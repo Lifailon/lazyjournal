@@ -13,9 +13,9 @@ case $ARCH in
         ;;
 esac
 
-if [ $SHELL = "/bin/bash" ]; then
+if [[ $SHELL =~ "bash" ]]; then
     shellRc="$HOME/.bashrc"
-elif [ $SHELL = "/bin/zsh" ]; then
+elif [[ $SHELL =~ "zsh" ]]; then
     shellRc="$HOME/.zshrc"
 else
     echo -e "\033[31mError.\033[0m Shell not supported: $SHELL"
