@@ -24,6 +24,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
 )
@@ -1322,56 +1323,75 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 // }
 
 // Функция для чтения и парсинга содержимого события Windows через wevtutil
+// func (app *App) loadWinEventLog(eventName string) (output []byte) {
+// 	cmd := exec.Command("powershell", "-Command",
+// 		"wevtutil qe "+eventName+" /f:text -l:en /c:"+app.logViewCount+
+// 			" /q:'*[System[TimeCreated[timediff(@SystemTime) <= 2592000000]]]'")
+// 	eventData, _ := cmd.Output()
+// 	// Декодирование вывода из Windows-1251 в UTF-8
+// 	decoder := charmap.Windows1251.NewDecoder()
+// 	decodeEventData, decodeErr := decoder.Bytes(eventData)
+// 	if decodeErr == nil {
+// 		eventData = decodeEventData
+// 	}
+// 	// Разбиваем вывод на массив
+// 	eventStrings := strings.Split(string(eventData), "Event[")
+// 	var eventMessage []string
+// 	for _, eventString := range eventStrings {
+// 		var dateTime, eventID, level, description string
+// 		// Разбиваем элемент массива на строки
+// 		lines := strings.Split(eventString, "\n")
+// 		// Флаг для обработки последней строки Description с содержимым Message
+// 		isDescription := false
+// 		for _, line := range lines {
+// 			// Удаляем проблемы во всех строках
+// 			trimmedLine := strings.TrimSpace(line)
+// 			switch {
+// 			// Обновляем формат даты
+// 			case strings.HasPrefix(trimmedLine, "Date:"):
+// 				dateTime = strings.ReplaceAll(trimmedLine, "Date: ", "")
+// 				dateTimeParse := strings.Split(dateTime, "T")
+// 				dateParse := strings.Split(dateTimeParse[0], "-")
+// 				timeParse := strings.Split(dateTimeParse[1], ".")
+// 				dateTime = fmt.Sprintf("%s.%s.%s %s", dateParse[2], dateParse[1], dateParse[0], timeParse[0])
+// 			case strings.HasPrefix(trimmedLine, "Event ID:"):
+// 				eventID = strings.ReplaceAll(trimmedLine, "Event ID: ", "")
+// 			case strings.HasPrefix(trimmedLine, "Level:"):
+// 				level = strings.ReplaceAll(trimmedLine, "Level: ", "")
+// 			case strings.HasPrefix(trimmedLine, "Description:"):
+// 				// Фиксируем и пропускаем Description
+// 				isDescription = true
+// 			case isDescription:
+// 				// Добавляем до конца текущего массива все не пустые строки
+// 				if trimmedLine != "" {
+// 					description += "\n" + trimmedLine
+// 				}
+// 			}
+// 		}
+// 		if dateTime != "" && eventID != "" && level != "" && description != "" {
+// 			eventMessage = append(eventMessage, fmt.Sprintf("%s %s (%s): %s", dateTime, level, eventID, strings.TrimSpace(description)))
+// 		}
+// 	}
+// 	fullMessage := strings.Join(eventMessage, "\n")
+// 	return []byte(fullMessage)
+// }
+
 func (app *App) loadWinEventLog(eventName string) (output []byte) {
-	cmd := exec.Command("cmd", "/C",
-		"chcp 65001 &&"+
-			"wevtutil qe "+eventName+" /f:text -l:en")
-	eventData, _ := cmd.Output()
-	// Декодирование вывода из Windows-1251 в UTF-8
-	decoder := charmap.Windows1251.NewDecoder()
-	decodeEventData, decodeErr := decoder.Bytes(eventData)
-	if decodeErr == nil {
-		eventData = decodeEventData
+	type Win32_NTLogEvent struct {
+		ComputerName string
+		Message      string
 	}
-	// Разбиваем вывод на массив
-	eventStrings := strings.Split(string(eventData), "Event[")
-	var eventMessage []string
-	for _, eventString := range eventStrings {
-		var dateTime, eventID, level, description string
-		// Разбиваем элемент массива на строки
-		lines := strings.Split(eventString, "\n")
-		// Флаг для обработки последней строки Description с содержимым Message
-		isDescription := false
-		for _, line := range lines {
-			// Удаляем проблемы во всех строках
-			trimmedLine := strings.TrimSpace(line)
-			switch {
-			// Обновляем формат даты
-			case strings.HasPrefix(trimmedLine, "Date:"):
-				dateTime = strings.ReplaceAll(trimmedLine, "Date: ", "")
-				dateTimeParse := strings.Split(dateTime, "T")
-				dateParse := strings.Split(dateTimeParse[0], "-")
-				timeParse := strings.Split(dateTimeParse[1], ".")
-				dateTime = fmt.Sprintf("%s.%s.%s %s", dateParse[2], dateParse[1], dateParse[0], timeParse[0])
-			case strings.HasPrefix(trimmedLine, "Event ID:"):
-				eventID = strings.ReplaceAll(trimmedLine, "Event ID: ", "")
-			case strings.HasPrefix(trimmedLine, "Level:"):
-				level = strings.ReplaceAll(trimmedLine, "Level: ", "")
-			case strings.HasPrefix(trimmedLine, "Description:"):
-				// Фиксируем и пропускаем Description
-				isDescription = true
-			case isDescription:
-				// Добавляем до конца текущего массива все не пустые строки
-				if trimmedLine != "" {
-					description += "\n" + trimmedLine
-				}
-			}
-		}
-		if dateTime != "" && eventID != "" && level != "" && description != "" {
-			eventMessage = append(eventMessage, fmt.Sprintf("%s %s (%s): %s", dateTime, level, eventID, strings.TrimSpace(description)))
-		}
+	var dst []Win32_NTLogEvent
+	query := fmt.Sprintf("SELECT * FROM Win32_NTLogEvent WHERE Logfile = '%s'", eventName)
+	err := wmi.Query(query, &dst)
+	if err != nil {
+		log.Fatal(err)
 	}
-	fullMessage := strings.Join(eventMessage, "\n")
+	var eventMessages []string
+	for _, v := range dst {
+		eventMessages = append(eventMessages, v.Message)
+	}
+	fullMessage := strings.Join(eventMessages, "\n")
 	return []byte(fullMessage)
 }
 
