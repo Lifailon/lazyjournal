@@ -1282,35 +1282,35 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 }
 
 // Функция для чтения и парсинга содержимого события Windows через PowerShell (возвращяет текст в формате байт и текст ошибки)
-func (app *App) loadWinEventLog(eventName string) (output []byte) {
-	cmd := exec.Command("powershell", "-Command",
-		"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;"+
-			"Get-CimInstance -Query \"SELECT * FROM Win32_NTLogEvent WHERE Logfile='"+eventName+"'\" | "+
-			"Select-Object TimeWritten,EventCode,Type,Message | "+
-			"Sort-Object TimeWritten | "+
-			"ConvertTo-Json")
-	eventsJson, _ := cmd.Output()
-	var eventMessage []string
-	var eventStrings []map[string]interface{}
-	_ = json.Unmarshal(eventsJson, &eventStrings)
-	for _, eventString := range eventStrings {
-		TimeCreated, _ := eventString["TimeWritten"].(string)
-		parts := strings.Split(TimeCreated, "(")
-		timestampString := strings.Split(parts[1], ")")[0]
-		timestamp, _ := strconv.Atoi(timestampString)
-		dateTime := time.Unix(int64(timestamp/1000), int64((timestamp%1000)*1000000))
-		LogId, _ := eventString["EventCode"].(float64)
-		LogIdInt := int(LogId)
-		LogIdString := strconv.Itoa(LogIdInt)
-		LevelDisplayName, _ := eventString["Type"].(string)
-		Message, _ := eventString["Message"].(string)
-		messageReplace := strings.ReplaceAll(Message, "\r\n", "")
-		mess := dateTime.Format("02.01.2006 15:04:05") + " " + LevelDisplayName + " (" + LogIdString + "): " + messageReplace
-		eventMessage = append(eventMessage, mess)
-	}
-	fullMessage := strings.Join(eventMessage, "\n")
-	return []byte(fullMessage)
-}
+// func (app *App) loadWinEventLog(eventName string) (output []byte) {
+// 	cmd := exec.Command("powershell", "-Command",
+// 		"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;"+
+// 			"Get-CimInstance -Query \"SELECT * FROM Win32_NTLogEvent WHERE Logfile='"+eventName+"'\" | "+
+// 			"Select-Object TimeWritten,EventCode,Type,Message | "+
+// 			"Sort-Object TimeWritten | "+
+// 			"ConvertTo-Json")
+// 	eventsJson, _ := cmd.Output()
+// 	var eventMessage []string
+// 	var eventStrings []map[string]interface{}
+// 	_ = json.Unmarshal(eventsJson, &eventStrings)
+// 	for _, eventString := range eventStrings {
+// 		TimeCreated, _ := eventString["TimeWritten"].(string)
+// 		parts := strings.Split(TimeCreated, "(")
+// 		timestampString := strings.Split(parts[1], ")")[0]
+// 		timestamp, _ := strconv.Atoi(timestampString)
+// 		dateTime := time.Unix(int64(timestamp/1000), int64((timestamp%1000)*1000000))
+// 		LogId, _ := eventString["EventCode"].(float64)
+// 		LogIdInt := int(LogId)
+// 		LogIdString := strconv.Itoa(LogIdInt)
+// 		LevelDisplayName, _ := eventString["Type"].(string)
+// 		Message, _ := eventString["Message"].(string)
+// 		messageReplace := strings.ReplaceAll(Message, "\r\n", "")
+// 		mess := dateTime.Format("02.01.2006 15:04:05") + " " + LevelDisplayName + " (" + LogIdString + "): " + messageReplace
+// 		eventMessage = append(eventMessage, mess)
+// 	}
+// 	fullMessage := strings.Join(eventMessage, "\n")
+// 	return []byte(fullMessage)
+// }
 
 // Функция для чтения и парсинга содержимого события Windows через PowerShell (возвращяет текст в формате байт и текст ошибки)
 // func (app *App) loadWinEventLog(eventName string) (output []byte) {
@@ -1353,58 +1353,58 @@ func (app *App) loadWinEventLog(eventName string) (output []byte) {
 // }
 
 // Функция для чтения и парсинга содержимого события Windows через wevtutil
-// func (app *App) loadWinEventLog(eventName string) (output []byte) {
-// 	cmd := exec.Command("powershell", "-Command",
-// 		"wevtutil qe "+eventName+" /f:text -l:en /c:"+app.logViewCount+
-// 			" /q:'*[System[TimeCreated[timediff(@SystemTime) <= 2592000000]]]'")
-// 	eventData, _ := cmd.Output()
-// 	// Декодирование вывода из Windows-1251 в UTF-8
-// 	decoder := charmap.Windows1251.NewDecoder()
-// 	decodeEventData, decodeErr := decoder.Bytes(eventData)
-// 	if decodeErr == nil {
-// 		eventData = decodeEventData
-// 	}
-// 	// Разбиваем вывод на массив
-// 	eventStrings := strings.Split(string(eventData), "Event[")
-// 	var eventMessage []string
-// 	for _, eventString := range eventStrings {
-// 		var dateTime, eventID, level, description string
-// 		// Разбиваем элемент массива на строки
-// 		lines := strings.Split(eventString, "\n")
-// 		// Флаг для обработки последней строки Description с содержимым Message
-// 		isDescription := false
-// 		for _, line := range lines {
-// 			// Удаляем проблемы во всех строках
-// 			trimmedLine := strings.TrimSpace(line)
-// 			switch {
-// 			// Обновляем формат даты
-// 			case strings.HasPrefix(trimmedLine, "Date:"):
-// 				dateTime = strings.ReplaceAll(trimmedLine, "Date: ", "")
-// 				dateTimeParse := strings.Split(dateTime, "T")
-// 				dateParse := strings.Split(dateTimeParse[0], "-")
-// 				timeParse := strings.Split(dateTimeParse[1], ".")
-// 				dateTime = fmt.Sprintf("%s.%s.%s %s", dateParse[2], dateParse[1], dateParse[0], timeParse[0])
-// 			case strings.HasPrefix(trimmedLine, "Event ID:"):
-// 				eventID = strings.ReplaceAll(trimmedLine, "Event ID: ", "")
-// 			case strings.HasPrefix(trimmedLine, "Level:"):
-// 				level = strings.ReplaceAll(trimmedLine, "Level: ", "")
-// 			case strings.HasPrefix(trimmedLine, "Description:"):
-// 				// Фиксируем и пропускаем Description
-// 				isDescription = true
-// 			case isDescription:
-// 				// Добавляем до конца текущего массива все не пустые строки
-// 				if trimmedLine != "" {
-// 					description += "\n" + trimmedLine
-// 				}
-// 			}
-// 		}
-// 		if dateTime != "" && eventID != "" && level != "" && description != "" {
-// 			eventMessage = append(eventMessage, fmt.Sprintf("%s %s (%s): %s", dateTime, level, eventID, strings.TrimSpace(description)))
-// 		}
-// 	}
-// 	fullMessage := strings.Join(eventMessage, "\n")
-// 	return []byte(fullMessage)
-// }
+func (app *App) loadWinEventLog(eventName string) (output []byte) {
+	cmd := exec.Command("powershell", "-Command",
+		"wevtutil qe "+eventName+" /f:text -l:en /c:"+app.logViewCount+
+			" /q:'*[System[TimeCreated[timediff(@SystemTime) <= 2592000000]]]'")
+	eventData, _ := cmd.Output()
+	// Декодирование вывода из Windows-1251 в UTF-8
+	decoder := charmap.Windows1251.NewDecoder()
+	decodeEventData, decodeErr := decoder.Bytes(eventData)
+	if decodeErr == nil {
+		eventData = decodeEventData
+	}
+	// Разбиваем вывод на массив
+	eventStrings := strings.Split(string(eventData), "Event[")
+	var eventMessage []string
+	for _, eventString := range eventStrings {
+		var dateTime, eventID, level, description string
+		// Разбиваем элемент массива на строки
+		lines := strings.Split(eventString, "\n")
+		// Флаг для обработки последней строки Description с содержимым Message
+		isDescription := false
+		for _, line := range lines {
+			// Удаляем проблемы во всех строках
+			trimmedLine := strings.TrimSpace(line)
+			switch {
+			// Обновляем формат даты
+			case strings.HasPrefix(trimmedLine, "Date:"):
+				dateTime = strings.ReplaceAll(trimmedLine, "Date: ", "")
+				dateTimeParse := strings.Split(dateTime, "T")
+				dateParse := strings.Split(dateTimeParse[0], "-")
+				timeParse := strings.Split(dateTimeParse[1], ".")
+				dateTime = fmt.Sprintf("%s.%s.%s %s", dateParse[2], dateParse[1], dateParse[0], timeParse[0])
+			case strings.HasPrefix(trimmedLine, "Event ID:"):
+				eventID = strings.ReplaceAll(trimmedLine, "Event ID: ", "")
+			case strings.HasPrefix(trimmedLine, "Level:"):
+				level = strings.ReplaceAll(trimmedLine, "Level: ", "")
+			case strings.HasPrefix(trimmedLine, "Description:"):
+				// Фиксируем и пропускаем Description
+				isDescription = true
+			case isDescription:
+				// Добавляем до конца текущего массива все не пустые строки
+				if trimmedLine != "" {
+					description += "\n" + trimmedLine
+				}
+			}
+		}
+		if dateTime != "" && eventID != "" && level != "" && description != "" {
+			eventMessage = append(eventMessage, fmt.Sprintf("%s %s (%s): %s", dateTime, level, eventID, strings.TrimSpace(description)))
+		}
+	}
+	fullMessage := strings.Join(eventMessage, "\n")
+	return []byte(fullMessage)
+}
 
 // func (app *App) loadWinEventLog(eventName string) (output []byte) {
 // 	type Win32_NTLogEvent struct {
