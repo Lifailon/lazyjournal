@@ -24,7 +24,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/awesome-gocui/gocui"
-	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
 )
@@ -1283,6 +1282,37 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 }
 
 // Функция для чтения и парсинга содержимого события Windows через PowerShell (возвращяет текст в формате байт и текст ошибки)
+func (app *App) loadWinEventLog(eventName string) (output []byte) {
+	cmd := exec.Command("powershell", "-Command",
+		"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;"+
+			"Get-CimInstance -Query \"SELECT * FROM Win32_NTLogEvent WHERE Logfile='"+eventName+"'\" | "+
+			"Select-Object TimeWritten,EventCode,Type,Message | "+
+			"Sort-Object TimeWritten | "+
+			"ConvertTo-Json")
+	eventsJson, _ := cmd.Output()
+	var eventMessage []string
+	var eventStrings []map[string]interface{}
+	_ = json.Unmarshal(eventsJson, &eventStrings)
+	for _, eventString := range eventStrings {
+		TimeCreated, _ := eventString["TimeWritten"].(string)
+		parts := strings.Split(TimeCreated, "(")
+		timestampString := strings.Split(parts[1], ")")[0]
+		timestamp, _ := strconv.Atoi(timestampString)
+		dateTime := time.Unix(int64(timestamp/1000), int64((timestamp%1000)*1000000))
+		LogId, _ := eventString["EventCode"].(float64)
+		LogIdInt := int(LogId)
+		LogIdString := strconv.Itoa(LogIdInt)
+		LevelDisplayName, _ := eventString["Type"].(string)
+		Message, _ := eventString["Message"].(string)
+		messageReplace := strings.ReplaceAll(Message, "\r\n", "")
+		mess := dateTime.Format("02.01.2006 15:04:05") + " " + LevelDisplayName + " (" + LogIdString + "): " + messageReplace
+		eventMessage = append(eventMessage, mess)
+	}
+	fullMessage := strings.Join(eventMessage, "\n")
+	return []byte(fullMessage)
+}
+
+// Функция для чтения и парсинга содержимого события Windows через PowerShell (возвращяет текст в формате байт и текст ошибки)
 // func (app *App) loadWinEventLog(eventName string) (output []byte) {
 // 	// Запуск во внешнем процессе PowerShell 5
 // 	cmd := exec.Command("powershell", "-Command",
@@ -1376,24 +1406,24 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 // 	return []byte(fullMessage)
 // }
 
-func (app *App) loadWinEventLog(eventName string) (output []byte) {
-	type Win32_NTLogEvent struct {
-		ComputerName string
-		Message      string
-	}
-	var dst []Win32_NTLogEvent
-	query := fmt.Sprintf("SELECT * FROM Win32_NTLogEvent WHERE Logfile = '%s'", eventName)
-	err := wmi.Query(query, &dst)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var eventMessages []string
-	for _, v := range dst {
-		eventMessages = append(eventMessages, v.Message)
-	}
-	fullMessage := strings.Join(eventMessages, "\n")
-	return []byte(fullMessage)
-}
+// func (app *App) loadWinEventLog(eventName string) (output []byte) {
+// 	type Win32_NTLogEvent struct {
+// 		ComputerName string
+// 		Message      string
+// 	}
+// 	var dst []Win32_NTLogEvent
+// 	query := fmt.Sprintf("SELECT * FROM Win32_NTLogEvent WHERE Logfile = '%s'", eventName)
+// 	err := wmi.Query(query, &dst)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	var eventMessages []string
+// 	for _, v := range dst {
+// 		eventMessages = append(eventMessages, v.Message)
+// 	}
+// 	fullMessage := strings.Join(eventMessages, "\n")
+// 	return []byte(fullMessage)
+// }
 
 // ---------------------------------------- Filesystem ----------------------------------------
 
