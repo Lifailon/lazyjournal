@@ -155,6 +155,8 @@ func showHelp() {
 	fmt.Println("    lazyjournal --help, -h             Show help")
 	fmt.Println("    lazyjournal --version, -v          Show version")
 	fmt.Println("    lazyjournal --audit, -a            Show audit information")
+	fmt.Println("    lazyjournal --tail, -t             Change the number of log lines to output (range: 5000-300000)")
+	fmt.Println("    lazyjournal --update, -u           Change the auto refresh interval of the log output (range: 2-10)")
 	fmt.Println("    lazyjournal --disable-color, -d    Disable output coloring")
 	fmt.Println("    lazyjournal --command-color, -c    Coloring in command line mode")
 }
@@ -442,8 +444,6 @@ func runGoCui(mock bool) {
 		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для MacOS) + /root/
 		selectContainerizationSystem: "docker",    // "podman" || kubernetes
 		selectFilterMode:             "default",   // "fuzzy" || "regex"
-		logViewCount:                 "100000",    // 5000-300000
-		logUpdateSeconds:             5,           // 2-10
 		journalListFrameColor:        gocui.ColorDefault,
 		fileSystemFrameColor:         gocui.ColorDefault,
 		dockerFrameColor:             gocui.ColorDefault,
@@ -474,6 +474,10 @@ func runGoCui(mock bool) {
 	flag.BoolVar(version, "v", false, "Show version")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
+	tailFlag := flag.String("tail", "100000", "Change the number of log lines to output (range: 5000-300000)")
+	flag.StringVar(tailFlag, "t", "100000", "Change the number of log lines to output (range: 5000-300000)")
+	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10)")
+	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (range: 2-10)")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
 	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
@@ -485,14 +489,31 @@ func runGoCui(mock bool) {
 		showHelp()
 		os.Exit(0)
 	}
+
 	if *version {
 		fmt.Println(programVersion)
 		os.Exit(0)
 	}
+
 	if *audit {
 		app.showAudit()
 		os.Exit(0)
 	}
+
+	if *tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "50000" || *tailFlag == "100000" || *tailFlag == "200000" || *tailFlag == "300000" {
+		app.logViewCount = *tailFlag
+	} else {
+		fmt.Println("Available values: 5000, 10000, 50000, 100000, 200000, 300000")
+		os.Exit(1)
+	}
+
+	if *updateFlag >= 2 && *updateFlag <= 10 {
+		app.logUpdateSeconds = *updateFlag
+	} else {
+		fmt.Println("Valid range: 2-10")
+		os.Exit(1)
+	}
+
 	if *disableColor {
 		app.colorMode = false
 	}
@@ -757,7 +778,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Title = "Logs"
 		v.Wrap = true
 		v.Autoscroll = false
-		v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
+		v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
 	}
 
 	// Включение курсора в режиме фильтра и отключение в остальных окнах
@@ -4538,7 +4559,7 @@ func (app *App) setupKeybindings() error {
 			if err != nil {
 				return err
 			}
-			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
+			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
 		}
 		return nil
 	}); err != nil {
@@ -4552,7 +4573,7 @@ func (app *App) setupKeybindings() error {
 			if err != nil {
 				return err
 			}
-			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
+			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
 		}
 		return nil
 	}); err != nil {
@@ -4705,6 +4726,11 @@ func (app *App) setupKeybindings() error {
 			app.applyFilter(false)
 			app.updateLogOutput(0, false)
 		}
+		vLog, err := app.gui.View("logs")
+		if err != nil {
+			return err
+		}
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
 		return nil
 	}); err != nil {
 		return err
@@ -4756,7 +4782,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 104, 29
+	width, height := 104, 31
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -4778,8 +4804,8 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "\n  Hotkeys:")
 	fmt.Fprintln(helpView, "\n  \033[32mTab\033[0m - switch between windows.")
 	fmt.Fprintln(helpView, "  \033[32mShift+Tab\033[0m - return to previous window.")
-	fmt.Fprintln(helpView, "  \033[32mLeft/Right\033[0m - switch between journal lists in the selected window.")
 	fmt.Fprintln(helpView, "  \033[32mEnter\033[0m - selection a journal from the list to display log output.")
+	fmt.Fprintln(helpView, "  \033[32mLeft/Right\033[0m - switch between journal lists in the selected window.")
 	fmt.Fprintln(helpView, "  \033[32m<Up/PgUp>\033[0m and \033[32m<Down/PgDown>\033[0m - move up and down through all journal lists and log output,")
 	fmt.Fprintln(helpView, "  as well as changing the filtering mode in the filter window.")
 	fmt.Fprintln(helpView, "  \033[32m<Shift/Alt>+<Up/Down>\033[0m - quickly move up and down through all journal lists and log output")
@@ -4787,10 +4813,12 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "  \033[32m<Shift/Ctrl>+<U/D>\033[0m - quickly move up and down (alternative for macOS).")
 	fmt.Fprintln(helpView, "  \033[32mCtrl+A\033[0m or \033[32mHome\033[0m - go to top of log.")
 	fmt.Fprintln(helpView, "  \033[32mCtrl+E\033[0m or \033[32mEnd\033[0m - go to the end of the log.")
+	fmt.Fprintln(helpView, "  \033[32mAlt+<Left/Right>\033[0m - change the number of log lines to output (tail mode).")
+	fmt.Fprintln(helpView, "  \033[32mShift+<Left/Right>\033[0m - change the auto refresh interval of the log output (range: 2-10).")
 	fmt.Fprintln(helpView, "  \033[32mCtrl+Q\033[0m - enable or disable built-in output coloring.")
 	fmt.Fprintln(helpView, "  \033[32mCtrl+S\033[0m - enable or disable coloring via tailspin.")
 	fmt.Fprintln(helpView, "  \033[32mCtrl+R\033[0m - update all log lists.")
-	fmt.Fprintln(helpView, "  \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output without filtering.")
+	fmt.Fprintln(helpView, "  \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
 	fmt.Fprintln(helpView, "  \033[32mCtrl+C\033[0m - exit.")
 	fmt.Fprintln(helpView, "  \033[32mEscape\033[0m - close help.")
 	fmt.Fprintln(helpView, "\n  Source code: \033[35mhttps://github.com/Lifailon/lazyjournal\033[0m")
@@ -4827,7 +4855,7 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
 	return nil
 }
 
@@ -4851,7 +4879,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
 	return nil
 }
 
