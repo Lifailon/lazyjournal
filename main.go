@@ -66,8 +66,10 @@ type App struct {
 	selectPath                   string // путь к логам (/var/log/)
 	selectContainerizationSystem string // название системы контейнеризации (docker/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (default/fuzzy/regex)
-	logViewCount                 string // количество логов для просмотра
-	logUpdateSeconds             int    // период фонового обновления журнала
+
+	logViewCount     string   // количество логов для просмотра
+	logUpdateSeconds int      // период фонового обновления журнала
+	secondsChan      chan int // канал для изменения интервала обновления в горутине
 
 	journals           []Journal // список (массив/срез) журналов для отображения
 	maxVisibleServices int       // максимальное количество видимых элементов в окне списка служб
@@ -658,8 +660,9 @@ func runGoCui(mock bool) {
 	}
 
 	// Горутина для автоматического обновления вывода журнала каждые n (logUpdateSeconds) секунд
+	app.secondsChan = make(chan int, app.logUpdateSeconds)
 	go func() {
-		app.updateLogOutput(app.logUpdateSeconds, false)
+		app.updateLogBack(app.secondsChan, false)
 	}()
 
 	// Горутина для отслеживания изменений размера окна
@@ -4126,29 +4129,58 @@ func (app *App) clearFilterEditor(g *gocui.Gui) {
 	app.applyFilter(false)
 }
 
-// Функция для обновления последнего выбранного вывода лога (параметры: период обновления и загрузка журнала)
-func (app *App) updateLogOutput(seconds int, newUpdate bool) {
-	for {
-		// Выполняем обновление интерфейса через метод Update для иницилизации перерисовки интерфейса
-		app.gui.Update(func(g *gocui.Gui) error {
-			// Сбрасываем автоскролл, если это ручное обновление, что бы опустить журнал вниз
-			if seconds == 0 {
-				app.autoScroll = true
-			}
-			switch app.lastWindow {
-			case "services":
-				app.loadJournalLogs(app.lastSelected, newUpdate)
-			case "varLogs":
-				app.loadFileLogs(app.lastSelected, newUpdate)
-			case "docker":
-				app.loadDockerLogs(app.lastSelected, newUpdate)
-			}
-			return nil
-		})
-		if seconds == 0 {
-			break
+// Функция для обновления последнего выбранного вывода лога (параметры: опустить скролл вниз и загрузка журнала)
+func (app *App) updateLogOutput(lowScroll bool, newUpdate bool) {
+	// Выполняем обновление интерфейса через метод Update для иницилизации перерисовки интерфейса
+	app.gui.Update(func(g *gocui.Gui) error {
+		// Сбрасываем автоскролл, если это ручное обновление, что бы опустить журнал вниз
+		if lowScroll {
+			app.autoScroll = true
 		}
-		time.Sleep(time.Duration(seconds) * time.Second)
+		switch app.lastWindow {
+		case "services":
+			app.loadJournalLogs(app.lastSelected, newUpdate)
+		case "varLogs":
+			app.loadFileLogs(app.lastSelected, newUpdate)
+		case "docker":
+			app.loadDockerLogs(app.lastSelected, newUpdate)
+		}
+		return nil
+	})
+}
+
+// Запускает фоновое обновление с изменяемым интервалом
+func (app *App) updateLogBack(secondsChan chan int, newUpdate bool) {
+	seconds := app.logUpdateSeconds
+	// Проверяем, есть ли в канале новое значение интервала
+	select {
+	case s := <-secondsChan:
+		seconds = s
+	default:
+	}
+	// Таймер
+	ticker := time.NewTicker(time.Duration(seconds) * time.Second)
+	// Гарантируем остановку таймера при выходе из функции
+	defer ticker.Stop()
+	for {
+		select {
+		// Если в канал поступило новое значение, перезапускаем таймер с новым интервалом
+		case newSeconds := <-secondsChan:
+			ticker.Reset(time.Duration(newSeconds) * time.Second)
+		// Когда срабатывает таймер, выполняем обновление логов
+		case <-ticker.C:
+			app.gui.Update(func(g *gocui.Gui) error {
+				switch app.lastWindow {
+				case "services":
+					app.loadJournalLogs(app.lastSelected, newUpdate)
+				case "varLogs":
+					app.loadFileLogs(app.lastSelected, newUpdate)
+				case "docker":
+					app.loadDockerLogs(app.lastSelected, newUpdate)
+				}
+				return nil
+			})
+		}
 	}
 }
 
@@ -4559,6 +4591,8 @@ func (app *App) setupKeybindings() error {
 			if err != nil {
 				return err
 			}
+			// Изменяем интервал в горутине
+			app.secondsChan <- app.logUpdateSeconds
 			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
 		}
 		return nil
@@ -4573,6 +4607,7 @@ func (app *App) setupKeybindings() error {
 			if err != nil {
 				return err
 			}
+			app.secondsChan <- app.logUpdateSeconds
 			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
 		}
 		return nil
@@ -4724,7 +4759,7 @@ func (app *App) setupKeybindings() error {
 		if len(app.currentLogLines) != 0 {
 			app.updateLogsView(true)
 			app.applyFilter(false)
-			app.updateLogOutput(0, false)
+			app.updateLogOutput(true, false)
 		}
 		vLog, err := app.gui.View("logs")
 		if err != nil {
@@ -4753,7 +4788,7 @@ func (app *App) setupKeybindings() error {
 		if len(app.currentLogLines) != 0 {
 			app.updateLogsView(true)
 			app.applyFilter(false)
-			app.updateLogOutput(0, false)
+			app.updateLogOutput(true, false)
 		}
 		return nil
 	}); err != nil {
@@ -4849,7 +4884,7 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 		app.logViewCount = "300000"
 	}
 	// Загружаем журнал заново
-	app.updateLogOutput(0, true)
+	app.updateLogOutput(true, true)
 	// Обновляем статус
 	vLog, err := app.gui.View("logs")
 	if err != nil {
@@ -4874,7 +4909,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	case "5000":
 		app.logViewCount = "5000"
 	}
-	app.updateLogOutput(0, true)
+	app.updateLogOutput(true, true)
 	vLog, err := app.gui.View("logs")
 	if err != nil {
 		return err
