@@ -28,7 +28,7 @@ import (
 	"golang.org/x/text/encoding/unicode"
 )
 
-var programVersion string = "0.7.6"
+var programVersion string = "0.7.7"
 
 // Структура хранения информации о журналах
 type Journal struct {
@@ -150,14 +150,12 @@ func showHelp() {
 	fmt.Println("If you have problems with the application, please open issue: https://github.com/Lifailon/lazyjournal/issues")
 	fmt.Println("")
 	fmt.Println("  Flags:")
-	fmt.Println("    lazyjournal                Run interface")
-	fmt.Println("    lazyjournal --help, -h     Show help")
-	fmt.Println("    lazyjournal --version, -v  Show version")
-	fmt.Println("    lazyjournal --audit, -a    Show audit information")
-}
-
-func (app *App) showVersion() {
-	fmt.Println(programVersion)
+	fmt.Println("    lazyjournal                        Run interface")
+	fmt.Println("    lazyjournal --help, -h             Show help")
+	fmt.Println("    lazyjournal --version, -v          Show version")
+	fmt.Println("    lazyjournal --audit, -a            Show audit information")
+	fmt.Println("    lazyjournal --disable-color, -d    Disable output coloring")
+	fmt.Println("    lazyjournal --command-color, -c    Coloring in command line mode")
 }
 
 func (app *App) showAudit() {
@@ -474,6 +472,10 @@ func runGoCui(mock bool) {
 	flag.BoolVar(version, "v", false, "Show version")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
+	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
+	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
+	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
+	flag.BoolVar(commandColor, "c", false, "Coloring in command line mode")
 
 	// Обработка аргументов
 	flag.Parse()
@@ -482,48 +484,19 @@ func runGoCui(mock bool) {
 		os.Exit(0)
 	}
 	if *version {
-		app.showVersion()
+		fmt.Println(programVersion)
 		os.Exit(0)
 	}
 	if *audit {
 		app.showAudit()
 		os.Exit(0)
 	}
-
-	// Создаем GUI
-	var err error
-	if mock {
-		g, err = gocui.NewGui(gocui.OutputSimulator, true) // 1-й параметр для режима работы терминала (tcell) и 2-й параметр для форка
-	} else {
-		g, err = gocui.NewGui(gocui.OutputNormal, true)
-	}
-	if err != nil {
-		log.Panicln(err)
-	}
-	// Закрываем GUI после завершения
-	defer g.Close()
-
-	app.gui = g
-	// Функция, которая будет вызываться при обновлении интерфейса
-	g.SetManagerFunc(app.layout)
-	// Включить поддержку мыши
-	g.Mouse = false
-
-	// Цветовая схема GUI
-	g.FgColor = gocui.ColorDefault // поля всех окон и цвет текста
-	g.BgColor = gocui.ColorDefault // фон
-
-	// Привязка клавиш для работы с интерфейсом из функции setupKeybindings()
-	if err := app.setupKeybindings(); err != nil {
-		log.Panicln("Error key bindings", err)
-	}
-
-	// Выполняем layout для инициализации интерфейса
-	if err := app.layout(g); err != nil {
-		log.Panicln(err)
+	if *disableColor {
+		app.colorMode = false
 	}
 
 	// Определяем переменные и массивы для покраски вывода
+
 	// Текущее имя хоста
 	app.hostName, _ = os.Hostname()
 	// Удаляем доменную часть, если она есть
@@ -560,6 +533,45 @@ func runGoCui(mock bool) {
 		if file.IsDir() {
 			app.rootDirArray = append(app.rootDirArray, "/"+file.Name())
 		}
+	}
+
+	// Обработка покраски вывода в режиме командной строки
+	if *commandColor {
+		app.commandLineColor()
+		os.Exit(0)
+	}
+
+	// Создаем GUI
+	var err error
+	if mock {
+		g, err = gocui.NewGui(gocui.OutputSimulator, true) // 1-й параметр для режима работы терминала (tcell) и 2-й параметр для форка
+	} else {
+		g, err = gocui.NewGui(gocui.OutputNormal, true)
+	}
+	if err != nil {
+		log.Panicln(err)
+	}
+	// Закрываем GUI после завершения
+	defer g.Close()
+
+	app.gui = g
+	// Функция, которая будет вызываться при обновлении интерфейса
+	g.SetManagerFunc(app.layout)
+	// Включить поддержку мыши
+	g.Mouse = false
+
+	// Цветовая схема GUI
+	g.FgColor = gocui.ColorDefault // поля всех окон и цвет текста
+	g.BgColor = gocui.ColorDefault // фон
+
+	// Привязка клавиш для работы с интерфейсом из функции setupKeybindings()
+	if err := app.setupKeybindings(); err != nil {
+		log.Panicln("Error key bindings", err)
+	}
+
+	// Выполняем layout для инициализации интерфейса
+	if err := app.layout(g); err != nil {
+		log.Panicln(err)
 	}
 
 	// Фиксируем текущее количество видимых строк в терминале (-1 заголовок)
@@ -2956,38 +2968,7 @@ func (app *App) applyFilter(color bool) {
 				colorLogLines := strings.Split(out.String(), "\n")
 				app.filteredLogLines = colorLogLines
 			} else {
-				// Максимальное количество потоков
-				const maxWorkers = 10
-				// Канал для передачи индексов всех строк
-				tasks := make(chan int, len(app.filteredLogLines))
-				// Срез для хранения обработанных строк
-				colorLogLines := make([]string, len(app.filteredLogLines))
-				// Объявляем группу ожидания для синхронизации всех горутин (воркеров)
-				var wg sync.WaitGroup
-				// Создаем maxWorkers горутин, где каждая будет обрабатывать задачи из канала tasks
-				for i := 0; i < maxWorkers; i++ {
-					go func() {
-						// Горутина будет работать, пока в канале tasks есть задачи
-						for index := range tasks {
-							// Обрабатываем строку и сохраняем результат по соответствующему индексу
-							colorLogLines[index] = app.lineColor(app.filteredLogLines[index])
-							// Уменьшаем счетчик задач в группе ожидания.
-							wg.Done()
-						}
-					}()
-				}
-				// Добавляем задачи в канал
-				for i := range app.filteredLogLines {
-					// Увеличиваем счетчик задач в группе ожидания.
-					wg.Add(1)
-					// Передаем индекс строки в канал tasks
-					tasks <- i
-				}
-				// Закрываем канал задач, чтобы воркеры завершили работу после обработки всех задач
-				close(tasks)
-				// Ждем завершения всех задач
-				wg.Wait()
-				app.filteredLogLines = colorLogLines
+				app.filteredLogLines = app.mainColor(app.filteredLogLines)
 			}
 		}
 		// Debug end time
@@ -3015,6 +2996,63 @@ func (app *App) applyFilter(color bool) {
 }
 
 // ---------------------------------------- Coloring ----------------------------------------
+
+// Функция для покраски вывода в режиме командной строки
+func (app *App) commandLineColor() {
+	scanner := bufio.NewScanner(os.Stdin)
+	var inputLines []string
+	for scanner.Scan() {
+		inputLines = append(inputLines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	if len(inputLines) == 0 {
+		fmt.Fprintln(os.Stderr)
+		return
+	}
+	inputColoring := app.mainColor(inputLines)
+	for _, line := range inputColoring {
+		fmt.Println(line)
+	}
+}
+
+// Функция покраски
+func (app *App) mainColor(inputText []string) []string {
+	// Максимальное количество потоков
+	const maxWorkers = 10
+	// Канал для передачи индексов всех строк
+	tasks := make(chan int, len(inputText))
+	// Срез для хранения обработанных строк
+	colorLogLines := make([]string, len(inputText))
+	// Объявляем группу ожидания для синхронизации всех горутин (воркеров)
+	var wg sync.WaitGroup
+	// Создаем maxWorkers горутин, где каждая будет обрабатывать задачи из канала tasks
+	for i := 0; i < maxWorkers; i++ {
+		go func() {
+			// Горутина будет работать, пока в канале tasks есть задачи
+			for index := range tasks {
+				// Обрабатываем строку и сохраняем результат по соответствующему индексу
+				colorLogLines[index] = app.lineColor(inputText[index])
+				// Уменьшаем счетчик задач в группе ожидания.
+				wg.Done()
+			}
+		}()
+	}
+	// Добавляем задачи в канал
+	for i := range inputText {
+		// Увеличиваем счетчик задач в группе ожидания
+		wg.Add(1)
+		// Передаем индекс строки в канал tasks
+		tasks <- i
+	}
+	// Закрываем канал задач, чтобы воркеры завершили работу после обработки всех задач
+	close(tasks)
+	// Ждем завершения всех задач
+	wg.Wait()
+	return colorLogLines
+}
 
 // Функция для покраски строки
 func (app *App) lineColor(inputLine string) string {
