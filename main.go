@@ -66,7 +66,8 @@ type App struct {
 	selectPath                   string // путь к логам (/var/log/)
 	selectContainerizationSystem string // название системы контейнеризации (docker/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (default/fuzzy/regex)
-	logViewCount                 string // количество логов для просмотра (5000)
+	logViewCount                 string // количество логов для просмотра
+	logUpdateSeconds             int    // период фонового обновления журнала
 
 	journals           []Journal // список (массив/срез) журналов для отображения
 	maxVisibleServices int       // максимальное количество видимых элементов в окне списка служб
@@ -441,7 +442,8 @@ func runGoCui(mock bool) {
 		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для MacOS) + /root/
 		selectContainerizationSystem: "docker",    // "podman" || kubernetes
 		selectFilterMode:             "default",   // "fuzzy" || "regex"
-		logViewCount:                 "200000",    // 5000-300000
+		logViewCount:                 "100000",    // 5000-300000
+		logUpdateSeconds:             5,           // 2-10
 		journalListFrameColor:        gocui.ColorDefault,
 		fileSystemFrameColor:         gocui.ColorDefault,
 		dockerFrameColor:             gocui.ColorDefault,
@@ -634,9 +636,9 @@ func runGoCui(mock bool) {
 		return
 	}
 
-	// Горутина для автоматического обновления вывода журнала каждые 5 секунд
+	// Горутина для автоматического обновления вывода журнала каждые n (logUpdateSeconds) секунд
 	go func() {
-		app.updateLogOutput(5)
+		app.updateLogOutput(app.logUpdateSeconds, false)
 	}()
 
 	// Горутина для отслеживания изменений размера окна
@@ -755,6 +757,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Title = "Logs"
 		v.Wrap = true
 		v.Autoscroll = false
+		v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
 	}
 
 	// Включение курсора в режиме фильтра и отключение в остальных окнах
@@ -3985,13 +3988,21 @@ func (app *App) updateLogsView(lowerDown bool) {
 		// Стартовая позиция + размер текущего вывода логов и округляем в большую сторону (math)
 		percentage = int(math.Ceil(float64((startLine+viewHeight)*100) / float64(len(app.filteredLogLines))))
 		if percentage > 100 {
-			v.Title = fmt.Sprintf("Logs: 100%% (%d) ["+app.debugLoadTime+"]", len(app.filteredLogLines)) // "Logs: 100%% (%d) [Max lines: "+app.logViewCount+"/Load time: "+app.debugLoadTime+"]"
+			v.Title = fmt.Sprintf(
+				"Logs: 100%% (%d) ["+app.debugLoadTime+"]",
+				len(app.filteredLogLines),
+			)
 		} else {
-			v.Title = fmt.Sprintf("Logs: %d%% (%d/%d) ["+app.debugLoadTime+"]", percentage, startLine+1+viewHeight, len(app.filteredLogLines))
+			v.Title = fmt.Sprintf("Logs: %d%% (%d/%d) ["+app.debugLoadTime+"]",
+				percentage,
+				startLine+1+viewHeight,
+				len(app.filteredLogLines),
+			)
 		}
 	} else {
 		v.Title = "Logs: 0% (0) [" + app.debugLoadTime + "]"
 	}
+	v.TitleColor = gocui.ColorYellow
 	app.viewScrollLogs(percentage)
 }
 
@@ -4094,8 +4105,8 @@ func (app *App) clearFilterEditor(g *gocui.Gui) {
 	app.applyFilter(false)
 }
 
-// Функция для обновления последнего выбранного вывода лога
-func (app *App) updateLogOutput(seconds int) {
+// Функция для обновления последнего выбранного вывода лога (параметры: период обновления и загрузка журнала)
+func (app *App) updateLogOutput(seconds int, newUpdate bool) {
 	for {
 		// Выполняем обновление интерфейса через метод Update для иницилизации перерисовки интерфейса
 		app.gui.Update(func(g *gocui.Gui) error {
@@ -4105,11 +4116,11 @@ func (app *App) updateLogOutput(seconds int) {
 			}
 			switch app.lastWindow {
 			case "services":
-				app.loadJournalLogs(app.lastSelected, false)
+				app.loadJournalLogs(app.lastSelected, newUpdate)
 			case "varLogs":
-				app.loadFileLogs(app.lastSelected, false)
+				app.loadFileLogs(app.lastSelected, newUpdate)
 			case "docker":
-				app.loadDockerLogs(app.lastSelected, false)
+				app.loadDockerLogs(app.lastSelected, newUpdate)
 			}
 			return nil
 		})
@@ -4511,11 +4522,40 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("filter", gocui.KeyPgdn, gocui.ModNone, app.setFilterModeLeft); err != nil {
 		return err
 	}
-	// Переключение для количества выводимых строк через Left/Right для выбранного окна (logs)
-	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowLeft, gocui.ModNone, app.setCountLogViewDown); err != nil {
+	// Переключение для количества строк вывода (tail mode) Alt+Left
+	if err := app.gui.SetKeybinding("", gocui.KeyArrowLeft, gocui.ModAlt, app.setCountLogViewDown); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowRight, gocui.ModNone, app.setCountLogViewUp); err != nil {
+	// Alt+Right
+	if err := app.gui.SetKeybinding("", gocui.KeyArrowRight, gocui.ModAlt, app.setCountLogViewUp); err != nil {
+		return err
+	}
+	// Увеличение фоновго интервала обновления журнала Shift+Left
+	if err := app.gui.SetKeybinding("", gocui.KeyArrowLeft, gocui.ModShift, func(g *gocui.Gui, v *gocui.View) error {
+		if app.logUpdateSeconds >= 3 && app.logUpdateSeconds <= 10 {
+			app.logUpdateSeconds--
+			v, err := app.gui.View("logs")
+			if err != nil {
+				return err
+			}
+			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	// Shift+Right
+	if err := app.gui.SetKeybinding("", gocui.KeyArrowRight, gocui.ModShift, func(g *gocui.Gui, v *gocui.View) error {
+		if app.logUpdateSeconds >= 2 && app.logUpdateSeconds <= 9 {
+			app.logUpdateSeconds++
+			v, err := app.gui.View("logs")
+			if err != nil {
+				return err
+			}
+			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
+		}
+		return nil
+	}); err != nil {
 		return err
 	}
 	// >>> Logs
@@ -4663,7 +4703,7 @@ func (app *App) setupKeybindings() error {
 		if len(app.currentLogLines) != 0 {
 			app.updateLogsView(true)
 			app.applyFilter(false)
-			app.updateLogOutput(0)
+			app.updateLogOutput(0, false)
 		}
 		return nil
 	}); err != nil {
@@ -4687,7 +4727,7 @@ func (app *App) setupKeybindings() error {
 		if len(app.currentLogLines) != 0 {
 			app.updateLogsView(true)
 			app.applyFilter(false)
-			app.updateLogOutput(0)
+			app.updateLogOutput(0, false)
 		}
 		return nil
 	}); err != nil {
@@ -4780,8 +4820,14 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	case "300000":
 		app.logViewCount = "300000"
 	}
-	app.applyFilter(false)
-	app.updateLogOutput(0)
+	// Загружаем журнал заново
+	app.updateLogOutput(0, true)
+	// Обновляем статус
+	vLog, err := app.gui.View("logs")
+	if err != nil {
+		return err
+	}
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
 	return nil
 }
 
@@ -4800,8 +4846,12 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	case "5000":
 		app.logViewCount = "5000"
 	}
-	app.applyFilter(false)
-	app.updateLogOutput(0)
+	app.updateLogOutput(0, true)
+	vLog, err := app.gui.View("logs")
+	if err != nil {
+		return err
+	}
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec]", app.logViewCount, app.logUpdateSeconds)
 	return nil
 }
 
@@ -5171,7 +5221,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case "services":
 			nextView = "varLogs"
@@ -5186,7 +5235,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case "varLogs":
 			nextView = "docker"
@@ -5201,7 +5249,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case "docker":
 			nextView = "filter"
@@ -5216,7 +5263,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorGreen
 			selectedFilter.TitleColor = gocui.ColorGreen
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case "filter":
 			nextView = "logs"
@@ -5231,7 +5277,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorGreen
-			selectedLogs.TitleColor = gocui.ColorGreen
 			selectedScrollLogs.FrameColor = gocui.ColorGreen
 		case "logs":
 			nextView = "filterList"
@@ -5246,7 +5291,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		}
 	}
@@ -5306,7 +5350,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorGreen
-			selectedLogs.TitleColor = gocui.ColorGreen
 			selectedScrollLogs.FrameColor = gocui.ColorGreen
 		case "services":
 			nextView = "filterList"
@@ -5321,7 +5364,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case "logs":
 			nextView = "filter"
@@ -5336,7 +5378,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorGreen
 			selectedFilter.TitleColor = gocui.ColorGreen
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case "filter":
 			nextView = "docker"
@@ -5351,7 +5392,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case "docker":
 			nextView = "varLogs"
@@ -5366,7 +5406,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case "varLogs":
 			nextView = "services"
@@ -5381,7 +5420,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = gocui.ColorDefault
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedLogs.TitleColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		}
 	}
