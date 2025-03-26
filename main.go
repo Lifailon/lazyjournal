@@ -126,8 +126,10 @@ type App struct {
 	fileSystemFrameColor  gocui.Attribute
 	dockerFrameColor      gocui.Attribute
 
-	// Фиксируем последнее время загрузки журнала
-	debugLoadTime string
+	// Фиксируем последнее время загрузки и покраски журнала
+	debugStartTime time.Time
+	debugLoadTime  string
+	debugColorTime string
 
 	// Отключение привязки горячих клавиш на время загрузки списка
 	keybindingsEnabled bool
@@ -159,7 +161,7 @@ func showHelp() {
 	fmt.Println("    lazyjournal --help, -h             Show help")
 	fmt.Println("    lazyjournal --version, -v          Show version")
 	fmt.Println("    lazyjournal --audit, -a            Show audit information")
-	fmt.Println("    lazyjournal --tail, -t             Change the number of log lines to output (range: 5000-300000)")
+	fmt.Println("    lazyjournal --tail, -t             Change the number of log lines to output (range: 5000-200000)")
 	fmt.Println("    lazyjournal --update, -u           Change the auto refresh interval of the log output (range: 2-10)")
 	fmt.Println("    lazyjournal --disable-color, -d    Disable output coloring")
 	fmt.Println("    lazyjournal --command-color, -c    Coloring in command line mode")
@@ -447,6 +449,8 @@ func runGoCui(mock bool) {
 		selectedFile:                 0,
 		startDockerContainers:        0,
 		selectedDockerContainer:      0,
+		debugLoadTime:                "0s",
+		debugColorTime:               "0s",
 		selectUnits:                  "services",  // "UNIT" || "USER_UNIT" || "kernel"
 		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для MacOS) + /root/
 		selectContainerizationSystem: "docker",    // "podman" || kubernetes
@@ -483,8 +487,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(version, "v", false, "Show version")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
-	tailFlag := flag.String("tail", "100000", "Change the number of log lines to output (range: 5000-300000)")
-	flag.StringVar(tailFlag, "t", "100000", "Change the number of log lines to output (range: 5000-300000)")
+	tailFlag := flag.String("tail", "100000", "Change the number of log lines to output (range: 5000-200000)")
+	flag.StringVar(tailFlag, "t", "100000", "Change the number of log lines to output (range: 5000-200000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10)")
 	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (range: 2-10)")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
@@ -509,10 +513,10 @@ func runGoCui(mock bool) {
 		os.Exit(0)
 	}
 
-	if *tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "50000" || *tailFlag == "100000" || *tailFlag == "200000" || *tailFlag == "300000" {
+	if *tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" || *tailFlag == "30000" || *tailFlag == "50000" || *tailFlag == "100000" || *tailFlag == "150000" || *tailFlag == "200000" {
 		app.logViewCount = *tailFlag
 	} else {
-		fmt.Println("Available values: 5000, 10000, 50000, 100000, 200000, 300000")
+		fmt.Println("Available values: 5000, 10000, 20000, 30000 50000, 100000, 150000, 200000")
 		os.Exit(1)
 	}
 
@@ -1062,6 +1066,7 @@ func (app *App) loadServices(journalName string) {
 
 // Функция для загрузки списка всех журналов событий Windows через PowerShell
 func (app *App) loadWinEvents() {
+	app.debugStartTime = time.Now()
 	app.journals = nil
 	// Получаем список, игнорируем ошибки, фильтруем пустые журналы, забираем нужные параметры, сортируем и выводим в формате JSON
 	cmd := exec.Command("powershell", "-Command",
@@ -1235,6 +1240,7 @@ func (app *App) selectService(g *gocui.Gui, v *gocui.View) error {
 // Функция для загрузки записей журнала выбранной службы через journalctl
 // Второй параметр для обнолвения позиции делимитра нового вывода лога а также сброса автоскролл
 func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
+	app.debugStartTime = time.Now()
 	var output []byte
 	var err error
 	selectUnits := app.selectUnits
@@ -1327,77 +1333,6 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 	}
 }
 
-// Функция для чтения и парсинга содержимого события Windows через PowerShell (возвращяет текст в формате байт и текст ошибки)
-// func (app *App) loadWinEventLog(eventName string) (output []byte) {
-// 	cmd := exec.Command("powershell", "-Command",
-// 		"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;"+
-// 			"Get-CimInstance -Query \"SELECT * FROM Win32_NTLogEvent WHERE Logfile='"+eventName+"'\" | "+
-// 			"Select-Object TimeWritten,EventCode,Type,Message | "+
-// 			"Sort-Object TimeWritten | "+
-// 			"ConvertTo-Json")
-// 	eventsJson, _ := cmd.Output()
-// 	var eventMessage []string
-// 	var eventStrings []map[string]interface{}
-// 	_ = json.Unmarshal(eventsJson, &eventStrings)
-// 	for _, eventString := range eventStrings {
-// 		TimeCreated, _ := eventString["TimeWritten"].(string)
-// 		parts := strings.Split(TimeCreated, "(")
-// 		timestampString := strings.Split(parts[1], ")")[0]
-// 		timestamp, _ := strconv.Atoi(timestampString)
-// 		dateTime := time.Unix(int64(timestamp/1000), int64((timestamp%1000)*1000000))
-// 		LogId, _ := eventString["EventCode"].(float64)
-// 		LogIdInt := int(LogId)
-// 		LogIdString := strconv.Itoa(LogIdInt)
-// 		LevelDisplayName, _ := eventString["Type"].(string)
-// 		Message, _ := eventString["Message"].(string)
-// 		messageReplace := strings.ReplaceAll(Message, "\r\n", "")
-// 		mess := dateTime.Format("02.01.2006 15:04:05") + " " + LevelDisplayName + " (" + LogIdString + "): " + messageReplace
-// 		eventMessage = append(eventMessage, mess)
-// 	}
-// 	fullMessage := strings.Join(eventMessage, "\n")
-// 	return []byte(fullMessage)
-// }
-
-// Функция для чтения и парсинга содержимого события Windows через PowerShell (возвращяет текст в формате байт и текст ошибки)
-// func (app *App) loadWinEventLog(eventName string) (output []byte) {
-// 	// Запуск во внешнем процессе PowerShell 5
-// 	cmd := exec.Command("powershell", "-Command",
-// 		"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;"+
-// 			"Get-WinEvent -LogName "+eventName+" -MaxEvents 5000 | "+
-// 			"Select-Object TimeCreated,Id,LevelDisplayName,Message | "+
-// 			"Sort-Object TimeCreated | "+
-// 			"ConvertTo-Json")
-// 	eventsJson, _ := cmd.Output()
-// 	var eventMessage []string
-// 	var eventStrings []map[string]interface{}
-// 	_ = json.Unmarshal(eventsJson, &eventStrings)
-// 	for _, eventString := range eventStrings {
-// 		// Извлекаем метку времени из json
-// 		TimeCreated, _ := eventString["TimeCreated"].(string)
-// 		// Извлекаем метку времени из строки
-// 		parts := strings.Split(TimeCreated, "(")
-// 		timestampString := strings.Split(parts[1], ")")[0]
-// 		// Преобразуем строку в целое число (timestamp)
-// 		timestamp, _ := strconv.Atoi(timestampString)
-// 		// Преобразуем в Unix-формат (секунды и наносекунды)
-// 		dateTime := time.Unix(int64(timestamp/1000), int64((timestamp%1000)*1000000)) // Миллисекунды -> наносекунды
-// 		// Извлекаем остальные данные из json
-// 		LogId, _ := eventString["Id"].(float64)
-// 		LogIdInt := int(LogId)
-// 		LogIdString := strconv.Itoa(LogIdInt)
-// 		LevelDisplayName, _ := eventString["LevelDisplayName"].(string)
-// 		Message, _ := eventString["Message"].(string)
-// 		// Удаляем встроенные переносы строки
-// 		messageReplace := strings.ReplaceAll(Message, "\r\n", "")
-// 		// Формируем строку и заполняем временный массив
-// 		mess := dateTime.Format("02.01.2006 15:04:05") + " " + LevelDisplayName + " (" + LogIdString + "): " + messageReplace
-// 		eventMessage = append(eventMessage, mess)
-// 	}
-// 	// Собираем все строки в одну и возвращяем байты
-// 	fullMessage := strings.Join(eventMessage, "\n")
-// 	return []byte(fullMessage)
-// }
-
 // Функция для чтения и парсинга содержимого события Windows через wevtutil
 func (app *App) loadWinEventLog(eventName string) (output []byte) {
 	cmd := exec.Command("powershell", "-Command",
@@ -1451,25 +1386,6 @@ func (app *App) loadWinEventLog(eventName string) (output []byte) {
 	fullMessage := strings.Join(eventMessage, "\n")
 	return []byte(fullMessage)
 }
-
-// func (app *App) loadWinEventLog(eventName string) (output []byte) {
-// 	type Win32_NTLogEvent struct {
-// 		ComputerName string
-// 		Message      string
-// 	}
-// 	var dst []Win32_NTLogEvent
-// 	query := fmt.Sprintf("SELECT * FROM Win32_NTLogEvent WHERE Logfile = '%s'", eventName)
-// 	err := wmi.Query(query, &dst)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	var eventMessages []string
-// 	for _, v := range dst {
-// 		eventMessages = append(eventMessages, v.Message)
-// 	}
-// 	fullMessage := strings.Join(eventMessages, "\n")
-// 	return []byte(fullMessage)
-// }
 
 // ---------------------------------------- Filesystem ----------------------------------------
 
@@ -2039,6 +1955,7 @@ func (app *App) selectFile(g *gocui.Gui, v *gocui.View) error {
 
 // Функция для чтения файла
 func (app *App) loadFileLogs(logName string, newUpdate bool) {
+	app.debugStartTime = time.Now()
 	// В параметре logName имя файла при выборе возвращяется без символов покраски
 	// Получаем путь из массива по имени
 	var logFullPath string
@@ -2364,6 +2281,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 
 // Функция для чтения файла с опредилением кодировки в Windows
 func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors string) {
+	app.debugStartTime = time.Now()
 	// Открываем файл
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -2646,6 +2564,7 @@ func (app *App) selectDocker(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
+	app.debugStartTime = time.Now()
 	containerizationSystem := app.selectContainerizationSystem
 	// Сохраняем систему контейнеризации для автообновления при смене окна
 	if newUpdate {
@@ -2876,7 +2795,7 @@ func (app *App) applyFilter(color bool) {
 		if color {
 			v.FrameColor = gocui.ColorGreen
 		}
-		// Debug: если текст фильтра не менялся и позиция курсора не в самом конце журнала, то пропускаем фильтрацию и покраску при пролистывании
+		// Если текст фильтра не менялся и позиция курсора не в самом конце журнала, то пропускаем фильтрацию и покраску при пролистывании
 		vLogs, _ := app.gui.View("logs")
 		_, viewHeight := vLogs.Size()
 		size = app.logScrollPos + viewHeight + 1
@@ -2888,7 +2807,12 @@ func (app *App) applyFilter(color bool) {
 	}
 	// Фильтруем и красим, только если это не строллинг
 	if !skip {
-		// Debug start time
+		// Debug end load time
+		endLoadTime := time.Since(app.debugStartTime)
+		// Фиксируем время окончания загрузки журнала
+		app.debugLoadTime = endLoadTime.Truncate(time.Millisecond).String()
+		// Debug start color time
+		// Фиксируем время начала покраски журнала
 		startTime := time.Now()
 		// Debug: если текст фильтра пустой или равен любому символу для regex, возвращяем вывод без фильтрации
 		if filter == "" || (filter == "." && app.selectFilterMode == "regex") {
@@ -3007,7 +2931,7 @@ func (app *App) applyFilter(color bool) {
 		}
 		// Debug end time
 		endTime := time.Since(startTime)
-		app.debugLoadTime = endTime.Truncate(time.Millisecond).String()
+		app.debugColorTime = endTime.Truncate(time.Millisecond).String()
 	}
 	// Debug: корректируем текущую позицию скролла, если размер массива стал меньше
 	if size > len(app.filteredLogLines) {
@@ -4028,18 +3952,18 @@ func (app *App) updateLogsView(lowerDown bool) {
 		percentage = int(math.Ceil(float64((startLine+viewHeight)*100) / float64(len(app.filteredLogLines))))
 		if percentage > 100 {
 			v.Title = fmt.Sprintf(
-				"Logs: 100%% (%d) ["+app.debugLoadTime+"]",
+				"Logs: 100%% (%d) ["+app.debugLoadTime+"/"+app.debugColorTime+"]",
 				len(app.filteredLogLines),
 			)
 		} else {
-			v.Title = fmt.Sprintf("Logs: %d%% (%d/%d) ["+app.debugLoadTime+"]",
+			v.Title = fmt.Sprintf("Logs: %d%% (%d/%d) ["+app.debugLoadTime+"/"+app.debugColorTime+"]",
 				percentage,
 				startLine+1+viewHeight,
 				len(app.filteredLogLines),
 			)
 		}
 	} else {
-		v.Title = "Logs: 0% (0) [" + app.debugLoadTime + "]"
+		v.Title = "Logs: 0% (0) [" + app.debugLoadTime + "/" + app.debugColorTime + "]"
 	}
 	v.TitleColor = gocui.ColorYellow
 	app.viewScrollLogs(percentage)
@@ -4888,15 +4812,19 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	case "5000":
 		app.logViewCount = "10000"
 	case "10000":
+		app.logViewCount = "20000"
+	case "20000":
+		app.logViewCount = "30000"
+	case "30000":
 		app.logViewCount = "50000"
 	case "50000":
 		app.logViewCount = "100000"
 	case "100000":
+		app.logViewCount = "150000"
+	case "150000":
 		app.logViewCount = "200000"
 	case "200000":
-		app.logViewCount = "300000"
-	case "300000":
-		app.logViewCount = "300000"
+		app.logViewCount = "200000"
 	}
 	// Загружаем журнал заново
 	app.updateLogOutput(true, true)
@@ -4911,13 +4839,17 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 
 func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	switch app.logViewCount {
-	case "300000":
-		app.logViewCount = "200000"
 	case "200000":
+		app.logViewCount = "150000"
+	case "150000":
 		app.logViewCount = "100000"
 	case "100000":
 		app.logViewCount = "50000"
 	case "50000":
+		app.logViewCount = "30000"
+	case "30000":
+		app.logViewCount = "20000"
+	case "20000":
 		app.logViewCount = "10000"
 	case "10000":
 		app.logViewCount = "5000"
