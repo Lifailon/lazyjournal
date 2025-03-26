@@ -2957,6 +2957,17 @@ func (app *App) applyFilter(color bool) {
 
 // Функция для покраски вывода в режиме командной строки
 func (app *App) commandLineColor() {
+	// Проверяем, подключен ли stdin через pipe или перенаправлен
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	// Проверяем, пуст ли stdin (например, если нет pipe или перенаправления)
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		fmt.Fprintln(os.Stderr, "No data. Use pipe to transfer data.")
+		return
+	}
 	scanner := bufio.NewScanner(os.Stdin)
 	var inputLines []string
 	for scanner.Scan() {
