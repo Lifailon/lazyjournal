@@ -144,6 +144,8 @@ type App struct {
 	dateRegex            *regexp.Regexp
 	ipAddressRegex       *regexp.Regexp
 	procRegex            *regexp.Regexp
+	intInputRegex        *regexp.Regexp
+	intOutputRegex       *regexp.Regexp
 	syslogUnitRegex      *regexp.Regexp
 }
 
@@ -424,6 +426,9 @@ var (
 	ipAddressRegex = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+|\.\d+|/\d+)?\b`)
 	// int%
 	procRegex = regexp.MustCompile(`(\d+)%`)
+	// int only
+	intInputRegex  = regexp.MustCompile(`^[^a-zA-Z]*\d+[^a-zA-Z]*$`)
+	intOutputRegex = regexp.MustCompile(`\d+`)
 	// Syslog UNIT
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
 )
@@ -461,6 +466,8 @@ func runGoCui(mock bool) {
 		dateRegex:                    dateRegex,
 		ipAddressRegex:               ipAddressRegex,
 		procRegex:                    procRegex,
+		intInputRegex:                intInputRegex,
+		intOutputRegex:               intOutputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
 	}
@@ -3917,6 +3924,14 @@ func (app *App) wordColor(inputWord string) string {
 			}
 			return colored
 		})
+	// Int only
+	case app.intInputRegex.MatchString(inputWord):
+		matches := intOutputRegex.FindAllString(inputWord, -1)
+		colored := inputWord
+		for _, match := range matches {
+			colored = strings.ReplaceAll(colored, match, "\033[34m"+match+"\033[0m")
+		}
+		return colored
 	// tcpdump
 	case strings.Contains(inputWordLower, "tcp"):
 		coloredWord = app.replaceWordLower(inputWord, "tcp", "\033[33m")
