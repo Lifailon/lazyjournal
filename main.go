@@ -2987,7 +2987,7 @@ func (app *App) commandLineColor() {
 	}
 }
 
-// Функция покраски
+// Основная функция покраски
 func (app *App) mainColor(inputText []string) []string {
 	// Максимальное количество потоков
 	const maxWorkers = 10
@@ -3023,13 +3023,12 @@ func (app *App) mainColor(inputText []string) []string {
 	return colorLogLines
 }
 
-// Функция для покраски строки
 func (app *App) lineColor(inputLine string) string {
-	// Разбиваем строку на слова
-	words := strings.Fields(inputLine)
 	var colorLine string
 	var filterColor bool = false
-	for _, word := range words {
+	// Разбиваем строку по пробелам, сохраняя их
+	words := strings.Split(inputLine, " ")
+	for i, word := range words {
 		// Исключаем строки с покраской при поиске (Background)
 		if strings.Contains(word, "\x1b[0;44m") {
 			filterColor = true
@@ -3042,9 +3041,14 @@ func (app *App) lineColor(inputLine string) string {
 		if strings.Contains(word, "\033[0m") {
 			filterColor = false
 		}
-		colorLine += word + " "
+		// Добавляем слово обратно с пробелами
+		if i != len(words)-1 {
+			colorLine += word + " "
+		} else {
+			colorLine += word
+		}
 	}
-	return strings.TrimSpace(colorLine)
+	return colorLine
 }
 
 // Игнорируем регистр и проверяем, что слово окружено границами (не буквы и цифры)
