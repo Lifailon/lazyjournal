@@ -161,8 +161,8 @@ func showHelp() {
 	fmt.Println("    lazyjournal --help, -h             Show help")
 	fmt.Println("    lazyjournal --version, -v          Show version")
 	fmt.Println("    lazyjournal --audit, -a            Show audit information")
-	fmt.Println("    lazyjournal --tail, -t             Change the number of log lines to output (range: 5000-200000)")
-	fmt.Println("    lazyjournal --update, -u           Change the auto refresh interval of the log output (range: 2-10)")
+	fmt.Println("    lazyjournal --tail, -t             Change the number of log lines to output (default: 100000, range: 5000-200000)")
+	fmt.Println("    lazyjournal --update, -u           Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	fmt.Println("    lazyjournal --disable-color, -d    Disable output coloring")
 	fmt.Println("    lazyjournal --command-color, -c    Coloring in command line mode")
 }
@@ -487,10 +487,10 @@ func runGoCui(mock bool) {
 	flag.BoolVar(version, "v", false, "Show version")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
-	tailFlag := flag.String("tail", "100000", "Change the number of log lines to output (range: 5000-200000)")
-	flag.StringVar(tailFlag, "t", "100000", "Change the number of log lines to output (range: 5000-200000)")
-	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10)")
-	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (range: 2-10)")
+	tailFlag := flag.String("tail", "100000", "Change the number of log lines to output (default: 100000, range: 5000-200000)")
+	flag.StringVar(tailFlag, "t", "100000", "Change the number of log lines to output (default: 100000, range: 5000-200000)")
+	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
+	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
 	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
@@ -4744,8 +4744,12 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Отключить окно справки (F1)
+	// Открыть или закрыть окно справки (F1)
 	if err := app.gui.SetKeybinding("", gocui.KeyF1, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		// Если окно уже существует, закрываем его
+		if _, err := g.View("help"); err == nil {
+			return app.closeHelp(g)
+		}
 		app.showInterfaceHelp(g)
 		return nil
 	}); err != nil {
@@ -4767,7 +4771,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 104, 31
+	width, height := 108, 36
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -4783,35 +4787,40 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	helpView.FrameColor = gocui.ColorGreen
 	helpView.TitleColor = gocui.ColorGreen
 	helpView.Clear()
-	fmt.Fprintln(helpView, "\n  \033[33mlazyjournal\033[0m - terminal user interface for reading logs from journalctl, file system, Docker and")
-	fmt.Fprintln(helpView, "  Podman containers, as well Kubernetes pods.")
-	fmt.Fprintln(helpView, "\n  Version: \033[36m"+programVersion+"\033[0m")
-	fmt.Fprintln(helpView, "\n  Hotkeys:")
-	fmt.Fprintln(helpView, "\n  \033[32mTab\033[0m - switch between windows.")
-	fmt.Fprintln(helpView, "  \033[32mShift+Tab\033[0m - return to previous window.")
-	fmt.Fprintln(helpView, "  \033[32mEnter\033[0m - selection a journal from the list to display log output.")
-	fmt.Fprintln(helpView, "  \033[32mLeft/Right\033[0m - switch between journal lists in the selected window.")
-	fmt.Fprintln(helpView, "  \033[32m<Up/PgUp>\033[0m and \033[32m<Down/PgDown>\033[0m - move up and down through all journal lists and log output,")
-	fmt.Fprintln(helpView, "  as well as changing the filtering mode in the filter window.")
-	fmt.Fprintln(helpView, "  \033[32m<Shift/Alt>+<Up/Down>\033[0m - quickly move up and down through all journal lists and log output")
-	fmt.Fprintln(helpView, "  every 10 or 100 lines (500 for log output).")
-	fmt.Fprintln(helpView, "  \033[32m<Shift/Ctrl>+<U/D>\033[0m - quickly move up and down (alternative for macOS).")
-	fmt.Fprintln(helpView, "  \033[32mCtrl+A\033[0m or \033[32mHome\033[0m - go to top of log.")
-	fmt.Fprintln(helpView, "  \033[32mCtrl+E\033[0m or \033[32mEnd\033[0m - go to the end of the log.")
-	fmt.Fprintln(helpView, "  \033[32mAlt+<Left/Right>\033[0m - change the number of log lines to output (tail mode).")
-	fmt.Fprintln(helpView, "  \033[32mShift+<Left/Right>\033[0m - change the auto refresh interval of the log output (range: 2-10).")
-	fmt.Fprintln(helpView, "  \033[32mCtrl+Q\033[0m - enable or disable built-in output coloring.")
-	fmt.Fprintln(helpView, "  \033[32mCtrl+S\033[0m - enable or disable coloring via tailspin.")
-	fmt.Fprintln(helpView, "  \033[32mCtrl+R\033[0m - update all log lists.")
-	fmt.Fprintln(helpView, "  \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
-	fmt.Fprintln(helpView, "  \033[32mCtrl+C\033[0m - exit.")
-	fmt.Fprintln(helpView, "  \033[32mEscape\033[0m - close help.")
-	fmt.Fprintln(helpView, "\n  Source code: \033[35mhttps://github.com/Lifailon/lazyjournal\033[0m")
+	fmt.Fprintln(helpView, "\n                   \033[32m_                              \033[36m_                                    _ ")
+	fmt.Fprintln(helpView, "                  \033[32m| |                            \033[36m| |                                  | |")
+	fmt.Fprintln(helpView, "                  \033[32m| |      __ _  ____ _   _      \033[36m| |  ___   _   _  _ __  _ __    __ _ | |")
+	fmt.Fprintln(helpView, "                  \033[32m| |     / _` ||_  /| | | | \033[36m_   | | / _ \\ | | | || '__|| '_ \\  / _` || |")
+	fmt.Fprintln(helpView, "                  \033[32m| |____| (_| | / / | |_| |\033[36m| |__| || (_) || |_| || |   | | | || (_| || |")
+	fmt.Fprintln(helpView, "                  \033[32m|______|\\__,_|/___| \\__, | \033[36m\\____/  \\___/  \\__,_||_|   |_| |_| \\__,_||_|")
+	fmt.Fprintln(helpView, "                  \033[32m					 __/ |                                             ")
+	fmt.Fprintln(helpView, "                  \033[32m                    |___/\033[0m")
+	fmt.Fprintln(helpView, "\n    Version: \033[36m"+programVersion+"\033[0m")
+	fmt.Fprintln(helpView, "\n    Hotkeys:")
+	fmt.Fprintln(helpView, "\n    \033[32mTab\033[0m - switch between windows.")
+	fmt.Fprintln(helpView, "    \033[32mShift+Tab\033[0m - return to previous window.")
+	fmt.Fprintln(helpView, "    \033[32mEnter\033[0m - selection a journal from the list to display log output.")
+	fmt.Fprintln(helpView, "    \033[32mLeft/Right\033[0m - switch between journal lists in the selected window.")
+	fmt.Fprintln(helpView, "    \033[32m<Up/PgUp>\033[0m and \033[32m<Down/PgDown>\033[0m - move up and down through all journal lists and log output,")
+	fmt.Fprintln(helpView, "    as well as changing the filtering mode in the filter window.")
+	fmt.Fprintln(helpView, "    \033[32m<Shift/Alt>+<Up/Down>\033[0m - quickly move up and down through all journal lists and log output")
+	fmt.Fprintln(helpView, "    every 10 or 100 lines (500 for log output).")
+	fmt.Fprintln(helpView, "    \033[32m<Shift/Ctrl>+<U/D>\033[0m - quickly move up and down (alternative for macOS).")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+A\033[0m or \033[32mHome\033[0m - go to top of log.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+E\033[0m or \033[32mEnd\033[0m - go to the end of the log.")
+	fmt.Fprintln(helpView, "    \033[32mAlt+<Left/Right>\033[0m - change the number of log lines to output (default: 100000, range: 5000-200000).")
+	fmt.Fprintln(helpView, "    \033[32mShift+<Left/Right>\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - enable or disable built-in output coloring.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - enable or disable coloring via tailspin.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+C\033[0m - exit.")
+	fmt.Fprintln(helpView, "\n    Source code: \033[36mhttps://github.com/Lifailon/lazyjournal\033[0m")
 }
 
 func (app *App) closeHelp(g *gocui.Gui) error {
 	if err := g.DeleteView("help"); err != nil {
-		return err
+		return nil
 	}
 	return nil
 }
