@@ -104,8 +104,8 @@ type App struct {
 	lastFilterText   string   // фиксируем содержимое последнего ввода текста для фильтрации
 
 	autoScroll     bool   // используется для автоматического скроллинга вниз при обновлении (если это не ручной скроллинг)
-	newUpdateIndex int    // фиксируем текущую длинну массива (индекс) для вставки строки обновления (если это ручной выбор из списка)
-	updateTime     string // время загрузки журнала для делиметра
+	lastUpdateLine string // фиксируем предпоследнюю строку для делимитра
+	updateTime     string // фиксируем время загрузки журнала для делимитра
 
 	lastDateUpdateFile time.Time // последняя дата изменения файла
 	lastSizeFile       int64     // размер файла
@@ -3888,7 +3888,7 @@ func (app *App) wordColor(inputWord string) string {
 		}
 	// Update delimiter
 	case strings.Contains(inputWord, "⎯"):
-		coloredWord = app.replaceWordLower(inputWord, "⎯", "\033[32m")
+		coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[35m"+inputWord+"\033[0m")
 	// Исключения
 	case strings.Contains(inputWordLower, "not"):
 		coloredWord = app.replaceWordLower(inputWord, "not", "\033[31m")
@@ -4170,31 +4170,50 @@ func (app *App) updateWindowSize(seconds int) {
 	}
 }
 
-// Функция для фиксации места загрузки журнала с помощью делиметра
+// Функция для фиксации места загрузки журнала с помощью делимитра (параметр для обновления места и времени загрузки)
 func (app *App) updateDelimiter(newUpdate bool) {
-	// Фиксируем текущую длинну массива (индекс) для вставки строки обновления, если это ручной выбор из списка
 	if newUpdate {
-		app.newUpdateIndex = len(app.currentLogLines) - 1
+		// Фиксируем (сохраняем) предпоследнюю (последняя строка всегда пустая) строку для вставки делимитра (если это ручной выбор из списка) или выходим
+		if len(app.currentLogLines) > 0 {
+			app.lastUpdateLine = app.currentLogLines[len(app.currentLogLines)-2]
+		} else {
+			return
+		}
 		// Сбрасываем автоскролл
 		app.autoScroll = true
-		// Фиксируем время загрузки журнала
+		// Фиксируем новое время загрузки журнала
 		app.updateTime = time.Now().Format("15:04:05")
-	}
-	// Проверяем, что массив не пустой и уже привысил длинну новых сообщений
-	if app.newUpdateIndex > 0 && len(app.currentLogLines)-1 > app.newUpdateIndex {
-		// Формируем длинну делимитра
-		v, _ := app.gui.View("logs")
-		width, _ := v.Size()
-		lengthDelimiter := width/2 - 5
-		delimiter1 := strings.Repeat("⎯", lengthDelimiter)
-		delimiter2 := delimiter1
-		if width > lengthDelimiter+lengthDelimiter+10 {
-			delimiter2 = strings.Repeat("⎯", lengthDelimiter+1)
+	} else {
+		// Ищем индекс строки в массиве с конца
+		delimiterIndex := 0
+		for i := len(app.currentLogLines) - 1; i >= 0; i-- {
+			if app.currentLogLines[i] == app.lastUpdateLine {
+				delimiterIndex = i
+				// Debug index
+				// selectedDocker, _ := g.View("docker")
+				// selectedDocker.Title = "index: " + strconv.Itoa(delimiterIndex) + "line: " + app.lastUpdateLine
+				break
+			}
 		}
-		var delimiterString string = delimiter1 + " " + app.updateTime + " " + delimiter2
-		// Вставляем новую строку после указанного индекса, сдвигая остальные строки массива
-		app.currentLogLines = append(app.currentLogLines[:app.newUpdateIndex],
-			append([]string{delimiterString}, app.currentLogLines[app.newUpdateIndex:]...)...)
+		// Если строка найдена, вставляем делимитр перед ней
+		if delimiterIndex > 0 {
+			// Проверяем, что найденный индекс меньше длинны массива строк
+			if delimiterIndex < len(app.currentLogLines)-1 {
+				// Формируем длинну делимитра
+				v, _ := app.gui.View("logs")
+				width, _ := v.Size()
+				lengthDelimiter := width/2 - 5
+				delimiter1 := strings.Repeat("⎯", lengthDelimiter)
+				delimiter2 := delimiter1
+				if width > lengthDelimiter+lengthDelimiter+10 {
+					delimiter2 = strings.Repeat("⎯", lengthDelimiter+1)
+				}
+				var delimiterString string = delimiter1 + " " + app.updateTime + " " + delimiter2
+				// Вставляем новую строку после указанного индекса + 1 пустая строка (сдвигая остальные строки массива)
+				app.currentLogLines = append(app.currentLogLines[:delimiterIndex+1],
+					append([]string{delimiterString}, app.currentLogLines[delimiterIndex+1:]...)...)
+			}
+		}
 	}
 }
 
