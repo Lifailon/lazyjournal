@@ -4173,7 +4173,7 @@ func (app *App) updateWindowSize(seconds int) {
 // Функция для фиксации места загрузки журнала с помощью делимитра (параметр для обновления места и времени загрузки)
 func (app *App) updateDelimiter(newUpdate bool) {
 	if newUpdate {
-		// Фиксируем (сохраняем) предпоследнюю (последняя строка всегда пустая) строку для вставки делимитра (если это ручной выбор из списка) или выходим
+		// Фиксируем (сохраняем) предпоследнюю (-2, т.к. последняя строка всегда пустая) строку для вставки делимитра (если это ручной выбор из списка) или выходим
 		if len(app.currentLogLines) > 0 {
 			app.lastUpdateLine = app.currentLogLines[len(app.currentLogLines)-2]
 		} else {
@@ -4189,30 +4189,25 @@ func (app *App) updateDelimiter(newUpdate bool) {
 		for i := len(app.currentLogLines) - 1; i >= 0; i-- {
 			if app.currentLogLines[i] == app.lastUpdateLine {
 				delimiterIndex = i
-				// Debug index
-				// selectedDocker, _ := g.View("docker")
-				// selectedDocker.Title = "index: " + strconv.Itoa(delimiterIndex) + "line: " + app.lastUpdateLine
 				break
 			}
 		}
-		// Если строка найдена, вставляем делимитр перед ней
-		if delimiterIndex > 0 {
-			// Проверяем, что найденный индекс меньше длинны массива строк
-			if delimiterIndex < len(app.currentLogLines)-1 {
-				// Формируем длинну делимитра
-				v, _ := app.gui.View("logs")
-				width, _ := v.Size()
-				lengthDelimiter := width/2 - 5
-				delimiter1 := strings.Repeat("⎯", lengthDelimiter)
-				delimiter2 := delimiter1
-				if width > lengthDelimiter+lengthDelimiter+10 {
-					delimiter2 = strings.Repeat("⎯", lengthDelimiter+1)
-				}
-				var delimiterString string = delimiter1 + " " + app.updateTime + " " + delimiter2
-				// Вставляем новую строку после указанного индекса + 1 пустая строка (сдвигая остальные строки массива)
-				app.currentLogLines = append(app.currentLogLines[:delimiterIndex+1],
-					append([]string{delimiterString}, app.currentLogLines[delimiterIndex+1:]...)...)
+		// Проверяем, что строка найдена и найденный индекс меньше длинны массива строк
+		if delimiterIndex > 0 && delimiterIndex < len(app.currentLogLines)-2 {
+			// Формируем длинну делимитра
+			v, _ := app.gui.View("logs")
+			width, _ := v.Size()
+			lengthDelimiter := width/2 - 5
+			delimiter1 := strings.Repeat("⎯", lengthDelimiter)
+			delimiter2 := delimiter1
+			if width > lengthDelimiter+lengthDelimiter+10 {
+				delimiter2 = strings.Repeat("⎯", lengthDelimiter+1)
 			}
+			var delimiterString string = delimiter1 + " " + app.updateTime + " " + delimiter2
+			// Вставляем новую строку после указанного индекса + 1 пустая строка (сдвигая остальные строки массива)
+			app.currentLogLines = append(app.currentLogLines[:delimiterIndex+1],
+				append([]string{delimiterString}, app.currentLogLines[delimiterIndex+1:]...)...)
+
 		}
 	}
 }
