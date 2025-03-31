@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -50,12 +51,13 @@ func TestWinFiles(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Заполняем базовые параметры структуры
 			app := &App{
-				selectPath:   tc.selectPath,
-				testMode:     true,
-				colorMode:    true,
-				tailSpinMode: false,
-				logViewCount: "100000",
-				getOS:        "windows",
+				selectPath:       tc.selectPath,
+				testMode:         true,
+				colorMode:        true,
+				tailSpinMode:     false,
+				logViewCount:     "100000",
+				logUpdateSeconds: 5,
+				getOS:            "windows",
 				// Режим и текст для фильтрации
 				selectFilterMode: "fuzzy",
 				filterText:       "",
@@ -71,6 +73,8 @@ func TestWinFiles(t *testing.T) {
 				dateRegex:            dateRegex,
 				ipAddressRegex:       ipAddressRegex,
 				procRegex:            procRegex,
+				intInputRegex:        intInputRegex,
+				intOutputRegex:       intOutputRegex,
 				syslogUnitRegex:      syslogUnitRegex,
 			}
 
@@ -137,6 +141,7 @@ func TestWinEvents(t *testing.T) {
 		colorMode:            true,
 		tailSpinMode:         false,
 		logViewCount:         "100000",
+		logUpdateSeconds:     5,
 		getOS:                "windows",
 		systemDisk:           "C",
 		userName:             "lifailon",
@@ -153,6 +158,8 @@ func TestWinEvents(t *testing.T) {
 		dateRegex:            dateRegex,
 		ipAddressRegex:       ipAddressRegex,
 		procRegex:            procRegex,
+		intInputRegex:        intInputRegex,
+		intOutputRegex:       intOutputRegex,
 		syslogUnitRegex:      syslogUnitRegex,
 	}
 
@@ -208,6 +215,7 @@ func TestUnixFiles(t *testing.T) {
 				colorMode:            true,
 				tailSpinMode:         false,
 				logViewCount:         "100000",
+				logUpdateSeconds:     5,
 				getOS:                "linux",
 				userName:             "lifailon",
 				selectFilterMode:     "fuzzy",
@@ -223,6 +231,8 @@ func TestUnixFiles(t *testing.T) {
 				dateRegex:            dateRegex,
 				ipAddressRegex:       ipAddressRegex,
 				procRegex:            procRegex,
+				intInputRegex:        intInputRegex,
+				intOutputRegex:       intOutputRegex,
 				syslogUnitRegex:      syslogUnitRegex,
 			}
 
@@ -284,6 +294,7 @@ func TestLinuxJournal(t *testing.T) {
 				colorMode:            true,
 				tailSpinMode:         false,
 				logViewCount:         "100000",
+				logUpdateSeconds:     5,
 				getOS:                "linux",
 				selectFilterMode:     "fuzzy",
 				filterText:           "",
@@ -298,6 +309,8 @@ func TestLinuxJournal(t *testing.T) {
 				dateRegex:            dateRegex,
 				ipAddressRegex:       ipAddressRegex,
 				procRegex:            procRegex,
+				intInputRegex:        intInputRegex,
+				intOutputRegex:       intOutputRegex,
 				syslogUnitRegex:      syslogUnitRegex,
 			}
 
@@ -354,6 +367,7 @@ func TestDockerContainer(t *testing.T) {
 				colorMode:                    true,
 				tailSpinMode:                 false,
 				logViewCount:                 "100000",
+				logUpdateSeconds:             5,
 				selectFilterMode:             "fuzzy",
 				filterText:                   "",
 				trimHttpRegex:                trimHttpRegex,
@@ -367,6 +381,8 @@ func TestDockerContainer(t *testing.T) {
 				dateRegex:                    dateRegex,
 				ipAddressRegex:               ipAddressRegex,
 				procRegex:                    procRegex,
+				intInputRegex:                intInputRegex,
+				intOutputRegex:               intOutputRegex,
 				syslogUnitRegex:              syslogUnitRegex,
 			}
 
@@ -404,6 +420,7 @@ func TestColor(t *testing.T) {
 		colorMode:            true,
 		tailSpinMode:         false,
 		logViewCount:         "100000",
+		logUpdateSeconds:     5,
 		selectPath:           "/home/",
 		filterListText:       "color",
 		trimHttpRegex:        trimHttpRegex,
@@ -417,6 +434,8 @@ func TestColor(t *testing.T) {
 		dateRegex:            dateRegex,
 		ipAddressRegex:       ipAddressRegex,
 		procRegex:            procRegex,
+		intInputRegex:        intInputRegex,
+		intOutputRegex:       intOutputRegex,
 		syslogUnitRegex:      syslogUnitRegex,
 	}
 
@@ -476,12 +495,13 @@ func TestTailSpinColor(t *testing.T) {
 	}
 
 	app := &App{
-		testMode:       true,
-		colorMode:      true,
-		tailSpinMode:   true,
-		logViewCount:   "100000",
-		selectPath:     "/home/",
-		filterListText: "color",
+		testMode:         true,
+		colorMode:        true,
+		tailSpinMode:     true,
+		logViewCount:     "100000",
+		logUpdateSeconds: 5,
+		selectPath:       "/home/",
+		filterListText:   "color",
 	}
 
 	app.loadFiles(app.selectPath)
@@ -525,6 +545,7 @@ func TestFilter(t *testing.T) {
 				colorMode:            true,
 				tailSpinMode:         false,
 				logViewCount:         "100000",
+				logUpdateSeconds:     5,
 				selectPath:           "/home/",
 				filterListText:       "color",
 				selectFilterMode:     tc.selectFilterMode,
@@ -540,6 +561,8 @@ func TestFilter(t *testing.T) {
 				dateRegex:            dateRegex,
 				ipAddressRegex:       ipAddressRegex,
 				procRegex:            procRegex,
+				intInputRegex:        intInputRegex,
+				intOutputRegex:       intOutputRegex,
 				syslogUnitRegex:      syslogUnitRegex,
 			}
 
@@ -598,8 +621,107 @@ func TestFilter(t *testing.T) {
 func TestFlags(t *testing.T) {
 	app := &App{}
 	showHelp()
-	app.showVersion()
 	app.showAudit()
+}
+
+func TestCommandColor(t *testing.T) {
+	app := &App{
+		testMode:                     false,
+		colorMode:                    true,
+		tailSpinMode:                 false,
+		startServices:                0,
+		selectedJournal:              0,
+		startFiles:                   0,
+		selectedFile:                 0,
+		startDockerContainers:        0,
+		selectedDockerContainer:      0,
+		selectUnits:                  "services",
+		selectPath:                   "/var/log/",
+		selectContainerizationSystem: "docker",
+		selectFilterMode:             "default",
+		logViewCount:                 "100000",
+		logUpdateSeconds:             5,
+		journalListFrameColor:        gocui.ColorDefault,
+		fileSystemFrameColor:         gocui.ColorDefault,
+		dockerFrameColor:             gocui.ColorDefault,
+		autoScroll:                   true,
+		trimHttpRegex:                trimHttpRegex,
+		trimHttpsRegex:               trimHttpsRegex,
+		trimPrefixPathRegex:          trimPrefixPathRegex,
+		trimPostfixPathRegex:         trimPostfixPathRegex,
+		hexByteRegex:                 hexByteRegex,
+		dateTimeRegex:                dateTimeRegex,
+		timeMacAddressRegex:          timeMacAddressRegex,
+		dateIpAddressRegex:           dateIpAddressRegex,
+		dateRegex:                    dateRegex,
+		ipAddressRegex:               ipAddressRegex,
+		procRegex:                    procRegex,
+		intInputRegex:                intInputRegex,
+		intOutputRegex:               intOutputRegex,
+		syslogUnitRegex:              syslogUnitRegex,
+		keybindingsEnabled:           true,
+	}
+
+	// Читаем содержимое тестируемого файла
+	data, err := os.ReadFile("color.log")
+	if err != nil {
+		t.Fatalf("Error read test file: %v", err)
+	}
+	// Подменяем stdin содержимым из файла
+	bytes.NewReader(data)
+	// Захватываем stdin
+	originalStdin := os.Stdin
+	// Создаем pipe, чтобы перенаправить stdin
+	pr, pw, _ := os.Pipe()
+	os.Stdin = pr
+	// Записываем данные в "pipe" (это имитирует передачу данных в stdin)
+	go func() {
+		_, _ = pw.Write(data)
+		pw.Close()
+	}()
+
+	// Текущее имя хоста
+	app.hostName, _ = os.Hostname()
+	// Удаляем доменную часть, если она есть
+	if strings.Contains(app.hostName, ".") {
+		app.hostName = strings.Split(app.hostName, ".")[0]
+	}
+	// Текущее имя пользователя
+	currentUser, _ := user.Current()
+	app.userName = currentUser.Username
+	// Удаляем доменную часть, если она есть
+	if strings.Contains(app.userName, "\\") {
+		app.userName = strings.Split(app.userName, "\\")[1]
+	}
+	// Определяем букву системного диска с установленной ОС Windows
+	app.systemDisk = os.Getenv("SystemDrive")
+	if len(app.systemDisk) >= 1 {
+		app.systemDisk = string(app.systemDisk[0])
+	} else {
+		app.systemDisk = "C"
+	}
+	// Имена пользователей
+	passwd, _ := os.Open("/etc/passwd")
+	scanner := bufio.NewScanner(passwd)
+	for scanner.Scan() {
+		line := scanner.Text()
+		userName := strings.Split(line, ":")
+		if len(userName) > 0 {
+			app.userNameArray = append(app.userNameArray, userName[0])
+		}
+	}
+	// Список корневых каталогов (ls -d /*/) с приставкой "/"
+	files, _ := os.ReadDir("/")
+	for _, file := range files {
+		if file.IsDir() {
+			app.rootDirArray = append(app.rootDirArray, "/"+file.Name())
+		}
+	}
+
+	app.commandLineColor()
+	// Восстанавливаем оригинальный stdin
+	os.Stdin = originalStdin
+
 }
 
 func TestMainInterface(t *testing.T) {
@@ -622,7 +744,8 @@ func TestMockInterface(t *testing.T) {
 		selectPath:                   "/var/log/",
 		selectContainerizationSystem: "docker",
 		selectFilterMode:             "default",
-		logViewCount:                 "200000",
+		logViewCount:                 "100000",
+		logUpdateSeconds:             5,
 		journalListFrameColor:        gocui.ColorDefault,
 		fileSystemFrameColor:         gocui.ColorDefault,
 		dockerFrameColor:             gocui.ColorDefault,
@@ -638,6 +761,8 @@ func TestMockInterface(t *testing.T) {
 		dateRegex:                    dateRegex,
 		ipAddressRegex:               ipAddressRegex,
 		procRegex:                    procRegex,
+		intInputRegex:                intInputRegex,
+		intOutputRegex:               intOutputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
 	}
@@ -753,8 +878,9 @@ func TestMockInterface(t *testing.T) {
 		return
 	}
 
+	app.secondsChan = make(chan int, app.logUpdateSeconds)
 	go func() {
-		app.updateLogOutput(3)
+		app.updateLogBack(app.secondsChan, false)
 	}()
 
 	go func() {
@@ -938,25 +1064,34 @@ func TestMockInterface(t *testing.T) {
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 	if v, err := g.View("logs"); err == nil {
-		// Right tail count +
+		// Alt+Right tail count +
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
+		// 200000
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		// Left tail count -
+		// Alt+Left tail count -
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
+		// 100000
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
+		// 50000
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
+		// 30000
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
+		// 20000
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
+		// 10000
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		// Right
+		// 5000
+		app.setCountLogViewDown(g, v)
+		time.Sleep(1 * time.Second)
+		// Right (back to 100000)
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		app.setCountLogViewUp(g, v)
