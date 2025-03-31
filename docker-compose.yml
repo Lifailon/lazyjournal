@@ -1,0 +1,32 @@
+services:
+  lazyjournal:
+    image: lifailon/lazyjournal:latest
+    container_name: lazyjournal
+    restart: unless-stopped
+    # Grant read permissions (:ro) from the host system
+    volumes:
+      # Systemd
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
+      - /run/systemd/system:/run/systemd/system:ro
+      - /run/systemd/journal/socket:/run/systemd/journal/socket:ro
+      # Journald
+      - /etc/machine-id:/etc/machine-id:ro
+      # Filesystem
+      - /var/log:/var/log:ro
+      - /opt:/opt:ro
+      - /home:/home:ro
+      # Docker socket
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    privileged: true
+    # Remove if not using Web mode
+    environment:
+      - PORT=${PORT}
+      - USERNAME=${USERNAME}
+      - PASSWORD=${PASSWORD}
+    ports:
+      - "${PORT}:${PORT}"
+    env_file:
+      - .env
+    # Remove if not using TUI mode
+    stdin_open: true
+    tty: true
