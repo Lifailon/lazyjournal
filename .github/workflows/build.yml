@@ -79,8 +79,13 @@ jobs:
       - name: Start docker container for test in Ubuntu
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: |
+          version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
+          curl -L "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o $HOME/.local/bin/docker-compose
+          chmod +x $HOME/.local/bin/docker-compose
+          docker-compose --version
+          echo -e "TTYD=true\nPORT=5555\nUSERNAME=\nPASSWORD=" | tee .env > /dev/null
+          docker-compose up -d
           docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
-          docker run -d --name TorAPI -p 8443:8443 lifailon/torapi:latest
 
       - name: Create pcap files for Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
@@ -100,6 +105,11 @@ jobs:
         run: sudo go test -v -cover
         continue-on-error: true
         timeout-minutes: 5
+
+      - name: Check color in cli mode and container
+        if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
+        run: docker logs lazyjournal | go run main.go -c
+        continue-on-error: true
 
       - name: Create markdown report in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}

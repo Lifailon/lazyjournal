@@ -1,7 +1,10 @@
-# Download ttyd and build lazyjournal
+# Build source code and download dependencies
 FROM golang:1.23-alpine3.20 AS build
 RUN apk add -U -q --progress --no-cache git curl
 RUN curl -fsSL https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 -o /bin/ttyd
+# RUN curl -fsSL https://github.com/containers/podman/releases/latest/download/podman-remote-static-linux_amd64.tar.gz | tar xz -C /bin
+# RUN latest=$(curl -sL https://dl.k8s.io/release/stable.txt) && \
+#     curl -fsSL https://cdn.dl.k8s.io/release/$latest/bin/linux/amd64/kubectl -o /bin/kubectl
 RUN git clone https://github.com/Lifailon/lazyjournal /lazyjournal
 WORKDIR /lazyjournal
 RUN go build -o /bin/lazyjournal
@@ -26,6 +29,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=docker-build /go/src/github.com/docker/cli/build/docker /bin/docker
+# COPY --from=build /bin/bin/podman-remote-static-linux_amd64 /bin/podman
+# COPY --from=build /bin/kubectl /bin/kubectl
 COPY --from=build /bin/lazyjournal /bin/lazyjournal
 COPY --from=build /bin/ttyd /bin/ttyd
 RUN chmod +x /bin/ttyd
