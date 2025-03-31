@@ -947,21 +947,28 @@ func TestMockInterface(t *testing.T) {
 			// Right
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
+			t.Log("PASS: UNIT")
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
+			t.Log("PASS: USER_UNIT")
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
+			t.Log("PASS: Kernel")
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
-			// Left
+			t.Log("PASS: Services")
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
+			t.Log("PASS: Kernel")
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
+			t.Log("PASS: USER_UNIT")
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
+			t.Log("PASS: UNIT")
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
+			t.Log("PASS: Services")
 		}
 	}
 	t.Log("PASS: test journals")
@@ -979,20 +986,28 @@ func TestMockInterface(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			app.setLogFilesListRight(g, v)
 			time.Sleep(5 * time.Second)
+			t.Log("PASS: /opt/log")
+			app.setLogFilesListRight(g, v)
+			time.Sleep(10 * time.Second)
+			t.Log("PASS: /home")
 			app.setLogFilesListRight(g, v)
 			time.Sleep(5 * time.Second)
+			t.Log("PASS: descriptor")
 			app.setLogFilesListRight(g, v)
 			time.Sleep(5 * time.Second)
-			app.setLogFilesListRight(g, v)
-			time.Sleep(5 * time.Second)
+			t.Log("PASS: /var/log")
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(5 * time.Second)
+			t.Log("PASS: descriptor")
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(5 * time.Second)
+			t.Log("PASS: /home")
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(5 * time.Second)
+			t.Log("PASS: /opt/log")
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(5 * time.Second)
+			t.Log("PASS: /var/log")
 		}
 	}
 	t.Log("PASS: test filesystem")
@@ -1008,15 +1023,22 @@ func TestMockInterface(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			app.setContainersListRight(g, v)
 			time.Sleep(1 * time.Second)
+			t.Log("PASS: Podman")
 			app.setContainersListRight(g, v)
 			time.Sleep(1 * time.Second)
+			t.Log("PASS: Kubernetes")
 			app.setContainersListRight(g, v)
 			time.Sleep(1 * time.Second)
+			t.Log("PASS: Docker")
 			app.setContainersListLeft(g, v)
 			time.Sleep(1 * time.Second)
+			t.Log("PASS: Kubernetes")
 			app.setContainersListLeft(g, v)
 			time.Sleep(1 * time.Second)
+			t.Log("PASS: Podman")
 			app.setContainersListLeft(g, v)
+			time.Sleep(1 * time.Second)
+			t.Log("PASS: Docker")
 		}
 		time.Sleep(1 * time.Second)
 		app.selectDocker(g, v)
@@ -1039,24 +1061,24 @@ func TestMockInterface(t *testing.T) {
 
 	// Проверяем режимы фильтрации
 	if v, err := g.View("filter"); err == nil {
-		// fuzzy
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
-		// regex
+		t.Log("PASS: Filter fuzzy")
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
-		// default
+		t.Log("PASS: Filter regex")
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
-		// regex
+		t.Log("PASS: Filter default")
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
-		// fuzzy
+		t.Log("PASS: Filter regex")
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
-		// default
+		t.Log("PASS: Filter fuzzy")
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
+		t.Log("PASS: Filter default")
 	}
 	t.Log("PASS: test filter modes")
 
@@ -1064,42 +1086,50 @@ func TestMockInterface(t *testing.T) {
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 	if v, err := g.View("logs"); err == nil {
-		// Alt+Right tail count +
+		// Alt+Right
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		// 200000
+		t.Log("PASS: Tail 150000")
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		// Alt+Left tail count -
+		t.Log("PASS: Tail 200000")
+		// Alt+Left
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		// 100000
+		t.Log("PASS: Tail 150000")
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		// 50000
+		t.Log("PASS: Tail 100000")
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		// 30000
+		t.Log("PASS: Tail 50000")
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		// 20000
+		t.Log("PASS: Tail 30000")
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		// 10000
+		t.Log("PASS: Tail 20000")
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		// 5000
+		t.Log("PASS: Tail 10000")
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		// Right (back to 100000)
+		t.Log("PASS: Tail 5000")
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
+		t.Log("PASS: Tail 10000")
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
+		t.Log("PASS: Tail 20000")
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
+		t.Log("PASS: Tail 30000")
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
+		t.Log("PASS: Tail 50000")
+		app.setCountLogViewUp(g, v)
+		time.Sleep(1 * time.Second)
+		t.Log("PASS: Tail 100000")
 		// UP output
 		app.scrollUpLogs(1)
 		time.Sleep(1 * time.Second)
