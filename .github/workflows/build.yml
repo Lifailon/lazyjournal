@@ -109,7 +109,7 @@ jobs:
       # macOS
       - name: Unit testing (files, flags and run main interface) in macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
-        run: sudo go test -v --run "TestUnixFiles|TestFlags|TestMainInterface" -cover
+        run: sudo go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestMainInterface" -cover
         continue-on-error: true
         timeout-minutes: 5
 
@@ -129,7 +129,7 @@ jobs:
 
       - name: Unit testing (events, files, flags and interface) in Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
-        run: go test -v --run "TestWin.*|TestFlags|TestMainInterface|TestMockInterface" -cover
+        run: go test -v --run "TestWin.*|TestFlags|TestCommandColor|TestMainInterface|TestMockInterface" -cover
         continue-on-error: true
         timeout-minutes: 5
 
@@ -163,3 +163,5 @@ jobs:
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: bin/
+        env:
+          ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}

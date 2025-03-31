@@ -1,4 +1,4 @@
-version := $(shell go run main.go -v)
+VERSION := $(shell go run main.go -v)
 
 prep:
 	@go fmt ./...
@@ -29,7 +29,7 @@ test: prep
 	go test -v -cover --run $(n) ./...
 
 build: prep
-	@echo "Build version: $(version)"
+	@echo "Build version: $(VERSION)"
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-linux-amd64
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-linux-arm64
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-darwin-amd64
