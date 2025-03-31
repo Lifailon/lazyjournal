@@ -4174,7 +4174,7 @@ func (app *App) updateWindowSize(seconds int) {
 func (app *App) updateDelimiter(newUpdate bool) {
 	if newUpdate {
 		// Фиксируем (сохраняем) предпоследнюю (-2, т.к. последняя строка всегда пустая) строку для вставки делимитра (если это ручной выбор из списка) или выходим
-		if len(app.currentLogLines) > 0 {
+		if len(app.currentLogLines) > 2 {
 			app.lastUpdateLine = app.currentLogLines[len(app.currentLogLines)-2]
 		} else {
 			return
