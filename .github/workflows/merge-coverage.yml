@@ -1,4 +1,4 @@
-name: Merge coverage and update report
+name: Merge Coverage
 
 on:
   workflow_dispatch:
@@ -87,7 +87,7 @@ jobs:
           go build -v ./...
 
       - name: Run unit test in macOS
-        run: sudo go test -v --run "TestUnixFiles|TestFlags|TestMainInterface" -cover -coverprofile macos-coverage.out
+        run: sudo go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestMainInterface" -cover -coverprofile macos-coverage.out
         continue-on-error: true
         timeout-minutes: 5
 
@@ -137,7 +137,7 @@ jobs:
         continue-on-error: true
 
       - name: Run unit test in Windows
-        run: go test -v --run "TestWin.*|TestFlags|TestMainInterface|TestMockInterface" -cover -coverprofile windows-coverage.out
+        run: go test -v --run "TestWin.*|TestFlags|TestCommandColor|TestMainInterface|TestMockInterface" -cover -coverprofile windows-coverage.out
         continue-on-error: true
         timeout-minutes: 5
 
@@ -160,7 +160,7 @@ jobs:
           name: windows-coverage
           path: windows-coverage.out
 
-  merge_coverage_test:
+  Merge:
     runs-on: ubuntu-latest
     needs: [Linux, macOS, Windows]
     steps:

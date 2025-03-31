@@ -109,7 +109,7 @@ jobs:
       # macOS
       - name: Unit testing (files, flags and run main interface) in macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
-        run: sudo go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestMainInterface" -cover
+        run: sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestMainInterface"
         continue-on-error: true
         timeout-minutes: 5
 
@@ -129,7 +129,7 @@ jobs:
 
       - name: Unit testing (events, files, flags and interface) in Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
-        run: go test -v --run "TestWin.*|TestFlags|TestCommandColor|TestMainInterface|TestMockInterface" -cover
+        run: go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestMainInterface|TestMockInterface"
         continue-on-error: true
         timeout-minutes: 5
 
@@ -144,7 +144,7 @@ jobs:
         if: ${{ github.event.inputs.Binary == 'true' }}
         run: |
           version=$(go run main.go -v)
-          echo "Get version from main.go: $version"
+          echo "Current version: $version"
           mkdir -p bin
           architectures=("amd64" "arm64")
           for arch in "${architectures[@]}"; do
@@ -155,7 +155,7 @@ jobs:
               CGO_ENABLED=0 GOOS=windows GOARCH=$arch go build -o bin/lazyjournal-$version-windows-$arch.exe
           done
           ls -lh bin
-          echo "ARTIFACT_NAME=lazyjournal-$(date +'%d.%m.%Y')" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=lazyjournal-$version" >> $GITHUB_ENV
 
       - name: Upload binaries
         if: ${{ github.event.inputs.Binary == 'true' }}

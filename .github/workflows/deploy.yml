@@ -17,15 +17,7 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Get version
-      run: |
-        version=$(go run main.go -v)
-        echo "Current version: $version"
-        echo "ARTIFACT_VERSION=$version" >> $GITHUB_ENV
-
     - name: Build and push Docker image
       run: |
-        docker build -t lifailon/lazyjournal:${{ env.ARTIFACT_VERSION }} .
-        docker push lifailon/lazyjournal:${{ env.ARTIFACT_VERSION }}
-      env:
-        ARTIFACT_VERSION: ${{ env.ARTIFACT_VERSION }}
+        docker build -t lifailon/lazyjournal:latest .
+        docker push lifailon/lazyjournal:latest
