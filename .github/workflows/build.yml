@@ -26,6 +26,10 @@ on:
         description: 'Unit testing'
         default: false
         type: boolean
+      Release:
+        description: 'Check release'
+        default: false
+        type: boolean
       Binary:
         description: 'Build binary'
         default: false
@@ -117,7 +121,7 @@ jobs:
         continue-on-error: true
 
       # macOS
-      - name: Unit testing (files, flags and run main interface) in macOS
+      - name: Unit testing (files, flags, cli and run main interface) in macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
         run: sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestMainInterface"
         continue-on-error: true
@@ -137,7 +141,7 @@ jobs:
         shell: pwsh
         continue-on-error: true
 
-      - name: Unit testing (events, files, flags and interface) in Windows
+      - name: Unit testing (events, files, flags, cli, main and mock interface) in Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
         run: go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestMainInterface|TestMockInterface"
         continue-on-error: true
@@ -148,6 +152,25 @@ jobs:
         run: Get-Content test-report.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
         shell: pwsh
         continue-on-error: true
+
+      - name: Install binary from latest release on GitHub
+        if: ${{ github.event.inputs.Release == 'true' }}
+        run: curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh | bash
+
+      - name: Check flags (cli mode)
+        if: ${{ github.event.inputs.Release == 'true' }}
+        run: |
+          lazyjournal -v
+          lazyjournal -a
+          # curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -c
+
+      - name: Check interface in TMUX
+        if: ${{ github.event.inputs.Release == 'true' }}
+        run: |
+          tmux new-session -d -s test-session "lazyjournal"
+          sleep 1
+          tmux capture-pane -p
+          tmux kill-session -t test-session
 
       # Build
       - name: Build binaries
