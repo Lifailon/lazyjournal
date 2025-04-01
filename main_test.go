@@ -70,11 +70,9 @@ func TestWinFiles(t *testing.T) {
 				dateTimeRegex:        dateTimeRegex,
 				timeMacAddressRegex:  timeMacAddressRegex,
 				dateIpAddressRegex:   dateIpAddressRegex,
-				dateRegex:            dateRegex,
 				ipAddressRegex:       ipAddressRegex,
 				procRegex:            procRegex,
-				intInputRegex:        intInputRegex,
-				intOutputRegex:       intOutputRegex,
+				integersInputRegex:   integersInputRegex,
 				syslogUnitRegex:      syslogUnitRegex,
 			}
 
@@ -155,11 +153,9 @@ func TestWinEvents(t *testing.T) {
 		dateTimeRegex:        dateTimeRegex,
 		timeMacAddressRegex:  timeMacAddressRegex,
 		dateIpAddressRegex:   dateIpAddressRegex,
-		dateRegex:            dateRegex,
 		ipAddressRegex:       ipAddressRegex,
 		procRegex:            procRegex,
-		intInputRegex:        intInputRegex,
-		intOutputRegex:       intOutputRegex,
+		integersInputRegex:   integersInputRegex,
 		syslogUnitRegex:      syslogUnitRegex,
 	}
 
@@ -228,11 +224,9 @@ func TestUnixFiles(t *testing.T) {
 				dateTimeRegex:        dateTimeRegex,
 				timeMacAddressRegex:  timeMacAddressRegex,
 				dateIpAddressRegex:   dateIpAddressRegex,
-				dateRegex:            dateRegex,
 				ipAddressRegex:       ipAddressRegex,
 				procRegex:            procRegex,
-				intInputRegex:        intInputRegex,
-				intOutputRegex:       intOutputRegex,
+				integersInputRegex:   integersInputRegex,
 				syslogUnitRegex:      syslogUnitRegex,
 			}
 
@@ -306,11 +300,9 @@ func TestLinuxJournal(t *testing.T) {
 				dateTimeRegex:        dateTimeRegex,
 				timeMacAddressRegex:  timeMacAddressRegex,
 				dateIpAddressRegex:   dateIpAddressRegex,
-				dateRegex:            dateRegex,
 				ipAddressRegex:       ipAddressRegex,
 				procRegex:            procRegex,
-				intInputRegex:        intInputRegex,
-				intOutputRegex:       intOutputRegex,
+				integersInputRegex:   integersInputRegex,
 				syslogUnitRegex:      syslogUnitRegex,
 			}
 
@@ -378,11 +370,9 @@ func TestDockerContainer(t *testing.T) {
 				dateTimeRegex:                dateTimeRegex,
 				timeMacAddressRegex:          timeMacAddressRegex,
 				dateIpAddressRegex:           dateIpAddressRegex,
-				dateRegex:                    dateRegex,
 				ipAddressRegex:               ipAddressRegex,
 				procRegex:                    procRegex,
-				intInputRegex:                intInputRegex,
-				intOutputRegex:               intOutputRegex,
+				integersInputRegex:           integersInputRegex,
 				syslogUnitRegex:              syslogUnitRegex,
 			}
 
@@ -431,11 +421,9 @@ func TestColor(t *testing.T) {
 		dateTimeRegex:        dateTimeRegex,
 		timeMacAddressRegex:  timeMacAddressRegex,
 		dateIpAddressRegex:   dateIpAddressRegex,
-		dateRegex:            dateRegex,
 		ipAddressRegex:       ipAddressRegex,
 		procRegex:            procRegex,
-		intInputRegex:        intInputRegex,
-		intOutputRegex:       intOutputRegex,
+		integersInputRegex:   integersInputRegex,
 		syslogUnitRegex:      syslogUnitRegex,
 	}
 
@@ -558,11 +546,9 @@ func TestFilter(t *testing.T) {
 				dateTimeRegex:        dateTimeRegex,
 				timeMacAddressRegex:  timeMacAddressRegex,
 				dateIpAddressRegex:   dateIpAddressRegex,
-				dateRegex:            dateRegex,
 				ipAddressRegex:       ipAddressRegex,
 				procRegex:            procRegex,
-				intInputRegex:        intInputRegex,
-				intOutputRegex:       intOutputRegex,
+				integersInputRegex:   integersInputRegex,
 				syslogUnitRegex:      syslogUnitRegex,
 			}
 
@@ -653,11 +639,9 @@ func TestCommandColor(t *testing.T) {
 		dateTimeRegex:                dateTimeRegex,
 		timeMacAddressRegex:          timeMacAddressRegex,
 		dateIpAddressRegex:           dateIpAddressRegex,
-		dateRegex:                    dateRegex,
 		ipAddressRegex:               ipAddressRegex,
 		procRegex:                    procRegex,
-		intInputRegex:                intInputRegex,
-		intOutputRegex:               intOutputRegex,
+		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
 	}
@@ -758,11 +742,9 @@ func TestMockInterface(t *testing.T) {
 		dateTimeRegex:                dateTimeRegex,
 		timeMacAddressRegex:          timeMacAddressRegex,
 		dateIpAddressRegex:           dateIpAddressRegex,
-		dateRegex:                    dateRegex,
 		ipAddressRegex:               ipAddressRegex,
 		procRegex:                    procRegex,
-		intInputRegex:                intInputRegex,
-		intOutputRegex:               intOutputRegex,
+		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
 	}
