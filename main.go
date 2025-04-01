@@ -424,7 +424,7 @@ var (
 	ipAddressRegex = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+|\.\d+|/\d+)?\b`)
 	// int%
 	procRegex = regexp.MustCompile(`(\d+)%`)
-	// Integers (int only)
+	// Integers: Int only + Time + MAC + Percentage + Date2 (20/03/2025)
 	integersInputRegex = regexp.MustCompile(`^[^a-zA-Z]*\d+[^a-zA-Z]*$`)
 	// Syslog UNIT
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
@@ -3818,19 +3818,19 @@ func (app *App) wordColor(inputWord string) string {
 			return colored
 		})
 	// Time + MAC
-	case app.timeMacAddressRegex.MatchString(inputWord):
-		coloredWord = app.timeMacAddressRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
-			colored := ""
-			for _, char := range match {
-				if char == '-' || char == ':' || char == '.' || char == ',' || char == '+' {
-					colored += "\033[35m" + string(char) + "\033[0m"
-				} else {
-					colored += "\033[34m" + string(char) + "\033[0m"
-				}
-			}
-			return colored
-		})
-	// Date + IP
+	// case app.timeMacAddressRegex.MatchString(inputWord):
+	// 	coloredWord = app.timeMacAddressRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
+	// 		colored := ""
+	// 		for _, char := range match {
+	// 			if char == '-' || char == ':' || char == '.' || char == ',' || char == '+' {
+	// 				colored += "\033[35m" + string(char) + "\033[0m"
+	// 			} else {
+	// 				colored += "\033[34m" + string(char) + "\033[0m"
+	// 			}
+	// 		}
+	// 		return colored
+	// 	})
+	// // Date + IP + Versions
 	case app.dateIpAddressRegex.MatchString(inputWord):
 		coloredWord = app.dateIpAddressRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
 			colored := ""
@@ -3844,18 +3844,18 @@ func (app *App) wordColor(inputWord string) string {
 			return colored
 		})
 	// Percentage (100%)
-	case strings.Contains(inputWordLower, "%"):
-		coloredWord = app.procRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
-			colored := ""
-			for _, char := range match {
-				if char == '%' {
-					colored += "\033[35m" + string(char) + "\033[0m"
-				} else {
-					colored += "\033[34m" + string(char) + "\033[0m"
-				}
-			}
-			return colored
-		})
+	// case strings.Contains(inputWordLower, "%"):
+	// 	coloredWord = app.procRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
+	// 		colored := ""
+	// 		for _, char := range match {
+	// 			if char == '%' {
+	// 				colored += "\033[35m" + string(char) + "\033[0m"
+	// 			} else {
+	// 				colored += "\033[34m" + string(char) + "\033[0m"
+	// 			}
+	// 		}
+	// 		return colored
+	// 	})
 	// Integers
 	case app.integersInputRegex.MatchString(inputWord):
 		var colored strings.Builder
@@ -3870,7 +3870,7 @@ func (app *App) wordColor(inputWord string) string {
 					colored.WriteString("\033[34m")
 					inNumber = true
 				}
-			case char == '/':
+			case char == '/' || char == ':' || char == '.' || char == '-' || char == '+' || char == '%':
 				// Красим символы
 				colored.WriteString("\033[35m")
 				inSymbol = true
