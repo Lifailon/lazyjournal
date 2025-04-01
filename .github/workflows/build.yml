@@ -19,7 +19,7 @@ on:
         default: false
         type: boolean
       Linter:
-        description: 'Linter checks'
+        description: 'Linter check'
         default: false
         type: boolean
       Test:
@@ -27,7 +27,7 @@ on:
         default: false
         type: boolean
       Release:
-        description: 'Check release'
+        description: 'Release check'
         default: false
         type: boolean
       Binary:
@@ -81,7 +81,7 @@ jobs:
 
       # Linux
       - name: Start docker container for test in Ubuntu
-        if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
+        if: ${{ (github.event.inputs.Release == 'true' || github.event.inputs.Test == 'true') && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: |
           version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
           curl -L "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
@@ -169,6 +169,29 @@ jobs:
         run: |
           tmux new-session -d -s test-session "lazyjournal"
           sleep 1
+          tmux capture-pane -p
+          tmux send-keys -t test-session "$(echo -e 'cron')"
+          tmux send-keys -t test-session "$(echo -e '\t')"        # Tab
+          tmux send-keys -t test-session "$(echo -e '\r')"        # Enter
+          sleep 3
+          tmux capture-pane -p
+          tmux send-keys -t test-session "$(echo -e '\t\t\t\t\t')"
+          for i in {1..4}; do tmux send-keys -t test-session "$(echo -e '\x7f')"; done
+          tmux send-keys -t test-session "$(echo -e 'lazy')"
+          tmux send-keys -t test-session "$(echo -e '\t\t\t')"
+          tmux send-keys -t test-session "$(echo -e '\x1b[C')"    # Right
+          sleep 1
+          tmux send-keys -t test-session "$(echo -e '\x1b[D')"    # Left
+          sleep 1
+          tmux send-keys -t test-session "$(echo -e '\r')"
+          sleep 3
+          tmux capture-pane -p
+          tmux send-keys -t test-session "$(echo -e '\t')"
+          tmux send-keys -t test-session "$(echo -e '\x1b[A')"    # Up
+          tmux send-keys -t test-session "$(echo -e '\x1b[B')"    # Down
+          tmux send-keys -t test-session "$(echo -e '\x1b[B')"
+          tmux send-keys -t test-session "$(echo -e 'tty|port')"
+          sleep 3
           tmux capture-pane -p
           tmux kill-session -t test-session
 
