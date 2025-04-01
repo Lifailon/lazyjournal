@@ -4108,14 +4108,12 @@ func (app *App) clearFilterEditor(g *gocui.Gui) {
 	app.applyFilter(false)
 }
 
-// Функция для обновления последнего выбранного вывода лога (параметры: опустить скролл вниз и загрузка журнала)
-func (app *App) updateLogOutput(lowScroll bool, newUpdate bool) {
+// Функция для обновления последнего выбранного вывода лога (параметр для загрузки журнала)
+func (app *App) updateLogOutput(newUpdate bool) {
 	// Выполняем обновление интерфейса через метод Update для иницилизации перерисовки интерфейса
 	app.gui.Update(func(g *gocui.Gui) error {
-		// Сбрасываем автоскролл, если это ручное обновление, что бы опустить журнал вниз
-		if lowScroll {
-			app.autoScroll = true
-		}
+		// Сбрасываем автоскролл, что бы опустить журнал вниз, т.к. это всегда ручное обновление
+		app.autoScroll = true
 		switch app.lastWindow {
 		case "services":
 			app.loadJournalLogs(app.lastSelected, newUpdate)
@@ -4232,7 +4230,6 @@ func (app *App) updateDelimiter(newUpdate bool) {
 			// Вставляем новую строку после указанного индекса + 1 пустая строка (сдвигая остальные строки массива)
 			app.currentLogLines = append(app.currentLogLines[:delimiterIndex+1],
 				append([]string{delimiterString}, app.currentLogLines[delimiterIndex+1:]...)...)
-
 		}
 	}
 }
@@ -4752,7 +4749,7 @@ func (app *App) setupKeybindings() error {
 		if len(app.currentLogLines) != 0 {
 			app.updateLogsView(true)
 			app.applyFilter(false)
-			app.updateLogOutput(true, false)
+			app.updateLogOutput(false)
 		}
 		vLog, err := app.gui.View("logs")
 		if err != nil {
@@ -4781,7 +4778,7 @@ func (app *App) setupKeybindings() error {
 		if len(app.currentLogLines) != 0 {
 			app.updateLogsView(true)
 			app.applyFilter(false)
-			app.updateLogOutput(true, false)
+			app.updateLogOutput(false)
 		}
 		return nil
 	}); err != nil {
@@ -4890,7 +4887,7 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 		app.logViewCount = "200000"
 	}
 	// Загружаем журнал заново
-	app.updateLogOutput(true, true)
+	app.updateLogOutput(true)
 	// Обновляем статус
 	vLog, err := app.gui.View("logs")
 	if err != nil {
@@ -4919,7 +4916,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	case "5000":
 		app.logViewCount = "5000"
 	}
-	app.updateLogOutput(true, true)
+	app.updateLogOutput(true)
 	vLog, err := app.gui.View("logs")
 	if err != nil {
 		return err

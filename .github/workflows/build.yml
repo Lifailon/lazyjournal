@@ -61,6 +61,7 @@ jobs:
         if: ${{ github.event.inputs.Update == 'true' }}
         run: go get -u ./...
 
+      # Linter
       - name: Golangci linter check
         if: ${{ github.event.inputs.Linter == 'true' }}
         run: |
@@ -153,6 +154,7 @@ jobs:
         shell: pwsh
         continue-on-error: true
 
+      # Release
       - name: Install binary from latest release on GitHub
         if: ${{ github.event.inputs.Release == 'true' }}
         run: curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh | bash
@@ -162,7 +164,7 @@ jobs:
         run: |
           lazyjournal -v
           lazyjournal -a
-          # curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -c
+          curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -c
 
       - name: Check interface in TMUX
         if: ${{ github.event.inputs.Release == 'true' }}

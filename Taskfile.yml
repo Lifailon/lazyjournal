@@ -1,6 +1,11 @@
 version: '3'
 
 tasks:
+  clean:
+    desc: "Clean cache"
+    cmds:
+      - go clean -cache -modcache -testcache
+
   prep:
     desc: "Install dependencies and code preparation"
     cmds:

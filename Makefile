@@ -1,5 +1,8 @@
 VERSION := $(shell go run main.go -v)
 
+clean:
+    @go clean -cache -modcache -testcache
+
 prep:
 	@go fmt ./...
 	@go vet ./...
