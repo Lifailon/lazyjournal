@@ -143,11 +143,9 @@ type App struct {
 	dateTimeRegex        *regexp.Regexp
 	timeMacAddressRegex  *regexp.Regexp
 	dateIpAddressRegex   *regexp.Regexp
-	dateRegex            *regexp.Regexp
 	ipAddressRegex       *regexp.Regexp
 	procRegex            *regexp.Regexp
-	intInputRegex        *regexp.Regexp
-	intOutputRegex       *regexp.Regexp
+	integersInputRegex   *regexp.Regexp
 	syslogUnitRegex      *regexp.Regexp
 }
 
@@ -420,17 +418,14 @@ var (
 	dateTimeRegex = regexp.MustCompile(`\b(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([\+\-]\d{2}:\d{2})?)\b`)
 	// MAC address + Time: H:MM || HH:MM || HH:MM:SS || XX:XX:XX:XX || XX:XX:XX:XX:XX:XX || XX-XX-XX-XX-XX-XX || HH:MM:SS,XXX || HH:MM:SS.XXX || HH:MM:SS+03
 	timeMacAddressRegex = regexp.MustCompile(`\b(?:\d{1,2}:\d{2}(:\d{2}([\.\,\+]\d{2,6})?)?|\b(?:[0-9A-Fa-f]{2}[\:\-]){5}[0-9A-Fa-f]{2}\b)\b`)
-	// Date + IP address + version (1.0 || 1.0.7 || 1.0-build)
+	// Date (DD-MM-YYYY || DD.MM.YYYY || YYYY-MM-DD || YYYY.MM.DD) + IP address + version (1.0 || 1.0.7 || 1.0-build)
 	dateIpAddressRegex = regexp.MustCompile(`\b(\d{1,2}[\-\.]\d{1,2}[\-\.]\d{4}|\d{4}[\-\.]\d{1,2}[\-\.]\d{1,2}|(?:\d{1,3}\.){3}\d{1,3}(?::\d+|\.\d+|/\d+)?|\d+\.\d+[\+\-\.\w]+|\d+\.\d+)\b`)
-	// Date: DD-MM-YYYY || DD.MM.YYYY || YYYY-MM-DD || YYYY.MM.DD
-	dateRegex = regexp.MustCompile(`\b(\d{1,2}[\-\.]\d{1,2}[\-\.]\d{4}|\d{4}[\-\.]\d{1,2}[\-.]\d{1,2})\b`)
 	// IP: 255.255.255.255 || 255.255.255.255:443 || 255.255.255.255.443 || 255.255.255.255/24
 	ipAddressRegex = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+|\.\d+|/\d+)?\b`)
 	// int%
 	procRegex = regexp.MustCompile(`(\d+)%`)
-	// int only
-	intInputRegex  = regexp.MustCompile(`^[^a-zA-Z]*\d+[^a-zA-Z]*$`)
-	intOutputRegex = regexp.MustCompile(`\d+`)
+	// Integers (int only)
+	integersInputRegex = regexp.MustCompile(`^[^a-zA-Z]*\d+[^a-zA-Z]*$`)
 	// Syslog UNIT
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
 )
@@ -467,11 +462,9 @@ func runGoCui(mock bool) {
 		dateTimeRegex:                dateTimeRegex,
 		timeMacAddressRegex:          timeMacAddressRegex,
 		dateIpAddressRegex:           dateIpAddressRegex,
-		dateRegex:                    dateRegex,
 		ipAddressRegex:               ipAddressRegex,
 		procRegex:                    procRegex,
-		intInputRegex:                intInputRegex,
-		intOutputRegex:               intOutputRegex,
+		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
 	}
@@ -3863,14 +3856,46 @@ func (app *App) wordColor(inputWord string) string {
 			}
 			return colored
 		})
-	// Int only
-	case app.intInputRegex.MatchString(inputWord):
-		matches := intOutputRegex.FindAllString(inputWord, -1)
-		colored := inputWord
-		for _, match := range matches {
-			colored = strings.ReplaceAll(colored, match, "\033[34m"+match+"\033[0m")
+	// Integers
+	case app.integersInputRegex.MatchString(inputWord):
+		var colored strings.Builder
+		// Флаги, для фиксации нахождения внутри числа/символа или нет
+		inNumber := false
+		inSymbol := false
+		for _, char := range inputWord {
+			switch {
+			case char >= '0' && char <= '9':
+				// Если это цифра и мы еще не в числе, открываем цвет
+				if !inNumber {
+					colored.WriteString("\033[34m")
+					inNumber = true
+				}
+			case char == '/':
+				// Красим символы
+				colored.WriteString("\033[35m")
+				inSymbol = true
+				inNumber = false
+			default:
+				// Если это не цифра и до этого было число, закрываем цвет
+				if inNumber {
+					inNumber = false
+				}
+				// Для всех других символов
+				colored.WriteString("\033[0m")
+			}
+			// Добавляем символ в результат
+			colored.WriteRune(char)
+			// Закрываем цвет для символа
+			if inSymbol {
+				colored.WriteString("\033[0m")
+				inSymbol = false
+			}
 		}
-		return colored
+		// Закрываем цвет, если строка закончилась на числе
+		if inNumber {
+			colored.WriteString("\033[0m")
+		}
+		return colored.String()
 	// tcpdump
 	case strings.Contains(inputWordLower, "tcp"):
 		coloredWord = app.replaceWordLower(inputWord, "tcp", "\033[33m")
