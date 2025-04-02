@@ -880,22 +880,24 @@ func TestMockInterface(t *testing.T) {
 
 	// Проверяем покраску
 	app.currentLogLines = []string{
-		"1  line: http://127.0.0.1:8443",
-		"2  line: https://github.com/Lifailon/lazyjournal",
-		"3  line: /dev/null",
-		"4  line: root",
-		"5  line: warning",
-		"6  line: stderr",
-		"7  line: success",
-		"8  line: restart",
-		"11 line: 0x04",
-		"12 line: 2025-02-26T21:38:35.956968+03:00",
-		"13 line: 11:11 / 11:11:11",
-		"14 line: 11:11:11:11:11:11 / 11-11-11-11-11-11",
-		"15 line: 20.03.2025",
-		"16 line: 1.0 / 1.0.7 / 1.0-build",
-		"17 line: 127.0.0.1 / 127.0.0.1:8443",
-		"18 line: 100%",
+		"http://127.0.0.1:8443",
+		"https://github.com/Lifailon/lazyjournal",
+		"/dev/null",
+		"root",
+		"warning",
+		"stderr",
+		"success",
+		"restart",
+		"0x04",
+		"2025-02-26T21:38:35.956968+03:00",
+		"127.0.0.1, 127.0.0.1:8443",
+		"1.0, 1.0.7, 1.0-build",
+		"20.03.2025, 2025.03.20, 2025-03-20, 20-03-2025",
+		"20/03/2025, 2025/03/20",
+		"11:11, 11:11:11",
+		"11:11:11:11:11:11, 11-11-11-11-11-11",
+		"10%, 50%, 100%",
+		"1, 10, 100, (1), [10], {100}",
 	}
 	app.updateDelimiter(true)
 	app.applyFilter(true)
@@ -1131,7 +1133,7 @@ func TestMockInterface(t *testing.T) {
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 
-	// Shift+TAB
+	// Shift+Tab
 	app.backView(g, nil)
 	time.Sleep(1 * time.Second)
 	app.backView(g, nil)
@@ -1146,8 +1148,22 @@ func TestMockInterface(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	app.backView(g, nil)
 	time.Sleep(1 * time.Second)
+	t.Log("PASS: test Shift+Tab")
 
+	// Select window use mouse
+	app.setSelectView(g, "filterList")
+	time.Sleep(1 * time.Second)
+	app.setSelectView(g, "services")
+	time.Sleep(1 * time.Second)
+	app.setSelectView(g, "varLogs")
+	time.Sleep(1 * time.Second)
+	app.setSelectView(g, "docker")
+	time.Sleep(1 * time.Second)
 	app.setSelectView(g, "filter")
+	time.Sleep(1 * time.Second)
+	app.setSelectView(g, "logs")
+	time.Sleep(1 * time.Second)
+	t.Log("PASS: test mouse")
 
 	quit(g, nil)
 }
