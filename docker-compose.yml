@@ -17,6 +17,8 @@ services:
       - /home:/home:ro
       # Docker socket
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Read docker logs from filesystem
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
     privileged: true
     # Remove if not using Web mode
     environment:

@@ -24,7 +24,8 @@ RUN rm build/docker && mv build/docker-linux-* build/docker
 FROM debian:bookworm-slim
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends systemd && \
+    apt-get install -y --no-install-recommends systemd \
+    xz-utils bzip2 gzip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
