@@ -2935,14 +2935,10 @@ func (app *App) applyFilter(color bool) {
 			app.logScrollPos = 0
 		}
 	}
-	// Обновляем окно для отображения отфильтрованных записей
+	// Обновляем автоскролл (всегда опускаем вывод в самый) для отображения отфильтрованных записей
 	if !app.testMode {
-		if app.autoScroll {
-			app.logScrollPos = 0
-			app.updateLogsView(true)
-		} else {
-			app.updateLogsView(false)
-		}
+		app.logScrollPos = 0
+		app.updateLogsView(true)
 	}
 }
 
