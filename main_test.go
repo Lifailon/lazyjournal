@@ -1147,5 +1147,7 @@ func TestMockInterface(t *testing.T) {
 	app.backView(g, nil)
 	time.Sleep(1 * time.Second)
 
+	app.setSelectView(g, "filter")
+
 	quit(g, nil)
 }

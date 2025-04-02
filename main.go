@@ -587,7 +587,7 @@ func runGoCui(mock bool) {
 	// Функция, которая будет вызываться при обновлении интерфейса
 	g.SetManagerFunc(app.layout)
 	// Включить поддержку мыши
-	g.Mouse = false
+	g.Mouse = true
 
 	// Цветовая схема GUI
 	g.FgColor = gocui.ColorDefault // поля всех окон и цвет текста
@@ -4804,6 +4804,102 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+	// Привязка клика мыши для выбора элемента в списке журналов и изменения фокуса на окно
+	if err := app.gui.SetKeybinding("filterList", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.setSelectView(g, "filterList")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("services", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.selectService(g, v)
+		return app.setSelectView(g, "services")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.selectFile(g, v)
+		return app.setSelectView(g, "varLogs")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.selectDocker(g, v)
+		return app.setSelectView(g, "docker")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("filter", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.setSelectView(g, "filter")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.setSelectView(g, "logs")
+	}); err != nil {
+		return err
+	}
+	// Скроллинг колесиком мыши вверх/вниз на 1 элемент
+	if err := app.gui.SetKeybinding("services", gocui.MouseWheelUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.prevService(v, 1)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("services", gocui.MouseWheelDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.nextService(v, 1)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", gocui.MouseWheelUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.prevFileName(v, 1)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", gocui.MouseWheelDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.nextFileName(v, 1)
+	}); err != nil {
+		return err
+	}
+
+	if err := app.gui.SetKeybinding("docker", gocui.MouseWheelUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.prevDockerContainer(v, 1)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", gocui.MouseWheelDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.nextDockerContainer(v, 1)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.MouseWheelUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollUpLogs(1)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.MouseWheelUp, gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollUpLogs(100)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.MouseWheelUp, gocui.ModMouseCtrl, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollUpLogs(100)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.MouseWheelDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollDownLogs(1)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.MouseWheelDown, gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollDownLogs(100)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.MouseWheelDown, gocui.ModMouseCtrl, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollDownLogs(100)
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -5497,6 +5593,30 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 		return err
 	}
 	return nil
+}
+
+func (app *App) setSelectView(g *gocui.Gui, viewName string) error {
+	// Сбрасываем цвет всех окон
+	views := []string{"filterList", "services", "varLogs", "docker", "filter", "logs"}
+	for _, name := range views {
+		if v, err := g.View(name); err == nil {
+			v.FrameColor = gocui.ColorDefault
+			// Исключение для tail
+			if name != "logs" {
+				v.TitleColor = gocui.ColorDefault
+			}
+		}
+	}
+	// Устанавливаем цвет для активного окна
+	if v, err := g.View(viewName); err == nil {
+		v.FrameColor = gocui.ColorGreen
+		if viewName != "logs" {
+			v.TitleColor = gocui.ColorGreen
+		}
+	}
+	// Устанавливаем фокус на активное окно
+	_, err := g.SetCurrentView(viewName)
+	return err
 }
 
 // Функция для выхода
