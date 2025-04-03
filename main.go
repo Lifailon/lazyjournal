@@ -669,7 +669,7 @@ func runGoCui(mock bool) {
 		app.updateLogBack(app.secondsChan, false)
 	}()
 
-	// Горутина для отслеживания изменений размера окна
+	// Горутина для отслеживания изменений размера окна и его перерисовки
 	go func() {
 		app.updateWindowSize(1)
 	}()
@@ -2935,8 +2935,10 @@ func (app *App) applyFilter(color bool) {
 			app.logScrollPos = 0
 		}
 	}
-	// Обновляем автоскролл (всегда опускаем вывод в самый) для отображения отфильтрованных записей
+	// Обновляем автоскролл (всегда опускаем вывод в самый низ) для отображения отфильтрованных записей
 	if !app.testMode {
+		// Включаем автоскролл и сбрасываем позицию
+		app.autoScroll = true
 		app.logScrollPos = 0
 		app.updateLogsView(true)
 	}
@@ -4122,7 +4124,7 @@ func (app *App) updateLogOutput(newUpdate bool) {
 	})
 }
 
-// Запускает фоновое обновление с изменяемым интервалом
+// Запускает фоновое обновление с изменяемым интервалом (параметры для обновления времени и загрузки журнала)
 func (app *App) updateLogBack(secondsChan chan int, newUpdate bool) {
 	seconds := app.logUpdateSeconds
 	// Проверяем, есть ли в канале новое значение интервала
@@ -4142,17 +4144,20 @@ func (app *App) updateLogBack(secondsChan chan int, newUpdate bool) {
 			ticker.Reset(time.Duration(newSeconds) * time.Second)
 		// Когда срабатывает таймер, выполняем обновление логов
 		case <-ticker.C:
-			app.gui.Update(func(g *gocui.Gui) error {
-				switch app.lastWindow {
-				case "services":
-					app.loadJournalLogs(app.lastSelected, newUpdate)
-				case "varLogs":
-					app.loadFileLogs(app.lastSelected, newUpdate)
-				case "docker":
-					app.loadDockerLogs(app.lastSelected, newUpdate)
-				}
-				return nil
-			})
+			// Обновляем журнал только если включен автоскролл
+			if app.autoScroll {
+				app.gui.Update(func(g *gocui.Gui) error {
+					switch app.lastWindow {
+					case "services":
+						app.loadJournalLogs(app.lastSelected, newUpdate)
+					case "varLogs":
+						app.loadFileLogs(app.lastSelected, newUpdate)
+					case "docker":
+						app.loadDockerLogs(app.lastSelected, newUpdate)
+					}
+					return nil
+				})
+			}
 		}
 	}
 }
@@ -4691,12 +4696,15 @@ func (app *App) setupKeybindings() error {
 	}
 	// Перемещение к концу журнала (Ctrl+E or End)
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlE, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		// Сбрасываем автоскролл
+		app.autoScroll = true
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("", gocui.KeyEnd, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.autoScroll = true
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
