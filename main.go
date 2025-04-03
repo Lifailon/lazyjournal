@@ -141,10 +141,8 @@ type App struct {
 	trimPostfixPathRegex *regexp.Regexp
 	hexByteRegex         *regexp.Regexp
 	dateTimeRegex        *regexp.Regexp
-	timeMacAddressRegex  *regexp.Regexp
 	dateIpAddressRegex   *regexp.Regexp
 	ipAddressRegex       *regexp.Regexp
-	procRegex            *regexp.Regexp
 	integersInputRegex   *regexp.Regexp
 	syslogUnitRegex      *regexp.Regexp
 }
@@ -414,17 +412,13 @@ var (
 	trimPostfixPathRegex = regexp.MustCompile(`[=:'"(){}\[\]]+.*$`)
 	// Байты или числа в шестнадцатеричном формате: 0x2 || 0xc0000001
 	hexByteRegex = regexp.MustCompile(`\b0x[0-9A-Fa-f]+\b`)
-	// Date: YYYY-MM-DDTHH:MM:SS.MS+HH:MM
+	// DateTime: YYYY-MM-DDTHH:MM:SS.MS+HH:MM
 	dateTimeRegex = regexp.MustCompile(`\b(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([\+\-]\d{2}:\d{2})?)\b`)
-	// MAC address + Time: H:MM || HH:MM || HH:MM:SS || XX:XX:XX:XX || XX:XX:XX:XX:XX:XX || XX-XX-XX-XX-XX-XX || HH:MM:SS,XXX || HH:MM:SS.XXX || HH:MM:SS+03
-	timeMacAddressRegex = regexp.MustCompile(`\b(?:\d{1,2}:\d{2}(:\d{2}([\.\,\+]\d{2,6})?)?|\b(?:[0-9A-Fa-f]{2}[\:\-]){5}[0-9A-Fa-f]{2}\b)\b`)
 	// Date (DD-MM-YYYY || DD.MM.YYYY || YYYY-MM-DD || YYYY.MM.DD) + IP address + version (1.0 || 1.0.7 || 1.0-build)
 	dateIpAddressRegex = regexp.MustCompile(`\b(\d{1,2}[\-\.]\d{1,2}[\-\.]\d{4}|\d{4}[\-\.]\d{1,2}[\-\.]\d{1,2}|(?:\d{1,3}\.){3}\d{1,3}(?::\d+|\.\d+|/\d+)?|\d+\.\d+[\+\-\.\w]+|\d+\.\d+)\b`)
 	// IP: 255.255.255.255 || 255.255.255.255:443 || 255.255.255.255.443 || 255.255.255.255/24
 	ipAddressRegex = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+|\.\d+|/\d+)?\b`)
-	// int%
-	procRegex = regexp.MustCompile(`(\d+)%`)
-	// Integers: Int only + Time + MAC + Percentage + Date2 (20/03/2025)
+	// Integers: Int only + Time + MAC address + Percentage (int%) + Date2 (20/03/2025)
 	integersInputRegex = regexp.MustCompile(`^[^a-zA-Z]*\d+[^a-zA-Z]*$`)
 	// Syslog UNIT
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
@@ -460,10 +454,8 @@ func runGoCui(mock bool) {
 		trimPostfixPathRegex:         trimPostfixPathRegex,
 		hexByteRegex:                 hexByteRegex,
 		dateTimeRegex:                dateTimeRegex,
-		timeMacAddressRegex:          timeMacAddressRegex,
 		dateIpAddressRegex:           dateIpAddressRegex,
 		ipAddressRegex:               ipAddressRegex,
-		procRegex:                    procRegex,
 		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
@@ -666,7 +658,7 @@ func runGoCui(mock bool) {
 	// Горутина для автоматического обновления вывода журнала каждые n (logUpdateSeconds) секунд
 	app.secondsChan = make(chan int, app.logUpdateSeconds)
 	go func() {
-		app.updateLogBack(app.secondsChan, false)
+		app.updateLogBackground(app.secondsChan, false)
 	}()
 
 	// Горутина для отслеживания изменений размера окна и его перерисовки
@@ -3817,20 +3809,7 @@ func (app *App) wordColor(inputWord string) string {
 			}
 			return colored
 		})
-	// Time + MAC
-	// case app.timeMacAddressRegex.MatchString(inputWord):
-	// 	coloredWord = app.timeMacAddressRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
-	// 		colored := ""
-	// 		for _, char := range match {
-	// 			if char == '-' || char == ':' || char == '.' || char == ',' || char == '+' {
-	// 				colored += "\033[35m" + string(char) + "\033[0m"
-	// 			} else {
-	// 				colored += "\033[34m" + string(char) + "\033[0m"
-	// 			}
-	// 		}
-	// 		return colored
-	// 	})
-	// // Date + IP + Versions
+	// Date + IP + Versions
 	case app.dateIpAddressRegex.MatchString(inputWord):
 		coloredWord = app.dateIpAddressRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
 			colored := ""
@@ -3843,19 +3822,6 @@ func (app *App) wordColor(inputWord string) string {
 			}
 			return colored
 		})
-	// Percentage (100%)
-	// case strings.Contains(inputWordLower, "%"):
-	// 	coloredWord = app.procRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
-	// 		colored := ""
-	// 		for _, char := range match {
-	// 			if char == '%' {
-	// 				colored += "\033[35m" + string(char) + "\033[0m"
-	// 			} else {
-	// 				colored += "\033[34m" + string(char) + "\033[0m"
-	// 			}
-	// 		}
-	// 		return colored
-	// 	})
 	// Integers
 	case app.integersInputRegex.MatchString(inputWord):
 		var colored strings.Builder
@@ -4068,11 +4034,13 @@ func (app *App) scrollDownLogs(step int) error {
 			app.logScrollPos = len(app.filteredLogLines) - 1 - viewHeight
 			// Включаем автоскролл
 			app.autoScroll = true
-			vLog, err := app.gui.View("logs")
-			if err != nil {
-				return err
+			if !app.testMode {
+				vLog, err := app.gui.View("logs")
+				if err != nil {
+					return err
+				}
+				vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 			}
-			vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		}
 		// Вызываем функцию для обновления отображения журнала
 		app.updateLogsView(false)
@@ -4088,11 +4056,13 @@ func (app *App) scrollUpLogs(step int) error {
 	}
 	// Отключаем автоскролл
 	app.autoScroll = false
-	vLog, err := app.gui.View("logs")
-	if err != nil {
-		return err
+	if !app.testMode {
+		vLog, err := app.gui.View("logs")
+		if err != nil {
+			return err
+		}
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 	}
-	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 	app.updateLogsView(false)
 	return nil
 }
@@ -4101,8 +4071,10 @@ func (app *App) scrollUpLogs(step int) error {
 func (app *App) pageUpLogs() {
 	app.logScrollPos = 0
 	app.autoScroll = false
-	vLog, _ := app.gui.View("logs")
-	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+	if !app.testMode {
+		vLog, _ := app.gui.View("logs")
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+	}
 	app.updateLogsView(false)
 }
 
@@ -4126,11 +4098,13 @@ func (app *App) updateLogOutput(newUpdate bool) {
 	app.gui.Update(func(g *gocui.Gui) error {
 		// Сбрасываем автоскролл, что бы опустить журнал вниз, т.к. это всегда ручное обновление
 		app.autoScroll = true
-		vLog, err := app.gui.View("logs")
-		if err != nil {
-			return err
+		if !app.testMode {
+			vLog, err := app.gui.View("logs")
+			if err != nil {
+				return err
+			}
+			vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		}
-		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		switch app.lastWindow {
 		case "services":
 			app.loadJournalLogs(app.lastSelected, newUpdate)
@@ -4144,7 +4118,7 @@ func (app *App) updateLogOutput(newUpdate bool) {
 }
 
 // Запускает фоновое обновление с изменяемым интервалом (параметры для обновления времени и загрузки журнала)
-func (app *App) updateLogBack(secondsChan chan int, newUpdate bool) {
+func (app *App) updateLogBackground(secondsChan chan int, newUpdate bool) {
 	seconds := app.logUpdateSeconds
 	// Проверяем, есть ли в канале новое значение интервала
 	select {
@@ -4224,8 +4198,10 @@ func (app *App) updateDelimiter(newUpdate bool) {
 		}
 		// Сбрасываем автоскролл
 		app.autoScroll = true
-		vLog, _ := app.gui.View("logs")
-		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+		if !app.testMode {
+			vLog, _ := app.gui.View("logs")
+			vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+		}
 		// Фиксируем новое время загрузки журнала
 		app.updateTime = time.Now().Format("15:04:05")
 	} else {
@@ -4846,19 +4822,28 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	if err := app.gui.SetKeybinding("services", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.selectService(g, v)
+		err := app.selectService(g, v)
+		if err != nil {
+			return err
+		}
 		return app.setSelectView(g, "services")
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("varLogs", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.selectFile(g, v)
+		err := app.selectFile(g, v)
+		if err != nil {
+			return err
+		}
 		return app.setSelectView(g, "varLogs")
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("docker", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.selectDocker(g, v)
+		err := app.selectDocker(g, v)
+		if err != nil {
+			return err
+		}
 		return app.setSelectView(g, "docker")
 	}); err != nil {
 		return err
