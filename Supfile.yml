@@ -1,8 +1,10 @@
 env:
   GIT_URL: https://github.com/Lifailon/lazyjournal
-  GO_PATH: /usr/local/bin/go
 
 networks:
+  dev:
+    hosts:
+      - lifailon@192.168.3.101:2121
   bsd:
     hosts:
       - root@192.168.3.102:22
@@ -12,8 +14,8 @@ commands:
   install:
     desc: Install Go
     run: |
-      if [ -e "$GO_PATH" ]; then
-        $GO_PATH version
+      if command -v go > /dev/null 2>&1; then
+        go version
       else
         if [ "$(uname -s)" = "FreeBSD" ]; then 
           pkg update
@@ -23,25 +25,6 @@ commands:
           yes | pkg_add go
         fi
       fi
-
-  bin:
-    desc: Install binary
-    run: curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh | bash
-
-  run:
-    desc: Run interface from release
-    run: |
-      if [ "$(uname -s)" = "FreeBSD" ]; then 
-        . /root/.shrc
-      elif [ "$(uname -s)" = "OpenBSD" ]; then
-        . /root/.kshrc
-      fi
-      lazyjournal -v
-      lazyjournal -a
-      tmux new-session -d -s test-session "lazyjournal"
-      sleep 1
-      tmux capture-pane -p
-      tmux kill-session -t test-session
 
   clone:
     desc: Clone repository
@@ -61,7 +44,7 @@ commands:
       - src: \*
         dst: lazyjournal
 
-  check:
+  ls:
     desc: Check directory
     run: ls -lh lazyjournal
 
@@ -69,18 +52,24 @@ commands:
     desc: Install dependencies and code preparation
     run: |
       cd lazyjournal
-      $GO_PATH fmt ./...
-      $GO_PATH vet ./...
-      $GO_PATH get ./...
-      $GO_PATH mod tidy
-      $GO_PATH mod verify
-      $GO_PATH build -o /dev/null -v ./...
+      go fmt ./...
+      go vet ./...
+      go get ./...
+      go mod tidy
+      go mod verify
+      go build -o /dev/null -v ./...
 
   test:
     desc: Run unit tests
     run: |
       cd lazyjournal
-      $GO_PATH test -v -cover --run "TestUnixFiles|TestColor|TestFilter|TestFlags|TestMainInterface|TestMockInterface"
+      go test -v -cover --run "TestUnixFiles|TestColor|TestFilter|TestFlags|TestCommandColor|TestMainInterface|TestMockInterface"
+
+  docker:
+    desc: Run docker containers test
+    run: |
+      cd lazyjournal
+      go test -v -cover --run "TestDockerContainer"
 
   remove:
     desc: Remove files on remote hosts
@@ -88,15 +77,52 @@ commands:
       rm -rf lazyjournal
       ls -l lazyjournal 2> /dev/null || echo "lazyjournal removed"
 
+  bin:
+    desc: Install binary from GitHub
+    run: curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh | bash
+
+  flags:
+    desc: Check flags from release
+    run: |
+      if [ "$(uname -s)" = "FreeBSD" ]; then 
+        . ~/.shrc
+      elif [ "$(uname -s)" = "OpenBSD" ]; then
+        . ~/.kshrc
+      fi
+      lazyjournal -v
+      mkdir -p /opt
+      echo test > /opt/test.log
+      lazyjournal -a
+      rm /opt/test.log
+      time cat /var/log/messages | lazyjournal -c > /dev/null
+
+  tmux:
+    desc: Check run interface from release
+    run: |
+      if [ "$(uname -s)" = "FreeBSD" ]; then 
+        . /root/.shrc
+      elif [ "$(uname -s)" = "OpenBSD" ]; then
+        . /root/.kshrc
+      fi
+      tmux new-session -d -s test-session "lazyjournal"
+      sleep 2
+      tmux capture-pane -p
+      tmux send-keys -t test-session "$(echo -e '\t\t')"
+      tmux send-keys -t test-session "$(echo -e '\r')"
+      sleep 2
+      tmux capture-pane -p
+      tmux kill-session -t test-session
+
 targets:
-  release:
-    - bin
-    - run
   testing:
     - install
     - creat
     - copy
-    - check
+    - ls
     - prep
     - test
     - remove
+  release:
+    - bin
+    - flags
+    - tmux
