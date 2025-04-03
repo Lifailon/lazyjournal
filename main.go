@@ -785,7 +785,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Title = "Logs"
 		v.Wrap = true
 		v.Autoscroll = false
-		v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
+		v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 	}
 
 	// Включение курсора в режиме фильтра и отключение в остальных окнах
@@ -2939,6 +2939,8 @@ func (app *App) applyFilter(color bool) {
 	if !app.testMode {
 		// Включаем автоскролл и сбрасываем позицию
 		app.autoScroll = true
+		vLog, _ := app.gui.View("logs")
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		app.logScrollPos = 0
 		app.updateLogsView(true)
 	}
@@ -4066,6 +4068,11 @@ func (app *App) scrollDownLogs(step int) error {
 			app.logScrollPos = len(app.filteredLogLines) - 1 - viewHeight
 			// Включаем автоскролл
 			app.autoScroll = true
+			vLog, err := app.gui.View("logs")
+			if err != nil {
+				return err
+			}
+			vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		}
 		// Вызываем функцию для обновления отображения журнала
 		app.updateLogsView(false)
@@ -4081,6 +4088,11 @@ func (app *App) scrollUpLogs(step int) error {
 	}
 	// Отключаем автоскролл
 	app.autoScroll = false
+	vLog, err := app.gui.View("logs")
+	if err != nil {
+		return err
+	}
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 	app.updateLogsView(false)
 	return nil
 }
@@ -4089,6 +4101,8 @@ func (app *App) scrollUpLogs(step int) error {
 func (app *App) pageUpLogs() {
 	app.logScrollPos = 0
 	app.autoScroll = false
+	vLog, _ := app.gui.View("logs")
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 	app.updateLogsView(false)
 }
 
@@ -4112,6 +4126,11 @@ func (app *App) updateLogOutput(newUpdate bool) {
 	app.gui.Update(func(g *gocui.Gui) error {
 		// Сбрасываем автоскролл, что бы опустить журнал вниз, т.к. это всегда ручное обновление
 		app.autoScroll = true
+		vLog, err := app.gui.View("logs")
+		if err != nil {
+			return err
+		}
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		switch app.lastWindow {
 		case "services":
 			app.loadJournalLogs(app.lastSelected, newUpdate)
@@ -4205,6 +4224,8 @@ func (app *App) updateDelimiter(newUpdate bool) {
 		}
 		// Сбрасываем автоскролл
 		app.autoScroll = true
+		vLog, _ := app.gui.View("logs")
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		// Фиксируем новое время загрузки журнала
 		app.updateTime = time.Now().Format("15:04:05")
 	} else {
@@ -4584,7 +4605,7 @@ func (app *App) setupKeybindings() error {
 			}
 			// Изменяем интервал в горутине
 			app.secondsChan <- app.logUpdateSeconds
-			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
+			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		}
 		return nil
 	}); err != nil {
@@ -4599,7 +4620,7 @@ func (app *App) setupKeybindings() error {
 				return err
 			}
 			app.secondsChan <- app.logUpdateSeconds
-			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
+			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		}
 		return nil
 	}); err != nil {
@@ -4698,6 +4719,11 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlE, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		// Сбрасываем автоскролл
 		app.autoScroll = true
+		vLog, err := app.gui.View("logs")
+		if err != nil {
+			return err
+		}
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
@@ -4705,6 +4731,11 @@ func (app *App) setupKeybindings() error {
 	}
 	if err := app.gui.SetKeybinding("", gocui.KeyEnd, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		app.autoScroll = true
+		vLog, err := app.gui.View("logs")
+		if err != nil {
+			return err
+		}
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
@@ -4759,7 +4790,7 @@ func (app *App) setupKeybindings() error {
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		return nil
 	}); err != nil {
 		return err
@@ -4993,7 +5024,7 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 	return nil
 }
 
@@ -5021,7 +5052,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %d sec | color: %t]", app.logViewCount, app.logUpdateSeconds, app.colorMode)
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 	return nil
 }
 
