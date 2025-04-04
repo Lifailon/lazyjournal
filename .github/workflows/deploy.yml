@@ -64,7 +64,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: snap-package
-        path: *.snap
+        path: lazyjournal*.snap
 
     - name: Login and push to Snapcraft
       if: ${{ github.event.inputs.Snapcraft == 'true' }}
@@ -95,4 +95,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: deb-package
-        path: *.deb
+        path: lazyjournal*.deb
