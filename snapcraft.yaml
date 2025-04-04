@@ -1,0 +1,24 @@
+name: lazyjournal
+version: '0.7.7'
+summary: A TUI for reading logs from journalctl, file system and containers
+description: |
+  A TUI for reading logs from journalctl, file system, Docker and Podman containers, as well Kubernetes pods for quick viewing and filtering with fuzzy find, regex support and coloring the output, written in Go with the gocui.
+
+base: core20
+confinement: classic
+
+architectures:
+  - amd64
+
+apps:
+  lazyjournal:
+    command: bin/lazyjournal
+
+parts:
+  lazyjournal:
+    plugin: dump
+    source: .
+    override-build: |
+      CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/lazyjournal-0.7.7-linux-amd64
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+      cp ./bin/lazyjournal-0.7.7-linux-amd64 $SNAPCRAFT_PART_INSTALL/bin/lazyjournal
