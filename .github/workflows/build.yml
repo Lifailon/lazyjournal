@@ -103,11 +103,17 @@ jobs:
 
       - name: Install tailspin
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
-        run: sudo apt install -y tailspin
+        run: |
+          version=$(curl -s https://api.github.com/repos/bensadeh/tailspin/releases/latest | jq -r .tag_name)
+          curl -L "https://github.com/bensadeh/tailspin/releases/download/$version/tailspin-$(uname -m)-unknown-$(uname -s | tr '[:upper:]' '[:lower:]')-musl.tar.gz" -o /usr/local/bin/tailspin.tar.gz
+          tar -xzf /usr/local/bin/tailspin.tar.gz -C /usr/local/bin
+          chmod +x /usr/local/bin/tspin
+          rm /usr/local/bin/*.tar.gz
+          tspin --version
 
       - name: Unit testing (all functions and mock interface) in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
-        run: sudo go test -v -cover
+        run: sudo env "PATH=$PATH" go test -v -cover
         continue-on-error: true
         timeout-minutes: 5
 

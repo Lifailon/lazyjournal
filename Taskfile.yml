@@ -52,6 +52,16 @@ tasks:
       - task: prep
       - go test -v -cover --run {{.CLI_ARGS}} ./...
 
+  actions-check:
+    desc: "Run GitHub Actions locally"
+    cmds:
+      - act -n -e .github/workflows/event.json -W .github/workflows/build.yml -P ubuntu-24.04=catthehacker/ubuntu:act-latest --reuse --artifact-server-path $PWD/artifacts
+
+  actions-run:
+    desc: "Run GitHub Actions locally"
+    cmds:
+      - act -e .github/workflows/event.json -W .github/workflows/build.yml -P ubuntu-24.04=catthehacker/ubuntu:act-latest --reuse --artifact-server-path $PWD/artifacts
+
   build:
     desc: "Build"
     vars:
