@@ -16,7 +16,7 @@ on:
         default: false
         type: boolean
       Deb:
-        description: 'Build and Push to Snapcraft'
+        description: 'Build deb package'
         default: false
         type: boolean
 
@@ -58,16 +58,13 @@ jobs:
         sed -i "s/0.7.7/$version/g" snapcraft.yaml
         snapcraft --destructive-mode
         sudo snap install *.snap --dangerous --classic
-        echo "ARTIFACT_NAME=lazyjournal_$version_amd64" >> $GITHUB_ENV
 
     - name: Upload snap package
       if: ${{ github.event.inputs.Snap == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.ARTIFACT_NAME }}
-        path: .
-      env:
-        ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+        name: snap-package
+        path: *.snap
 
     - name: Login and push to Snapcraft
       if: ${{ github.event.inputs.Snapcraft == 'true' }}
@@ -97,7 +94,5 @@ jobs:
       if: ${{ github.event.inputs.Deb == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.ARTIFACT_NAME }}
-        path: .
-      env:
-        ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+        name: deb-package
+        path: *.deb
