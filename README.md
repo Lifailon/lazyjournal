@@ -8,38 +8,40 @@
     <a href="https://goreportcard.com/report/github.com/Lifailon/lazyjournal"><img src="https://goreportcard.com/badge/github.com/Lifailon/lazyjournal" alt="Go Report"></a>
     <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
     <a href="https://github.com/Lifailon/Kinozal-Bot/blob/rsa/LICENSE"><img title="License"src="https://img.shields.io/github/license/Lifailon/Kinozal-Bot?logo=readme&color=white"></a>
-    <br>
-    <a href="https://aur.archlinux.org/packages/lazyjournal"><img title="Arch Linux" src="https://img.shields.io/aur/version/lazyjournal?logo=arch-linux&color=blue"></a>
-    <a href="https://anaconda.org/conda-forge/lazyjournal"><img title="conda-forge" src="https://img.shields.io/conda/vn/conda-forge/lazyjournal?logo=anaconda&color=green"></a>
-    <a href="https://formulae.brew.sh/formula/lazyjournal"><img title="Homebrew" src="https://img.shields.io/homebrew/v/lazyjournal?logo=homebrew&color=yellow"></a>
+    <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a>
+<br>
+    <a href="https://aur.archlinux.org/packages/lazyjournal"><img title="Arch Linux" src="https://img.shields.io/aur/version/lazyjournal?logo=arch-linux&color=blue&label=AUR"></a>
+    <a href="https://anaconda.org/conda-forge/lazyjournal"><img title="Conda Forge" src="https://img.shields.io/conda/vn/conda-forge/lazyjournal?logo=anaconda&color=green&label=Conda"></a>
+    <a href="https://formulae.brew.sh/formula/lazyjournal"><img title="Homebrew" src="https://img.shields.io/homebrew/v/lazyjournal?logo=homebrew&color=yellow&label=Homebrew"></a>
+    <a href="https://hub.docker.com/r/lifailon/lazyjournal"><img title="Docker Hub" src="https://img.shields.io/docker/image-size/lifailon/lazyjournal/latest?logo=docker&color=blue&label=Docker+Hub"></a>
 </p>
 
-Terminal user interface for reading logs from `journalctl`, file system, Docker and Podman containers, as well Kubernetes pods for quick viewing and filtering with fuzzy find (like `fzf`), regex support (like `grep`) and coloring the output, written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
+Terminal user interface for reading logs from `journalctl`, file system, Docker and Podman containers, as well Kubernetes pods for quick viewing and filtering with fuzzy find, regex support and coloring the output, written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
 
-This tool is inspired by and with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit), as well as is included in [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
+This tool is inspired by and with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit). It is also included in [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging), [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
 
 ![interface](/img/regex.png)
 
-## Functional
+## Features
 
 - Simple installation, to run download one executable file without dependencies and settings.
-- Displays the current log output in real-time (updated every 5 seconds, file logs are updated only when there are changes).
-- List of all units (`services`, `sockets`, etc.) via `systemctl` with current running status.
-- View all system and user journals via `journalctl` (tool for reading logs from [systemd-journald](https://github.com/systemd/systemd/tree/main/src/journal)).
+- Centralized search for the required journal by filtering all lists (log sources).
+- Streaming output of new events from the selected journal (like `tail`).
+- List of all units (`services`, `sockets`, etc.) with current running status from `systemd` via `systemctl`.
+- View all system and user journals via `journalctl` (tool for reading logs from [journald](https://github.com/systemd/systemd/tree/main/src/journal)).
 - List of all system boots for kernel log output.
-- File system logs (example, for `Apache` or `Nginx`), as well as `syslog` or `messages`, `dmesg` for kernel logs, etc.
-- List of all log files of descriptors used by processes, as well as all log files in the home directories of users.
-- Reading archived logs (`gz`, `xz` or `bz2` format), packet capture (`pcap` format) and Apple System Log (`asl` format).
+- File system logs such as for `Apache` or `Nginx`, as well as `syslog`, `messages`, etc. from `/var/log`.
+- Lists all log files in users home directories, as well as descriptor log files used by processes.
+- Reading archive logs truncated during rotation (`gz`, `xz` and `bz2` formats), Packet Capture (`pcap` format) and Apple System Log (`asl` format).
 - Docker containers (including `timestamp` and `stderr`), Podman pods and the Docker Swarm services.
-- Kubernetes pods via `kubectl`
-- Windows Event Logs (in test mode via `powershell` and reading via `wevtutil`) and application logs from Windows file system.
-- Filtering lists to find the desired journal.
+- Kubernetes pods via `kubectl`.
+- Windows Event Logs via `PowerShell` and `wevtutil`, as well as application logs from Windows file system.
 
 Supports 3 filtering modes:
 
 - **Default** - case sensitive exact search.
-- **Fuzzy** - custom inexact case-insensitive search (searches for all phrases separated by a space anywhere on a line).
-- **Regex** - search with regular expression support (based on the built-in [regexp](https://pkg.go.dev/regexp) library), case insensitive by default (in case a regular expression syntax error occurs, the input field will be highlighted in red).
+- **Fuzzy** (like `fzf`) - custom inexact case-insensitive search (searches for all phrases separated by a space anywhere on a line).
+- **Regex** (like `grep`) - search with regular expression support, based on the built-in [regexp](https://pkg.go.dev/regexp) library, case-insensitive by default (in case a regular expression syntax error occurs, the input field will be highlighted in red).
 
 ## Coloring
 
@@ -50,7 +52,7 @@ Supported coloring groups for output:
 - **Green** - keywords indicating success.
 - **Red** - keywords indicating error.
 - **Blue** - statuses (info, debug, etc), actions (install, update, etc) and HTTP methods (GET, POST, etc).
-- **Light blue** - numbers (date, time, bytes, versions, percentage, IP and MAC addresses).
+- **Light blue** - numbers (date, time, bytes, versions, percentage, integers, IP and MAC addresses).
 
 A full list of all keywords can be found in the [color.log](/color.log) file (used for testing only). If you have suggestions for improving coloring (e.g. adding new words), you can open an [issue](https://github.com/Lifailon/lazyjournal/issues) for a new feature. 
 
@@ -62,12 +64,12 @@ Binaries are available for download on the [releases](https://github.com/Lifailo
 
 List of supported systems and architectures in which functionality is checked: 
 
-| OS        | amd64 | arm64 | Systems                                                                                                                                   |
-| -         | -     | -     | -                                                                                                                                         |
-| Linux     | ✔     |  ✔   | Raspberry Pi (`aarch64`), Oracle Linux (RHEL-based in WSL environment), Arch Linux, Rocky Linux, Ubuntu Server 20.04.6 and above         |
-| Darwin    | ✔     |  ✔   | macOS Sequoia 15.2 `x64` on MacBook and the `arm64` in GitHub Actions                                                                    |
-| BSD       | ✔     |       | OpenBSD 7.6 and FreeBSD 14.2                                                                                                             |
-| Windows   | ✔     |       | Windows 10 and 11                                                                                                                        |
+| OS        | amd64 | arm64 | Systems                                                                                                                               |
+| -         | -     | -     | -                                                                                                                                     |
+| Linux     | ✔     |  ✔   | Raspberry Pi (`aarch64`), Oracle Linux (RHEL-based in WSL environment), Arch Linux, Rocky Linux, Ubuntu Server 20.04.6 and above.    |
+| Darwin    | ✔     |  ✔   | macOS Sequoia 15.2 `x64` on MacBook and the `arm64` in GitHub Actions.                                                               |
+| BSD       | ✔     |       | OpenBSD 7.6 and FreeBSD 14.2.                                                                                                        |
+| Windows   | ✔     |       | Windows 10 and 11.                                                                                                                   |
 
 ### Unix-based
 
@@ -110,6 +112,29 @@ Use the following command to install `lazyjournal` using [Homebrew](https://form
 brew install lazyjournal
 ```
 
+### Docker (Debian-based)
+
+To run the interface in a container, download [docker-compose](/docker-compose.yml) and use the image from [Docker Hub](https://hub.docker.com/r/lifailon/lazyjournal):
+
+```shell
+mkdir lazyjournal && cd lazyjournal
+curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/docker-compose.yml -o docker-compose.yml
+docker-compose up -d
+docker exec -it lazyjournal lazyjournal
+```
+
+The image is based on Debian with `systemd` and docker cli pre-installed. The necessary **read-only** permissions are already preset in `docker-compose` to support all log sources from the host system (review it to customize for your individual use).
+
+Supports running in the web interface via [ttyd](https://github.com/tsl0922/ttyd) and mouse control. To do this, edit the variables in the `.env` file:
+
+```shell
+TTYD=true
+PORT=5555
+# Credentials for accessing the Web interface (optional)
+USERNAME=admin
+PASSWORD=admin
+```
+
 ### Windows
 
 Use the following command to quickly install in your PowerShell console:
@@ -144,14 +169,32 @@ go install github.com/Lifailon/lazyjournal@latest
 
 You can run the interface from anywhere:
 
-```shell
-lazyjournal                # Run interface
-lazyjournal --help, -h     # Show help
-lazyjournal --version, -v  # Show version
-lazyjournal --audit, -a    # Show audit information
+```
+lazyjournal                        Run interface
+lazyjournal --help, -h             Show help
+lazyjournal --version, -v          Show version
+lazyjournal --audit, -a            Show audit information
+lazyjournal --tail, -t             Change the number of log lines to output (default: 100000, range: 5000-200000)
+lazyjournal --update, -u           Change the auto refresh interval of the log output (default: 5, range: 2-10)
+lazyjournal --disable-color, -d    Disable output coloring
+lazyjournal --command-color, -c    Coloring in command line mode
 ```
 
 Access to all system logs and containers may require elevated privileges for the current user.
+
+Information in the subtitle of the `Logs` window:
+
+- `tail` - maximum number of log lines to load.
+- `update` - current output auto-update status (disabled when manually scrolling the output).
+- `interval` - auto-update interval for output in seconds (file logs are updated only when there are changes).
+- `color` - whether the output coloring mode is currently enabled or disabled.
+
+Also output coloring is supported in command line mode:
+
+```shell
+alias lj=lazyjournal
+cat /var/log/syslog | lj -c
+```
 
 ## Build
 
@@ -195,17 +238,19 @@ Testing in BSD-based systems is done in a home environment using [usup](https://
 - `F1` - show help on hotkeys.
 - `Tab` - switch between windows.
 - `Shift+Tab` - return to previous window.
-- `Left/Right` - switch between journal lists in the selected window.
 - `Enter` - selection a journal from the list to display log output.
+- `Left/Right` - switch between journal lists in the selected window.
 - `<Up/PgUp>` and `<Down/PgDown>` - move up and down through all journal lists and log output, as well as changing the filtering mode in the filter window.
 - `<Shift/Alt>+<Up/Down>` - quickly move up and down through all journal lists and log output every `10` or `100` lines (`500` for log output).
 - `<Shift/Ctrl>+<U/D>` - quickly move up and down (alternative for macOS).
 - `Ctrl+A` or `Home` - go to top of log.
 - `Ctrl+E` or `End` - go to the end of the log.
+- `Alt+Left/Right` - change the number of log lines to output (default: `100000`, range: `5000-200000`).
+- `Shift+Left/Right` - change the auto refresh interval of the log output (default: `5`, range: `2-10`).
 - `Ctrl+Q` - enable or disable built-in output coloring.
 - `Ctrl+S` - enable or disable coloring via [tailspin](https://github.com/bensadeh/tailspin).
 - `Ctrl+R` - update all log lists.
-- `Ctrl+W` - clear text input field for filter to quickly update current log output without filtering.
+- `Ctrl+W` - clear text input field for filter to quickly update current log output.
 - `Ctrl+C` - exit.
 
 ## Contributing
@@ -215,14 +260,15 @@ Since this is my first Go project, there may be some bad practices, BUT I want t
 Thanks to all participants for their contributions:
 
 - [Matteo Giordano](https://github.com/malteo) for upload and update the package in `AUR`.
-- [Ueno M.](https://github.com/eunos-1128) for upload and update the package in `homebrew` and `conda`.
+- [Ueno M.](https://github.com/eunos-1128) for upload and update the package in `Homebrew` and `Conda`.
 
 You can also upload the package yourself to any package manager you use and make [Pull Requests](https://github.com/Lifailon/lazyjournal/pulls).
 
 ## Alternatives
 
-- [lnav](https://github.com/tstack/lnav) - The Logfile Navigator is a **log file** viewer for the terminal.
-- [Dozzle](https://github.com/amir20/dozzle) - is a small lightweight application with a web based interface to monitor **Docker logs**.
+- [Lnav](https://github.com/tstack/lnav) - The Logfile Navigator is a log file viewer for the terminal.
+- [TooLong](https://github.com/Textualize/toolong) - A terminal application to view, tail, merge, and search log files.
+- [Dozzle](https://github.com/amir20/dozzle) - A small lightweight application with a web based interface to monitor Docker logs.
 
 If you like using TUI tools, try [multranslate](https://github.com/Lifailon/multranslate) for translating text in multiple translators simultaneously and LLM, with support for translation history and automatic language detection.
 
