@@ -81,6 +81,15 @@ curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh 
 
 This command will run a script that will download the latest executable from the GitHub repository into your current user's home directory along with other executables (or create a directory) and grant execution permission.
 
+Or you can install manually from `deb` or `snap` package:
+```bash
+curl -L -sS https://github.com/Lifailon/lazyjournal/releases/download/0.7.7/lazyjournal-0.7.7-amd64.deb -o /tmp/lazyjournal.deb
+sudo dpkg -i /tmp/lazyjournal.deb
+
+curl -L -sS https://github.com/Lifailon/lazyjournal/releases/download/0.7.7/lazyjournal-0.7.7-amd64.snap -o /tmp/lazyjournal.snap
+sudo snap install /tmp/lazyjournal.snap --dangerous --classic
+```
+
 ### Arch Linux
 
 If you an Arch Linux user you can also install from the [AUR](https://aur.archlinux.org/packages/lazyjournal):
@@ -181,6 +190,8 @@ lazyjournal --command-color, -c    Coloring in command line mode
 ```
 
 Access to all system logs and containers may require elevated privileges for the current user.
+
+If your system uses [rsyslog](https://www.rsyslog.com) to collect logs from remote systems, you will be able to search for logs and analyze them from a single interface.
 
 Information in the subtitle of the `Logs` window:
 
