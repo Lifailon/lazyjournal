@@ -28,7 +28,7 @@ import (
 	"golang.org/x/text/encoding/unicode"
 )
 
-var programVersion string = "0.7.7"
+var programVersion string = "0.7.8"
 
 // Структура хранения информации о журналах
 type Journal struct {
@@ -162,6 +162,7 @@ func showHelp() {
 	fmt.Println("    lazyjournal --disable-color, -d    Disable output coloring")
 	fmt.Println("    lazyjournal --command-color, -c    Coloring in command line mode")
 	fmt.Println("    lazyjournal --command-fuzzy, -f    Filtering using fuzzy search in command line mode")
+	fmt.Println("    lazyjournal --command-regex, -r    Filtering using regular expression (regexp) in command line mode")
 }
 
 func (app *App) showAudit() {
@@ -483,6 +484,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(commandColor, "c", false, "Coloring in command line mode")
 	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
 	flag.StringVar(commandFuzzy, "f", "", "Filtering using fuzzy search in command line mode")
+	commandRegex := flag.String("command-regex", "", "Filtering using regular expression (regexp) in command line mode")
+	flag.StringVar(commandRegex, "r", "", "Filtering using regular expression (regexp) in command line mode")
 
 	// Обработка аргументов
 	flag.Parse()
@@ -568,6 +571,21 @@ func runGoCui(mock bool) {
 	// Обработка фильтрации с неточным поиском в режиме командной строки
 	if *commandFuzzy != "" {
 		app.commandLineFuzzy(*commandFuzzy)
+		os.Exit(0)
+	}
+
+	// Обработка фильтрации с поддержкой регулярных выражений в режиме командной строки
+	if *commandRegex != "" {
+		filter := strings.ToLower(*commandRegex)
+		// Добавляем флаг для нечувствительности к регистру по умолчанию
+		filter = "(?i)" + filter
+		// Компилируем и проверяем регулярное выражение
+		regex, err := regexp.Compile(filter)
+		if err != nil {
+			fmt.Println("Regular expression syntax error")
+			os.Exit(1)
+		}
+		app.commandLineRegex(filter, *regex)
 		os.Exit(0)
 	}
 
@@ -2905,19 +2923,6 @@ func (app *App) applyFilter(color bool) {
 	}
 }
 
-func (app *App) regexFilter(inputLine string, regex regexp.Regexp) string {
-	// Проверяем, что строка подходит под регулярное выражение
-	if regex.MatchString(inputLine) {
-		// Находим все найденные совпадени
-		matches := regex.FindAllString(inputLine, -1)
-		// Красим только первое найденное совпадение
-		inputLine = strings.ReplaceAll(inputLine, matches[0], "\x1b[0;44m"+matches[0]+"\033[0m")
-		return inputLine
-	} else {
-		return ""
-	}
-}
-
 func (app *App) fuzzyFilter(inputLine string, filter string) string {
 	// Разбиваем текст фильтра на массив из строк
 	filterWords := strings.Fields(filter)
@@ -2964,6 +2969,19 @@ func (app *App) fuzzyFilter(inputLine string, filter string) string {
 	}
 }
 
+func (app *App) regexFilter(inputLine string, regex regexp.Regexp) string {
+	// Проверяем, что строка подходит под регулярное выражение
+	if regex.MatchString(inputLine) {
+		// Находим все найденные совпадени
+		matches := regex.FindAllString(inputLine, -1)
+		// Красим только первое найденное совпадение
+		inputLine = strings.ReplaceAll(inputLine, matches[0], "\x1b[0;44m"+matches[0]+"\033[0m")
+		return inputLine
+	} else {
+		return ""
+	}
+}
+
 func (app *App) commandLineFuzzy(filter string) {
 	stat, err := os.Stdin.Stat()
 	if err != nil {
@@ -2989,6 +3007,40 @@ func (app *App) commandLineFuzzy(filter string) {
 	}
 	for _, line := range inputLines {
 		outputLine := app.fuzzyFilter(line, filter)
+		if outputLine != "" {
+			app.filteredLogLines = append(app.filteredLogLines, outputLine)
+		}
+	}
+	for _, line := range app.filteredLogLines {
+		fmt.Println(line)
+	}
+}
+
+func (app *App) commandLineRegex(filter string, regex regexp.Regexp) {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		fmt.Fprintln(os.Stderr, "No data. Use pipe to transfer data.")
+		return
+	}
+	scanner := bufio.NewScanner(os.Stdin)
+	var inputLines []string
+	for scanner.Scan() {
+		inputLines = append(inputLines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	if len(inputLines) == 0 {
+		fmt.Fprintln(os.Stderr)
+		return
+	}
+	for _, line := range inputLines {
+		outputLine := app.regexFilter(line, regex)
 		if outputLine != "" {
 			app.filteredLogLines = append(app.filteredLogLines, outputLine)
 		}
