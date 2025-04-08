@@ -161,6 +161,7 @@ func showHelp() {
 	fmt.Println("    lazyjournal --update, -u           Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	fmt.Println("    lazyjournal --disable-color, -d    Disable output coloring")
 	fmt.Println("    lazyjournal --command-color, -c    Coloring in command line mode")
+	fmt.Println("    lazyjournal --command-fuzzy, -f    Filtering using fuzzy search in command line mode")
 }
 
 func (app *App) showAudit() {
@@ -480,6 +481,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
 	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
 	flag.BoolVar(commandColor, "c", false, "Coloring in command line mode")
+	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
+	flag.StringVar(commandFuzzy, "f", "", "Filtering using fuzzy search in command line mode")
 
 	// Обработка аргументов
 	flag.Parse()
@@ -559,6 +562,12 @@ func runGoCui(mock bool) {
 	// Обработка покраски вывода в режиме командной строки
 	if *commandColor {
 		app.commandLineColor()
+		os.Exit(0)
+	}
+
+	// Обработка фильтрации с неточным поиском в режиме командной строки
+	if *commandFuzzy != "" {
+		app.commandLineFuzzy(*commandFuzzy)
 		os.Exit(0)
 	}
 
@@ -2829,57 +2838,15 @@ func (app *App) applyFilter(color bool) {
 				switch {
 				// Fuzzy (неточный поиск без учета регистра)
 				case app.selectFilterMode == "fuzzy":
-					// Разбиваем текст фильтра на массив из строк
-					filterWords := strings.Fields(filter)
-					// Опускаем регистр текущей строки цикла
-					lineLower := strings.ToLower(line)
-					var match bool = true
-					// Проверяем, если строка не содержит хотя бы одно слово из фильтра, то пропускаем строку
-					for _, word := range filterWords {
-						if !strings.Contains(lineLower, word) {
-							match = false
-							break
-						}
-					}
-					// Если строка подходит под фильтр, возвращаем ее с покраской
-					if match {
-						// Временные символы для обозначения начала и конца покраски найденных символов
-						startColor := "►"
-						endColor := "◄"
-						originalLine := line
-						// Проходимся по всем словосочетаниям фильтра (массив через пробел) для позиционирования покраски
-						for _, word := range filterWords {
-							wordLower := strings.ToLower(word)
-							start := 0
-							// Ищем все вхождения слова в строке с учетом регистра
-							for {
-								// Находим индекс вхождения с учетом регистра
-								idx := strings.Index(strings.ToLower(originalLine[start:]), wordLower)
-								if idx == -1 {
-									break // Если больше нет вхождений, выходим
-								}
-								start += idx // корректируем индекс с учетом текущей позиции
-								// Вставляем временные символы для покраски
-								originalLine = originalLine[:start] + startColor + originalLine[start:start+len(word)] + endColor + originalLine[start+len(word):]
-								// Сдвигаем индекс для поиска в оставшейся части строки
-								start += len(startColor) + len(word) + len(endColor)
-							}
-						}
-						// Заменяем временные символы на ANSI escape-последовательности
-						originalLine = strings.ReplaceAll(originalLine, startColor, "\x1b[0;44m")
-						originalLine = strings.ReplaceAll(originalLine, endColor, "\033[0m")
-						app.filteredLogLines = append(app.filteredLogLines, originalLine)
+					outputLine := app.fuzzyFilter(line, filter)
+					if outputLine != "" {
+						app.filteredLogLines = append(app.filteredLogLines, outputLine)
 					}
 				// Regex (с использованием регулярных выражений и без учета регистра по умолчанию)
 				case app.selectFilterMode == "regex":
-					// Проверяем, что строка подходит под регулярное выражение
-					if regex.MatchString(line) {
-						originalLine := line
-						// Находим все найденные совпадени
-						matches := regex.FindAllString(originalLine, -1)
-						// Красим только первое найденное совпадение
-						originalLine = strings.ReplaceAll(originalLine, matches[0], "\x1b[0;44m"+matches[0]+"\033[0m")
-						app.filteredLogLines = append(app.filteredLogLines, originalLine)
+					outputLine := app.regexFilter(line, *regex)
+					if outputLine != "" {
+						app.filteredLogLines = append(app.filteredLogLines, outputLine)
 					}
 				// Default (точный поиск с учетом регистра)
 				default:
@@ -2935,6 +2902,99 @@ func (app *App) applyFilter(color bool) {
 		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
 		app.logScrollPos = 0
 		app.updateLogsView(true)
+	}
+}
+
+func (app *App) regexFilter(inputLine string, regex regexp.Regexp) string {
+	// Проверяем, что строка подходит под регулярное выражение
+	if regex.MatchString(inputLine) {
+		// Находим все найденные совпадени
+		matches := regex.FindAllString(inputLine, -1)
+		// Красим только первое найденное совпадение
+		inputLine = strings.ReplaceAll(inputLine, matches[0], "\x1b[0;44m"+matches[0]+"\033[0m")
+		return inputLine
+	} else {
+		return ""
+	}
+}
+
+func (app *App) fuzzyFilter(inputLine string, filter string) string {
+	// Разбиваем текст фильтра на массив из строк
+	filterWords := strings.Fields(filter)
+	// Опускаем регистр текущей строки цикла
+	lineLower := strings.ToLower(inputLine)
+	var match bool = true
+	// Проверяем, если строка не содержит хотя бы одно слово из фильтра, то пропускаем строку
+	for _, word := range filterWords {
+		if !strings.Contains(lineLower, word) {
+			match = false
+			break
+		}
+	}
+	// Если строка подходит под фильтр, возвращаем ее с покраской
+	if match {
+		// Временные символы для обозначения начала и конца покраски найденных символов
+		startColor := "►"
+		endColor := "◄"
+		originalLine := inputLine
+		// Проходимся по всем словосочетаниям фильтра (массив через пробел) для позиционирования покраски
+		for _, word := range filterWords {
+			wordLower := strings.ToLower(word)
+			start := 0
+			// Ищем все вхождения слова в строке с учетом регистра
+			for {
+				// Находим индекс вхождения с учетом регистра
+				idx := strings.Index(strings.ToLower(originalLine[start:]), wordLower)
+				if idx == -1 {
+					break // Если больше нет вхождений, выходим
+				}
+				start += idx // корректируем индекс с учетом текущей позиции
+				// Вставляем временные символы для покраски
+				originalLine = originalLine[:start] + startColor + originalLine[start:start+len(word)] + endColor + originalLine[start+len(word):]
+				// Сдвигаем индекс для поиска в оставшейся части строки
+				start += len(startColor) + len(word) + len(endColor)
+			}
+		}
+		// Заменяем временные символы на ANSI escape-последовательности
+		originalLine = strings.ReplaceAll(originalLine, startColor, "\x1b[0;44m")
+		originalLine = strings.ReplaceAll(originalLine, endColor, "\033[0m")
+		return originalLine
+	} else {
+		return ""
+	}
+}
+
+func (app *App) commandLineFuzzy(filter string) {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		fmt.Fprintln(os.Stderr, "No data. Use pipe to transfer data.")
+		return
+	}
+	scanner := bufio.NewScanner(os.Stdin)
+	var inputLines []string
+	for scanner.Scan() {
+		inputLines = append(inputLines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+	if len(inputLines) == 0 {
+		fmt.Fprintln(os.Stderr)
+		return
+	}
+	for _, line := range inputLines {
+		outputLine := app.fuzzyFilter(line, filter)
+		if outputLine != "" {
+			app.filteredLogLines = append(app.filteredLogLines, outputLine)
+		}
+	}
+	for _, line := range app.filteredLogLines {
+		fmt.Println(line)
 	}
 }
 
