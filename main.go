@@ -135,7 +135,8 @@ type App struct {
 	keybindingsEnabled bool
 
 	// Отключение встроенных временных меток (timestamp) для логов Docker
-	timestampDocker bool
+	timestampDocker  bool
+	streamTypeDocker bool
 
 	// Регулярные выражения для покраски строк
 	trimHttpRegex        *regexp.Regexp
@@ -156,16 +157,17 @@ func showHelp() {
 	fmt.Println("If you have problems with the application, please open issue: https://github.com/Lifailon/lazyjournal/issues")
 	fmt.Println("")
 	fmt.Println("  Flags:")
-	fmt.Println("    lazyjournal                        Run interface")
-	fmt.Println("    lazyjournal --help, -h             Show help")
-	fmt.Println("    lazyjournal --version, -v          Show version")
-	fmt.Println("    lazyjournal --audit, -a            Show audit information")
-	fmt.Println("    lazyjournal --tail, -t             Change the number of log lines to output (default: 100000, range: 5000-200000)")
-	fmt.Println("    lazyjournal --update, -u           Change the auto refresh interval of the log output (default: 5, range: 2-10)")
-	fmt.Println("    lazyjournal --disable-color, -d    Disable output coloring")
-	fmt.Println("    lazyjournal --command-color, -c    Coloring in command line mode")
-	fmt.Println("    lazyjournal --command-fuzzy, -f    Filtering using fuzzy search in command line mode")
-	fmt.Println("    lazyjournal --command-regex, -r    Filtering using regular expression (regexp) in command line mode")
+	fmt.Println("    lazyjournal                            Run interface")
+	fmt.Println("    lazyjournal --help, -h                 Show help")
+	fmt.Println("    lazyjournal --version, -v              Show version")
+	fmt.Println("    lazyjournal --audit, -a                Show audit information")
+	fmt.Println("    lazyjournal --tail, -t                 Change the number of log lines to output (default: 100000, range: 5000-200000)")
+	fmt.Println("    lazyjournal --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
+	fmt.Println("    lazyjournal --disable-color, -d        Disable output coloring")
+	fmt.Println("    lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs")
+	fmt.Println("    lazyjournal --command-color, -c        Coloring in command line mode")
+	fmt.Println("    lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
+	fmt.Println("    lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
 }
 
 func (app *App) showAudit() {
@@ -465,6 +467,7 @@ func runGoCui(mock bool) {
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
 		timestampDocker:              true,
+		streamTypeDocker:             true,
 	}
 
 	// Определяем используемую ОС (linux/darwin/*bsd/windows) и архитектуру
@@ -484,6 +487,8 @@ func runGoCui(mock bool) {
 	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
+	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for docker logs")
+	flag.BoolVar(disableTimeStamp, "s", false, "Disable timestamp for docker logs")
 	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
 	flag.BoolVar(commandColor, "c", false, "Coloring in command line mode")
 	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
@@ -524,6 +529,10 @@ func runGoCui(mock bool) {
 
 	if *disableColor {
 		app.colorMode = false
+	}
+
+	if *disableTimeStamp {
+		app.timestampDocker = false
 	}
 
 	// Определяем переменные и массивы для покраски вывода
@@ -2656,12 +2665,16 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				}
 				var formattedLine string
 				// Заполняем строку в формате
-				if app.timestampDocker {
+				switch {
+				case app.timestampDocker && app.streamTypeDocker:
 					// stream time: log
 					formattedLine = fmt.Sprintf("%s %s: %s", stream, timeStr, logMessage)
-				} else {
+				case !app.timestampDocker && app.streamTypeDocker:
 					// stream: log
 					formattedLine = fmt.Sprintf("%s: %s", stream, logMessage)
+				case !app.timestampDocker && !app.streamTypeDocker:
+					// log only
+					formattedLine = logMessage
 				}
 				formattedLines = append(formattedLines, formattedLine)
 				// Если это последняя строка в выводе, добавляем перенос строки
@@ -5044,10 +5057,14 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlT, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if app.timestampDocker {
+		switch {
+		case app.timestampDocker && app.streamTypeDocker:
 			app.timestampDocker = false
-		} else {
+		case !app.timestampDocker && app.streamTypeDocker:
+			app.streamTypeDocker = false
+		case !app.timestampDocker && !app.streamTypeDocker:
 			app.timestampDocker = true
+			app.streamTypeDocker = true
 		}
 		app.updateLogOutput(false)
 		return nil
@@ -5061,7 +5078,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 36
+	width, height := 108, 37
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -5102,6 +5119,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32mShift+<Left/Right>\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - enable or disable built-in output coloring.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - enable or disable coloring via tailspin.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+T\033[0m - switch timestamp output for Docker logs.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+C\033[0m - exit.")
