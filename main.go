@@ -2660,18 +2660,18 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				// Парсим строку времени в объект time.Time
 				parsedTime, err := time.Parse(time.RFC3339Nano, timeStr)
 				if err == nil {
-					// Форматируем дату в формате: YYYY-MM-DD HH:MM:SS
-					timeStr = parsedTime.Format("2006-01-02 15:04:05")
+					// Форматируем дату в формате: YYYY-MM-DD HH:MM:SS.MS
+					timeStr = parsedTime.Format("2006-01-02 15:04:05.000")
 				}
 				var formattedLine string
 				// Заполняем строку в формате
 				switch {
 				case app.timestampDocker && app.streamTypeDocker:
-					// stream time: log
-					formattedLine = fmt.Sprintf("%s %s: %s", stream, timeStr, logMessage)
+					// stream time log
+					formattedLine = fmt.Sprintf("%s %s %s", stream, timeStr, logMessage)
 				case !app.timestampDocker && app.streamTypeDocker:
-					// stream: log
-					formattedLine = fmt.Sprintf("%s: %s", stream, logMessage)
+					// stream log
+					formattedLine = fmt.Sprintf("%s %s", stream, logMessage)
 				case !app.timestampDocker && !app.streamTypeDocker:
 					// log only
 					formattedLine = logMessage
@@ -2692,7 +2692,16 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			parts := strings.Split(containerName, " (")
 			containerId = parts[0]
 		}
-		cmd := exec.Command(containerizationSystem, "logs", "--tail", app.logViewCount, containerId)
+		var cmd *exec.Cmd
+		if app.timestampDocker {
+			if containerizationSystem == "kubectl" {
+				cmd = exec.Command(containerizationSystem, "logs", "--timestamps=true", "--tail", app.logViewCount, containerId)
+			} else {
+				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount, containerId)
+			}
+		} else {
+			cmd = exec.Command(containerizationSystem, "logs", "--tail", app.logViewCount, containerId)
+		}
 		output, err := cmd.CombinedOutput() // читаем весь вывод, включая stderr
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
