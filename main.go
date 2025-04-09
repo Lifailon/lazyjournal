@@ -134,6 +134,9 @@ type App struct {
 	// Отключение привязки горячих клавиш на время загрузки списка
 	keybindingsEnabled bool
 
+	// Отключение встроенных временных меток (timestamp) для логов Docker
+	timestampDocker bool
+
 	// Регулярные выражения для покраски строк
 	trimHttpRegex        *regexp.Regexp
 	trimHttpsRegex       *regexp.Regexp
@@ -461,6 +464,7 @@ func runGoCui(mock bool) {
 		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
+		timestampDocker:              true,
 	}
 
 	// Определяем используемую ОС (linux/darwin/*bsd/windows) и архитектуру
@@ -2647,11 +2651,18 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				// Парсим строку времени в объект time.Time
 				parsedTime, err := time.Parse(time.RFC3339Nano, timeStr)
 				if err == nil {
-					// Форматируем дату в формат: DD:MM:YYYY HH:MM:SS
-					timeStr = parsedTime.Format("02.01.2006 15:04:05")
+					// Форматируем дату в формате: YYYY-MM-DD HH:MM:SS
+					timeStr = parsedTime.Format("2006-01-02 15:04:05")
 				}
-				// Заполняем строку в формате: stream time: log
-				formattedLine := fmt.Sprintf("%s %s: %s", stream, timeStr, logMessage)
+				var formattedLine string
+				// Заполняем строку в формате
+				if app.timestampDocker {
+					// stream time: log
+					formattedLine = fmt.Sprintf("%s %s: %s", stream, timeStr, logMessage)
+				} else {
+					// stream: log
+					formattedLine = fmt.Sprintf("%s: %s", stream, logMessage)
+				}
 				formattedLines = append(formattedLines, formattedLine)
 				// Если это последняя строка в выводе, добавляем перенос строки
 				if i == len(lines)-1 {
@@ -5029,6 +5040,17 @@ func (app *App) setupKeybindings() error {
 	}
 	if err := app.gui.SetKeybinding("logs", gocui.MouseWheelDown, gocui.ModMouseCtrl, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollDownLogs(100)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("", gocui.KeyCtrlT, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.timestampDocker {
+			app.timestampDocker = false
+		} else {
+			app.timestampDocker = true
+		}
+		app.updateLogOutput(false)
+		return nil
 	}); err != nil {
 		return err
 	}
