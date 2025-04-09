@@ -15,10 +15,6 @@ on:
         description: 'Push to Snapcraft'
         default: false
         type: boolean
-      Deb:
-        description: 'Build deb package'
-        default: false
-        type: boolean
 
 jobs:
   build:
@@ -52,19 +48,14 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y snapd
-        sudo snap install snapcraft --classic
         snap version
+        sudo snap install snapcraft --classic
+        snapcraft version
         version=$(go run main.go -v)
         sed -i "s/0.7.7/$version/g" snapcraft.yaml
         snapcraft --destructive-mode
         sudo snap install *.snap --dangerous --classic
-
-    - name: Upload snap package
-      if: ${{ github.event.inputs.Snap == 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: snap-package
-        path: lazyjournal*.snap
+        snap remove lazyjournal
 
     - name: Login and push to Snapcraft
       if: ${{ github.event.inputs.Snapcraft == 'true' }}
@@ -73,26 +64,9 @@ jobs:
         export SNAPCRAFT_STORE_CREDENTIALS="${{ secrets.SNAPCRAFT_SECRET }}"
         snapcraft push *.snap
 
-    - name: Build deb package
-      if: ${{ github.event.inputs.Deb == 'true' }}
-      run: |
-        version=$(go run main.go -v)
-        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/lazyjournal-$version-linux-amd64
-        mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
-        cp bin/lazyjournal-$version-linux-amd64 lazyjournal/usr/local/bin/lazyjournal
-        echo "Package: lazyjournal" >> lazyjournal/DEBIAN/control
-        echo "Version: $version" >> lazyjournal/DEBIAN/control
-        echo "Architecture: amd64" >> lazyjournal/DEBIAN/control
-        echo "Maintainer: https://github.com/Lifailon" >> lazyjournal/DEBIAN/control
-        echo "Description: TUI for journalctl, logs in the file system and docker containers for quick viewing and filtering with fuzzy find and regex support." >> lazyjournal/DEBIAN/control
-        dpkg-deb --build lazyjournal lazyjournal-$version-amd64.deb
-        dpkg-deb --contents lazyjournal-$version-amd64.deb
-        echo "ARTIFACT_NAME=lazyjournal-$version-amd64.deb" >> $GITHUB_ENV
-        sudo dpkg -i lazyjournal-0.7.7-amd64.deb
-
-    - name: Upload deb package
-      if: ${{ github.event.inputs.Deb == 'true' }}
+    - name: Upload snap package
+      if: ${{ github.event.inputs.Snap == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: deb-package
-        path: lazyjournal*.deb
+        name: snap-package
+        path: lazyjournal*.snap

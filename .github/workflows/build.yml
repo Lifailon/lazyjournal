@@ -220,6 +220,29 @@ jobs:
           ls -lh bin
           echo "ARTIFACT_NAME=lazyjournal-$version" >> $GITHUB_ENV
 
+      - name: Build deb package
+        if: ${{ github.event.inputs.Binary == 'true' }}
+        run: |
+          version=$(go run main.go -v)
+          mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
+          architectures=("amd64" "arm64")
+          for arch in "${architectures[@]}"; do
+              rm -f lazyjournal/usr/local/bin/lazyjournal
+              cp bin/lazyjournal-$version-linux-$arch lazyjournal/usr/local/bin/lazyjournal
+              rm -f lazyjournal/DEBIAN/control
+              echo "Package: lazyjournal" > lazyjournal/DEBIAN/control
+              echo "Version: $version" >> lazyjournal/DEBIAN/control
+              echo "Architecture: $arch" >> lazyjournal/DEBIAN/control
+              echo "Maintainer: https://github.com/Lifailon" >> lazyjournal/DEBIAN/control
+              echo "Description: A TUI for reading logs from journald, auditd, file system, Docker and Podman containers, as well Kubernetes pods." >> lazyjournal/DEBIAN/control
+              dpkg-deb --build lazyjournal lazyjournal-$version-$arch.deb
+              dpkg-deb --contents lazyjournal-$version-$arch.deb
+              mv lazyjournal-$version-$arch.deb bin/lazyjournal-$version-$arch.deb
+          done
+          ls -lh bin/*.deb
+          sudo dpkg -i lazyjournal-0.7.7-amd64.deb
+          sudo dpkg -r lazyjournal
+
       - name: Upload binaries
         if: ${{ github.event.inputs.Binary == 'true' }}
         uses: actions/upload-artifact@v4
