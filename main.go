@@ -152,8 +152,6 @@ type App struct {
 	trimPostfixPathRegex *regexp.Regexp
 	hexByteRegex         *regexp.Regexp
 	dateTimeRegex        *regexp.Regexp
-	dateIpAddressRegex   *regexp.Regexp
-	ipAddressRegex       *regexp.Regexp
 	integersInputRegex   *regexp.Regexp
 	syslogUnitRegex      *regexp.Regexp
 }
@@ -426,12 +424,8 @@ var (
 	trimPostfixPathRegex = regexp.MustCompile(`[=:'"(){}\[\]]+.*$`)
 	// Байты или числа в шестнадцатеричном формате: 0x2 || 0xc0000001
 	hexByteRegex = regexp.MustCompile(`\b0x[0-9A-Fa-f]+\b`)
-	// DateTime: YYYY-MM-DDTHH:MM:SS.MS+HH:MM
-	dateTimeRegex = regexp.MustCompile(`\b(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([\+\-]\d{2}:\d{2})?)\b`)
-	// Date (DD-MM-YYYY || DD.MM.YYYY || YYYY-MM-DD || YYYY.MM.DD) + IP address + version (1.0 || 1.0.7 || 1.0-build)
-	dateIpAddressRegex = regexp.MustCompile(`\b(\d{1,2}[\-\.]\d{1,2}[\-\.]\d{4}|\d{4}[\-\.]\d{1,2}[\-\.]\d{1,2}|(?:\d{1,3}\.){3}\d{1,3}(?::\d+|\.\d+|/\d+)?|\d+\.\d+[\+\-\.\w]+|\d+\.\d+)\b`)
-	// IP: 255.255.255.255 || 255.255.255.255:443 || 255.255.255.255.443 || 255.255.255.255/24
-	ipAddressRegex = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+|\.\d+|/\d+)?\b`)
+	// DateTime: YYYY-MM-DDTHH:MM:SS.MS+HH:MM || YYYY-MM-DDTHH:MM:SS.MSZ
+	dateTimeRegex = regexp.MustCompile(`\b(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:\d{2}|Z))\b`)
 	// Integers: Int only + Time + MAC address + Percentage (int%) + Date2 (20/03/2025)
 	integersInputRegex = regexp.MustCompile(`^[^a-zA-Z]*\d+[^a-zA-Z]*$`)
 	// Syslog UNIT
@@ -468,8 +462,6 @@ func runGoCui(mock bool) {
 		trimPostfixPathRegex:         trimPostfixPathRegex,
 		hexByteRegex:                 hexByteRegex,
 		dateTimeRegex:                dateTimeRegex,
-		dateIpAddressRegex:           dateIpAddressRegex,
-		ipAddressRegex:               ipAddressRegex,
 		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
@@ -2667,8 +2659,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				// Парсим строку времени в объект time.Time
 				parsedTime, err := time.Parse(time.RFC3339Nano, timeStr)
 				if err == nil {
-					// Форматируем дату в формате: YYYY-MM-DD HH:MM:SS.MS
-					timeStr = parsedTime.Format("2006-01-02 15:04:05.000")
+					// Форматируем дату в формате: YYYY-MM-DDTHH:MM:SS.MS(x9)Z
+					timeStr = parsedTime.Format("2006-01-02T15:04:05.000000000Z")
 				}
 				var formattedLine string
 				// Заполняем строку в формате
@@ -2676,6 +2668,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				case app.timestampDocker && app.streamTypeDocker:
 					// stream time log
 					formattedLine = fmt.Sprintf("%s %s %s", stream, timeStr, logMessage)
+				case app.timestampDocker && !app.streamTypeDocker:
+					// time log
+					formattedLine = fmt.Sprintf("%s %s", timeStr, logMessage)
 				case !app.timestampDocker && app.streamTypeDocker:
 					// stream log
 					formattedLine = fmt.Sprintf("%s %s", stream, logMessage)
@@ -4047,24 +4042,11 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = app.dateTimeRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
 			colored := ""
 			for _, char := range match {
-				if char == '-' || char == '.' || char == ':' || char == '+' || char == 'T' {
+				if char == '-' || char == '.' || char == ':' || char == '+' || char == 'T' || char == 'Z' {
 					// Пурпурный для символов
 					colored += "\033[35m" + string(char) + "\033[0m"
 				} else {
 					// Синий для цифр
-					colored += "\033[34m" + string(char) + "\033[0m"
-				}
-			}
-			return colored
-		})
-	// Date + IP + Versions
-	case app.dateIpAddressRegex.MatchString(inputWord):
-		coloredWord = app.dateIpAddressRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
-			colored := ""
-			for _, char := range match {
-				if char == '.' || char == ':' || char == '-' || char == '+' {
-					colored += "\033[35m" + string(char) + "\033[0m"
-				} else {
 					colored += "\033[34m" + string(char) + "\033[0m"
 				}
 			}
