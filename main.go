@@ -46,6 +46,13 @@ type DockerContainers struct {
 	id   string
 }
 
+// Структура для парсинга логов из docker cli
+type dockerLogLines struct {
+	isError   bool
+	timestamp time.Time
+	content   string
+}
+
 // Структура основного приложения (графический интерфейс и данные журналов)
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
@@ -2693,31 +2700,127 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			containerId = parts[0]
 		}
 		var cmd *exec.Cmd
-		if app.timestampDocker {
-			if containerizationSystem == "kubectl" {
-				cmd = exec.Command(containerizationSystem, "logs", "--timestamps=true", "--tail", app.logViewCount, containerId)
-			} else {
-				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount, containerId)
-			}
+		if containerizationSystem == "kubectl" {
+			cmd = exec.Command(containerizationSystem, "logs", "--timestamps=true", "--tail", app.logViewCount, containerId)
 		} else {
-			cmd = exec.Command(containerizationSystem, "logs", "--tail", app.logViewCount, containerId)
+			cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount, containerId)
 		}
-		output, err := cmd.CombinedOutput() // читаем весь вывод, включая stderr
-		if err != nil && !app.testMode {
-			v, _ := app.gui.View("logs")
-			v.Clear()
-			fmt.Fprintln(v, "\033[31mError getting logs from", containerName, "(id:", containerId, ")", "container. Error:", err, "\033[0m")
-			return
+		// Читаем стандартный вывод
+		stdoutPipe, _ := cmd.StdoutPipe()
+		// Читаем вывод ошибок
+		stderrPipe, _ := cmd.StderrPipe()
+		_ = cmd.Start()
+		// Читаем параллельно (чтобы не блокировать)
+		var stdoutBytes, stderrBytes []byte
+		var stdoutErr, stderrErr error
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			stdoutBytes, stdoutErr = io.ReadAll(stdoutPipe)
+		}()
+		go func() {
+			defer wg.Done()
+			stderrBytes, stderrErr = io.ReadAll(stderrPipe)
+		}()
+		wg.Wait()
+		_ = cmd.Wait()
+		// Обработка ошибок чтения
+		if stdoutErr != nil || stderrErr != nil {
+			if !app.testMode {
+				v, _ := app.gui.View("logs")
+				v.Clear()
+				fmt.Fprintln(v, "\033[31mError getting logs from", containerName, "(id:", containerId, ")", "container.\033[0m")
+				return
+			} else {
+				log.Print("Error: getting logs from ", containerName, " (id:", containerId, ")", " container.")
+			}
 		}
-		if err != nil && app.testMode {
-			log.Print("Error: getting logs from ", containerName, " (id:", containerId, ")", " container. Error: ", err)
+		// Получаем 2 массива вывода
+		stdoutLines := strings.Split(string(stdoutBytes), "\n")
+		stderrLines := strings.Split(string(stderrBytes), "\n")
+		// Объединяем два массив
+		var combined []dockerLogLines
+		for _, line := range stdoutLines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			ts, err := parseTimestamp(line)
+			if err != nil {
+				continue
+			}
+			combined = append(combined, dockerLogLines{
+				isError:   false,
+				timestamp: ts,
+				content:   line,
+			})
 		}
-		app.currentLogLines = strings.Split(string(output), "\n")
+		for _, line := range stderrLines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			ts, err := parseTimestamp(line)
+			if err != nil {
+				continue
+			}
+			combined = append(combined, dockerLogLines{
+				isError:   true,
+				timestamp: ts,
+				content:   line,
+			})
+		}
+		// Cортируем итоговый массив по timestamp
+		sort.Slice(combined, func(i, j int) bool {
+			return combined[i].timestamp.Before(combined[j].timestamp)
+		})
+		// Добавляем префиксы с типом данных (stdout или stderr)
+		var finalLines []string
+		for _, entry := range combined {
+			entryLine := entry.content
+			// Удаляем из строки timestamp
+			if !app.timestampDocker {
+				entryLine = removeTimestamp(entry.content)
+			}
+			// Не добавляем профексы
+			if !app.streamTypeDocker {
+				finalLines = append(finalLines, entryLine)
+			} else {
+				prefix := "stdout "
+				if entry.isError {
+					prefix = "stderr "
+				}
+				finalLine := prefix + entryLine
+				finalLines = append(finalLines, finalLine)
+			}
+		}
+		app.currentLogLines = finalLines
 	}
 	if !app.testMode {
 		app.updateDelimiter(newUpdate)
 		app.applyFilter(false)
 	}
+}
+
+// Функция извлечения parseTimestamp для сортировки
+func parseTimestamp(line string) (time.Time, error) {
+	// Делим строку на две части по первому пробелу
+	parts := strings.SplitN(line, " ", 2)
+	// Удаляем лишние пробелы
+	tsStr := strings.TrimSpace(parts[0])
+	// Парсим строку (извлекаем временную метку)
+	return time.Parse(time.RFC3339Nano, tsStr)
+}
+
+// Функция для удаления timestamp из строки (первого слова до первого пробела)
+func removeTimestamp(line string) string {
+	// Находим индекс первого пробела
+	spaceIndex := strings.Index(line, " ")
+	if spaceIndex == -1 {
+		// Если пробела нет, возвращаем строку как есть
+		return line
+	}
+	// Возвращаем строку начиная с символа после первого пробела
+	return line[spaceIndex+1:]
 }
 
 // ---------------------------------------- Filter ----------------------------------------
@@ -5068,12 +5171,13 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlT, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		switch {
 		case app.timestampDocker && app.streamTypeDocker:
-			app.timestampDocker = false
-		case !app.timestampDocker && app.streamTypeDocker:
 			app.streamTypeDocker = false
+		case app.timestampDocker && !app.streamTypeDocker:
+			app.timestampDocker = false
 		case !app.timestampDocker && !app.streamTypeDocker:
-			app.timestampDocker = true
 			app.streamTypeDocker = true
+		case !app.timestampDocker && app.streamTypeDocker:
+			app.timestampDocker = true
 		}
 		app.updateLogOutput(false)
 		return nil
