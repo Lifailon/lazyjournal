@@ -1360,8 +1360,27 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			app.currentLogLines = []string{}
 			return
 		}
+	// Читаем лог выбранного по ключу журнала аудита
+	case selectUnits == "auditd":
+		if newUpdate {
+			app.lastBootId = serviceName
+		} else {
+			serviceName = app.lastBootId
+		}
+		cmd := exec.Command("ausearch", "-k", serviceName, "--format", "interpret")
+		output, err = cmd.Output()
+		if err != nil && !app.testMode {
+			v, _ := app.gui.View("logs")
+			v.Clear()
+			fmt.Fprintln(v, "\033[31mError getting auditd logs:", err, "\033[0m")
+			return
+		}
+		if err != nil && app.testMode {
+			log.Print("Error: getting auditd logs. ", err)
+		}
 	// Читаем лог ядра загрузки системы
 	case selectUnits == "kernel":
+		// Извлекаем id журнала из названия
 		var boot_id string
 		for _, journal := range app.journals {
 			journalBootName := removeANSI(journal.name)
