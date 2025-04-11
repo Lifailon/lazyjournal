@@ -69,7 +69,7 @@ type App struct {
 	userNameArray []string // список всех пользователей
 	rootDirArray  []string // список всех корневых каталогов
 
-	selectUnits                  string // название журнала (UNIT/USER_UNIT)
+	selectUnits                  string // название журнала (UNIT/USER_UNIT/kernel/audit)
 	selectPath                   string // путь к логам (/var/log/)
 	selectContainerizationSystem string // название системы контейнеризации (docker/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (default/fuzzy/regex)
@@ -157,7 +157,7 @@ type App struct {
 }
 
 func showHelp() {
-	fmt.Println("lazyjournal - terminal user interface for reading logs from journalctl, file system, Docker and Podman containers, as well Kubernetes pods.")
+	fmt.Println("lazyjournal - A TUI for reading logs from journald, auditd, file system, Docker and Podman containers, as well Kubernetes pods.")
 	fmt.Println("Source code: https://github.com/Lifailon/lazyjournal")
 	fmt.Println("If you have problems with the application, please open issue: https://github.com/Lifailon/lazyjournal/issues")
 	fmt.Println("")
@@ -448,7 +448,7 @@ func runGoCui(mock bool) {
 		selectedDockerContainer:      0,
 		debugLoadTime:                "0s",
 		debugColorTime:               "0s",
-		selectUnits:                  "services",  // "UNIT" || "USER_UNIT" || "kernel"
+		selectUnits:                  "services",  // "UNIT" || "USER_UNIT" || "kernel" || "audit"
 		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для MacOS) + /root/
 		selectContainerizationSystem: "docker",    // "podman" || kubernetes
 		selectFilterMode:             "default",   // "fuzzy" || "regex"
@@ -867,6 +867,7 @@ func (app *App) loadServices(journalName string) {
 		log.Print("Error: systemd-journald not supported")
 	}
 	switch {
+	// Services list from systemd
 	case journalName == "services":
 		// Получаем список всех юнитов в системе через systemctl в формате JSON
 		unitsList := exec.Command("systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--output=json") // "--type=service"
@@ -944,6 +945,64 @@ func (app *App) loadServices(journalName string) {
 				})
 			}
 		}
+	// Audit rules keys from auditd
+	case journalName == "auditd":
+		// Получаем список правил
+		auditRulesList := exec.Command("auditctl", "-l")
+		output, err := auditRulesList.Output()
+		// Проверяем, что auditd установлен и на ошибку доступа
+		if !app.testMode {
+			if err != nil {
+				var errorText string
+				if err.Error() == "exit status 4" {
+					errorText = "Access denied in auditd via auditctl (root only)"
+				} else {
+					errorText = "Auditd not installed"
+				}
+				vError, _ := app.gui.View("services")
+				vError.Clear()
+				app.journalListFrameColor = gocui.ColorRed
+				vError.FrameColor = app.journalListFrameColor
+				vError.Highlight = false
+				fmt.Fprintln(vError, "\033[31m"+errorText+"\033[0m")
+				return
+			}
+			v, _ := app.gui.View("services")
+			app.journalListFrameColor = gocui.ColorDefault
+			if v.FrameColor != gocui.ColorDefault {
+				v.FrameColor = gocui.ColorGreen
+			}
+			v.Highlight = true
+		}
+		if err != nil && app.testMode {
+			if strings.Contains(err.Error(), "root to run") {
+				log.Print("Access denied in auditd via auditctl (root only)")
+			} else {
+				log.Print("Auditd not installed")
+			}
+		}
+		// Заполняем список всех уникальный ключей
+		keysMap := make(map[string]bool)
+		scanner := bufio.NewScanner(strings.NewReader(string(output)))
+		for scanner.Scan() {
+			rule := scanner.Text()
+			if strings.Contains(rule, "-k ") {
+				// Разбиваем строку правила на 2 части (split) до ключа
+				rulePart := strings.Split(rule, "-k ")
+				if len(rulePart) > 1 {
+					// Разбиваем на слова (fields) из второй части правила после ключа и извлекаем первое слово
+					keyPart := strings.Fields(rulePart[1])[0]
+					if !keysMap[keyPart] {
+						keysMap[keyPart] = true
+						app.journals = append(app.journals, Journal{
+							name:    keyPart,
+							boot_id: keyPart,
+						})
+					}
+				}
+			}
+		}
+	// Boots list from journald
 	case journalName == "kernel":
 		// Получаем список загрузок системы
 		bootCmd := exec.Command("journalctl", "--list-boots", "-o", "json")
@@ -1038,6 +1097,7 @@ func (app *App) loadServices(journalName string) {
 			// Сравниваем по второй дате в обратном порядке (After для сортировки по убыванию)
 			return date1.After(date2)
 		})
+	// Journals list from journald
 	default:
 		cmd := exec.Command("journalctl", "--no-pager", "-F", journalName)
 		output, err := cmd.Output()
@@ -1327,7 +1387,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if err != nil && app.testMode {
 			log.Print("Error: getting kernal logs. ", err)
 		}
-		// Для юнитов systemd
+	// Для юнитов systemd
 	default:
 		if selectUnits == "services" {
 			// Удаляем статусы с покраской из навзания
@@ -5356,6 +5416,10 @@ func (app *App) setUnitListRight(g *gocui.Gui, v *gocui.View) error {
 		selectedServices.Title = " < Kernel boot (0) > "
 		app.loadServices(app.selectUnits)
 	case "kernel":
+		app.selectUnits = "auditd"
+		selectedServices.Title = " < Audit rules keys (0) > "
+		app.loadServices(app.selectUnits)
+	case "auditd":
 		app.selectUnits = "services"
 		selectedServices.Title = " < Unit list (0) > "
 		app.loadServices(app.selectUnits)
@@ -5373,6 +5437,10 @@ func (app *App) setUnitListLeft(g *gocui.Gui, v *gocui.View) error {
 	app.selectedJournal = 0
 	switch app.selectUnits {
 	case "services":
+		app.selectUnits = "auditd"
+		selectedServices.Title = " < Audit rules keys (0) > "
+		app.loadServices(app.selectUnits)
+	case "auditd":
 		app.selectUnits = "kernel"
 		selectedServices.Title = " < Kernel boot (0) > "
 		app.loadServices(app.selectUnits)
