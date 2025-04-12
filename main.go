@@ -166,7 +166,7 @@ func showHelp() {
 	fmt.Println("    lazyjournal --help, -h                 Show help")
 	fmt.Println("    lazyjournal --version, -v              Show version")
 	fmt.Println("    lazyjournal --audit, -a                Show audit information")
-	fmt.Println("    lazyjournal --tail, -t                 Change the number of log lines to output (default: 100000, range: 5000-200000)")
+	fmt.Println("    lazyjournal --tail, -t                 Change the number of log lines to output (default: 50000, range: 200-200000)")
 	fmt.Println("    lazyjournal --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	fmt.Println("    lazyjournal --disable-color, -d        Disable output coloring")
 	fmt.Println("    lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs")
@@ -480,8 +480,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(version, "v", false, "Show version")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
-	tailFlag := flag.String("tail", "100000", "Change the number of log lines to output (default: 100000, range: 5000-200000)")
-	flag.StringVar(tailFlag, "t", "100000", "Change the number of log lines to output (default: 100000, range: 5000-200000)")
+	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
+	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
@@ -512,17 +512,17 @@ func runGoCui(mock bool) {
 		os.Exit(0)
 	}
 
-	if *tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" || *tailFlag == "30000" || *tailFlag == "50000" || *tailFlag == "100000" || *tailFlag == "150000" || *tailFlag == "200000" {
+	if *tailFlag == "200" || *tailFlag == "500" || *tailFlag == "1000" || *tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" || *tailFlag == "30000" || *tailFlag == "50000" || *tailFlag == "100000" || *tailFlag == "150000" || *tailFlag == "200000" {
 		app.logViewCount = *tailFlag
 	} else {
-		fmt.Println("Available values: 5000, 10000, 20000, 30000 50000, 100000, 150000, 200000")
+		fmt.Println("Available values: 200, 500, 1000, 5000, 10000, 20000, 30000 50000, 100000, 150000, 200000 (default: 50000 lines)")
 		os.Exit(1)
 	}
 
 	if *updateFlag >= 2 && *updateFlag <= 10 {
 		app.logUpdateSeconds = *updateFlag
 	} else {
-		fmt.Println("Valid range: 2-10")
+		fmt.Println("Valid range: 2-10 (default: 5 seconds)")
 		os.Exit(1)
 	}
 
@@ -597,7 +597,7 @@ func runGoCui(mock bool) {
 			fmt.Println("Regular expression syntax error")
 			os.Exit(1)
 		}
-		app.commandLineRegex(filter, *regex)
+		app.commandLineRegex(regex)
 		os.Exit(0)
 	}
 
@@ -3072,7 +3072,7 @@ func (app *App) applyFilter(color bool) {
 					}
 				// Regex (с использованием регулярных выражений и без учета регистра по умолчанию)
 				case app.selectFilterMode == "regex":
-					outputLine := app.regexFilter(line, *regex)
+					outputLine := app.regexFilter(line, regex)
 					if outputLine != "" {
 						app.filteredLogLines = append(app.filteredLogLines, outputLine)
 					}
@@ -3133,7 +3133,8 @@ func (app *App) applyFilter(color bool) {
 	}
 }
 
-func (app *App) fuzzyFilter(inputLine string, filter string) string {
+// Fyzzy: Функция для неточного поиска (параметры: строка из цикла и текст фильтрации)
+func (app *App) fuzzyFilter(inputLine, filter string) string {
 	// Разбиваем текст фильтра на массив из строк
 	filterWords := strings.Fields(filter)
 	// Опускаем регистр текущей строки цикла
@@ -3179,7 +3180,8 @@ func (app *App) fuzzyFilter(inputLine string, filter string) string {
 	}
 }
 
-func (app *App) regexFilter(inputLine string, regex regexp.Regexp) string {
+// Regex: Функция для поска с использованием регулярных выражений (параметры: строка из цикла и скомпилированное регулярное выражение)
+func (app *App) regexFilter(inputLine string, regex *regexp.Regexp) string {
 	// Проверяем, что строка подходит под регулярное выражение
 	if regex.MatchString(inputLine) {
 		// Находим все найденные совпадени
@@ -3192,6 +3194,7 @@ func (app *App) regexFilter(inputLine string, regex regexp.Regexp) string {
 	}
 }
 
+// -f/--command-fuzzy
 func (app *App) commandLineFuzzy(filter string) {
 	stat, err := os.Stdin.Stat()
 	if err != nil {
@@ -3226,7 +3229,8 @@ func (app *App) commandLineFuzzy(filter string) {
 	}
 }
 
-func (app *App) commandLineRegex(filter string, regex regexp.Regexp) {
+// --command-regex/-r
+func (app *App) commandLineRegex(regex *regexp.Regexp) {
 	stat, err := os.Stdin.Stat()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -5289,11 +5293,11 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32m<Shift/Ctrl>+<U/D>\033[0m - quickly move up and down (alternative for macOS).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+A\033[0m or \033[32mHome\033[0m - go to top of log.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+E\033[0m or \033[32mEnd\033[0m - go to the end of the log.")
-	fmt.Fprintln(helpView, "    \033[32mAlt+<Left/Right>\033[0m - change the number of log lines to output (default: 100000, range: 5000-200000).")
+	fmt.Fprintln(helpView, "    \033[32mAlt+<Left/Right>\033[0m - change the number of log lines to output (default: 50000, range: 200-200000).")
 	fmt.Fprintln(helpView, "    \033[32mShift+<Left/Right>\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+T\033[0m - enable or disable timestamp for Docker logs.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - enable or disable built-in output coloring.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - enable or disable coloring via tailspin.")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+T\033[0m - switch timestamp output for Docker logs.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+C\033[0m - exit.")
@@ -5311,6 +5315,12 @@ func (app *App) closeHelp(g *gocui.Gui) error {
 
 func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	switch app.logViewCount {
+	case "200":
+		app.logViewCount = "500"
+	case "500":
+		app.logViewCount = "1000"
+	case "1000":
+		app.logViewCount = "5000"
 	case "5000":
 		app.logViewCount = "10000"
 	case "10000":
@@ -5356,7 +5366,13 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	case "10000":
 		app.logViewCount = "5000"
 	case "5000":
-		app.logViewCount = "5000"
+		app.logViewCount = "1000"
+	case "1000":
+		app.logViewCount = "500"
+	case "500":
+		app.logViewCount = "200"
+	case "200":
+		app.logViewCount = "200"
 	}
 	app.updateLogOutput(true)
 	vLog, err := app.gui.View("logs")
