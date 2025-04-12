@@ -26,16 +26,10 @@ lint: prep install-lint
 
 list:
 	@go test -list . ./...
-	@echo To run the test use: make test n=TestMain
+	@echo To run the selected test: make test n=TestMain
 
 test: prep
 	go test -v -cover --run $(n) ./...
-
-actions-check:
-	@act -n -e .github/workflows/event.json -W .github/workflows/build.yml -P ubuntu-24.04=catthehacker/ubuntu:act-latest --reuse --artifact-server-path $PWD/artifacts
-
-actions-run:
-	@act -e .github/workflows/event.json -W .github/workflows/build.yml -P ubuntu-24.04=catthehacker/ubuntu:act-latest --reuse --artifact-server-path $PWD/artifacts
 
 build: prep
 	@echo "Build version: $(VERSION)"

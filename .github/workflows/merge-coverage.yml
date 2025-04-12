@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  Linux-root:
+  Linux:
     runs-on: ubuntu-24.04
 
     steps:
@@ -47,8 +47,8 @@ jobs:
       - name: Install tailspin
         run: sudo apt install -y tailspin
 
-      - name: Run unit test in Linux
-        run: sudo go test -v -cover -coverprofile linux-root-coverage.out
+      - name: Run all unit test in Linux
+        run: sudo go test -v -cover -coverprofile linux-coverage.out
         continue-on-error: true
         timeout-minutes: 5
 
@@ -67,10 +67,10 @@ jobs:
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: linux-root-coverage
-          path: linux-root-coverage.out
+          name: linux-coverage
+          path: linux-coverage.out
 
-  Linux:
+  Docker:
     runs-on: ubuntu-24.04
 
     steps:
@@ -101,16 +101,16 @@ jobs:
           docker-compose up -d
           docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
 
-      - name: Run unit test docker without root in Linux
-        run: go test -v --run "TestDockerContainer" -cover -coverprofile linux-coverage.out
+      - name: Run unit test for docker in Linux without root
+        run: go test -v --run "TestDockerContainer" -cover -coverprofile docker-coverage.out
         continue-on-error: true
         timeout-minutes: 5
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: linux-coverage
-          path: linux-coverage.out
+          name: docker-coverage
+          path: docker-coverage.out
 
   macOS:
     runs-on: macos-15
@@ -209,7 +209,7 @@ jobs:
 
   Merge:
     runs-on: ubuntu-latest
-    needs: [Linux-root, Linux, macOS, Windows]
+    needs: [Linux, Docker, macOS, Windows]
     steps:
       - name: Clone main repository
         uses: actions/checkout@v4
@@ -219,16 +219,16 @@ jobs:
         with:
           go-version: 1.23
 
-      - name: Download coverage report for Linux (root)
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-root-coverage
-          path: .
-
-      - name: Download coverage report for Linux (without root)
+      - name: Download coverage report for Linux (with root)
         uses: actions/download-artifact@v4
         with:
           name: linux-coverage
+          path: .
+
+      - name: Download coverage report for Docker without root
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-coverage
           path: .
 
       - name: Download coverage report for macOS
@@ -243,11 +243,11 @@ jobs:
           name: windows-coverage
           path: .
 
-      - name: Check coverage report for Linux (root)
-        run: go tool cover -func linux-root-coverage.out
-
-      - name: Check coverage report for Linux (without root)
+      - name: Check coverage report for Linux with root
         run: go tool cover -func linux-coverage.out
+
+      - name: Check coverage report for Docker without root
+        run: go tool cover -func docker-coverage.out
 
       - name: Check coverage report for macOS
         run: go tool cover -func macos-coverage.out
@@ -264,7 +264,7 @@ jobs:
 
       - name: Merge coverage reports
         run: |
-          gocovmerge linux-root-coverage.out linux-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
+          gocovmerge linux-coverage.out docker-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
           go tool cover -func merge-coverage.out
 
       - name: Upload merge coverage report

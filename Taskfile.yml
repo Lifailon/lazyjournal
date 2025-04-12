@@ -44,23 +44,13 @@ tasks:
       - go test -list . ./...
       - silent: true
         cmd: |
-          echo To run the test use: task test -- TestMain
+          echo To run the selected test: task test -- TestMain
 
   test:
     desc: "Run the selected unit test"
     cmds:
       - task: prep
       - go test -v -cover --run {{.CLI_ARGS}} ./...
-
-  actions-check:
-    desc: "Run GitHub Actions locally"
-    cmds:
-      - act -n -e .github/workflows/event.json -W .github/workflows/build.yml -P ubuntu-24.04=catthehacker/ubuntu:act-latest --reuse --artifact-server-path $PWD/artifacts
-
-  actions-run:
-    desc: "Run GitHub Actions locally"
-    cmds:
-      - act -e .github/workflows/event.json -W .github/workflows/build.yml -P ubuntu-24.04=catthehacker/ubuntu:act-latest --reuse --artifact-server-path $PWD/artifacts
 
   build:
     desc: "Build"
@@ -80,3 +70,13 @@ tasks:
       - CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -o bin/lazyjournal-{{.VERSION}}-freebsd-arm64
       - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/lazyjournal-{{.VERSION}}-windows-amd64
       - CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o bin/lazyjournal-{{.VERSION}}-windows-arm64
+
+  actions-check:
+    desc: "Run GitHub Actions locally"
+    cmds:
+      - act -n -e .github/workflows/event.json -W .github/workflows/build.yml -P ubuntu-24.04=catthehacker/ubuntu:act-latest --reuse --artifact-server-path $PWD/artifacts
+
+  actions-run:
+    desc: "Run GitHub Actions locally"
+    cmds:
+      - act -e .github/workflows/event.json -W .github/workflows/build.yml -P ubuntu-24.04=catthehacker/ubuntu:act-latest --reuse --artifact-server-path $PWD/artifacts
