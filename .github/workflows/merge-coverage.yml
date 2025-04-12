@@ -4,6 +4,72 @@ on:
   workflow_dispatch:
 
 jobs:
+  Linux-root:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Clone main repository
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+
+      - name: Install dependencies
+        run: |
+          go fmt ./...
+          go vet ./...
+          go get ./...
+          go mod tidy
+          go mod verify
+          go build -v ./...
+
+      - name: Start docker container for test in Ubuntu
+        run: |
+          version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
+          curl -L "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+          echo -e "TTYD=true\nPORT=5555\nUSERNAME=\nPASSWORD=" | tee .env > /dev/null
+          docker-compose up -d
+          docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
+
+      - name: Create pcap files for Linux
+        run: |
+          sudo tcpdump -i any -c 1 -w test.pcap
+          gzip -c test.pcap > test.pcap.gz
+          sudo tcpdump -i any -c 1 -w test.pcapng
+          gzip -c test.pcapng > test.pcapng.gz
+          ls -lh
+        continue-on-error: true
+
+      - name: Install tailspin
+        run: sudo apt install -y tailspin
+
+      - name: Run unit test in Linux
+        run: sudo go test -v -cover -coverprofile linux-root-coverage.out
+        continue-on-error: true
+        timeout-minutes: 5
+
+      - name: Create markdown report
+        run: |
+          mv test-report.md test-linux-report.md
+          cat test-linux-report.md >> $GITHUB_STEP_SUMMARY
+        continue-on-error: true
+
+      - name: Upload test summary report
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-report
+          path: test-linux-report.md
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-root-coverage
+          path: linux-root-coverage.out
+
   Linux:
     runs-on: ubuntu-24.04
 
@@ -27,37 +93,18 @@ jobs:
 
       - name: Start docker container for test in Ubuntu
         run: |
+          version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
+          curl -L "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+          echo -e "TTYD=true\nPORT=5555\nUSERNAME=\nPASSWORD=" | tee .env > /dev/null
+          docker-compose up -d
           docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
-          docker run -d --name TorAPI -p 8443:8443 lifailon/torapi:latest
 
-      - name: Create pcap files for Linux
-        run: |
-          sudo tcpdump -i any -c 1 -w test.pcap
-          gzip -c test.pcap > test.pcap.gz
-          sudo tcpdump -i any -c 1 -w test.pcapng
-          gzip -c test.pcapng > test.pcapng.gz
-          ls -lh
-        continue-on-error: true
-
-      - name: Install tailspin
-        run: sudo apt install -y tailspin
-
-      - name: Run unit test in Linux
-        run: sudo go test -v -cover -coverprofile linux-coverage.out
+      - name: Run unit test docker without root in Linux
+        run: go test -v --run "TestDockerContainer" -cover -coverprofile linux-coverage.out
         continue-on-error: true
         timeout-minutes: 5
-
-      - name: Create markdown report
-        run: |
-          mv test-report.md test-linux-report.md
-          cat test-linux-report.md >> $GITHUB_STEP_SUMMARY
-        continue-on-error: true
-
-      - name: Upload test summary report
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-report
-          path: test-linux-report.md
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -87,7 +134,7 @@ jobs:
           go build -v ./...
 
       - name: Run unit test in macOS
-        run: sudo go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestMainInterface" -cover -coverprofile macos-coverage.out
+        run: sudo go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" -cover -coverprofile macos-coverage.out
         continue-on-error: true
         timeout-minutes: 5
 
@@ -137,7 +184,7 @@ jobs:
         continue-on-error: true
 
       - name: Run unit test in Windows
-        run: go test -v --run "TestWin.*|TestFlags|TestCommandColor|TestMainInterface|TestMockInterface" -cover -coverprofile windows-coverage.out
+        run: go test -v --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" -cover -coverprofile windows-coverage.out
         continue-on-error: true
         timeout-minutes: 5
 
@@ -162,7 +209,7 @@ jobs:
 
   Merge:
     runs-on: ubuntu-latest
-    needs: [Linux, macOS, Windows]
+    needs: [Linux-root, Linux, macOS, Windows]
     steps:
       - name: Clone main repository
         uses: actions/checkout@v4
@@ -172,7 +219,13 @@ jobs:
         with:
           go-version: 1.23
 
-      - name: Download coverage report for Linux
+      - name: Download coverage report for Linux (root)
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-root-coverage
+          path: .
+
+      - name: Download coverage report for Linux (without root)
         uses: actions/download-artifact@v4
         with:
           name: linux-coverage
@@ -190,7 +243,10 @@ jobs:
           name: windows-coverage
           path: .
 
-      - name: Check coverage report for Linux
+      - name: Check coverage report for Linux (root)
+        run: go tool cover -func linux-root-coverage.out
+
+      - name: Check coverage report for Linux (without root)
         run: go tool cover -func linux-coverage.out
 
       - name: Check coverage report for macOS
@@ -208,7 +264,7 @@ jobs:
 
       - name: Merge coverage reports
         run: |
-          gocovmerge linux-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
+          gocovmerge linux-root-coverage.out linux-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
           go tool cover -func merge-coverage.out
 
       - name: Upload merge coverage report
