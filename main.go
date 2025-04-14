@@ -96,8 +96,8 @@ type App struct {
 	// Фильтрация по времени
 	timestampFilterView bool   // отображение окон
 	timestampFilterMode bool   // использовать режим фильтрации
-	sinceFilter         string // начало отрезка времени
-	untilFilter         string // конец отрезка времени
+	sinceFilterText     string // начало отрезка времени
+	untilFilterText     string // конец отрезка времени
 
 	// Текст для фильтрации список журналов
 	filterListText string
@@ -830,7 +830,7 @@ func (app *App) layout(g *gocui.Gui) error {
 
 	// Включение курсора в режиме фильтра и отключение в остальных окнах
 	currentView := g.CurrentView()
-	if currentView != nil && (currentView.Name() == "filter" || currentView.Name() == "filterList") {
+	if currentView != nil && (currentView.Name() == "filter" || currentView.Name() == "filterList" || currentView.Name() == "sinceFilter" || currentView.Name() == "untilFilter") {
 		g.Cursor = true
 	} else {
 		g.Cursor = false
@@ -2912,13 +2912,13 @@ func removeTimestamp(line string) string {
 func (app *App) createFilterEditor(window string) gocui.Editor {
 	return gocui.EditorFunc(func(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
 		switch {
-		// добавляем символ в поле ввода
+		// Добавляем символ в поле ввода
 		case ch != 0 && mod == 0:
 			v.EditWrite(ch)
-		// добавляем пробел
+		// Добавляем пробел
 		case key == gocui.KeySpace:
 			v.EditWrite(' ')
-		// удаляем символ слева от курсора
+		// Удаляем символ слева от курсора
 		case key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
 			v.EditDelete(true)
 		// Удаляем символ справа от курсора
@@ -2941,6 +2941,62 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 			app.applyFilterList()
 		}
 	})
+}
+
+// Функция для обработки фильтрации по временной метке
+func (app *App) timestampFilterEditor(window string) gocui.Editor {
+	return gocui.EditorFunc(func(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
+		switch {
+		// Добавляем цифры (0-9)
+		case ch >= '0' && ch <= '9':
+			v.EditWrite(ch)
+		case ch == '-' || ch == ':':
+			v.EditWrite(ch)
+		// Добавляем пробел
+		case key == gocui.KeySpace:
+			v.EditWrite(' ')
+		// Удаляем символ слева от курсора
+		case key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
+			v.EditDelete(true)
+		// Удаляем символ справа от курсора
+		case key == gocui.KeyDelete:
+			v.EditDelete(false)
+		// Перемещение курсора влево
+		case key == gocui.KeyArrowLeft:
+			v.MoveCursor(-1, 0) // удалить 3-й булевой параметр для форка
+		// Перемещение курсора вправо
+		case key == gocui.KeyArrowRight:
+			v.MoveCursor(1, 0)
+		}
+		if app.timestampCheckFormat(strings.TrimSpace(v.Buffer())) {
+			v.FrameColor = gocui.ColorGreen
+		} else {
+			v.FrameColor = gocui.ColorRed
+		}
+		if window == "sinceFilter" {
+			// Обновляем текст в буфере
+			app.sinceFilterText = strings.TrimSpace(v.Buffer())
+		} else if window == "untilFilter" {
+			app.untilFilterText = strings.TrimSpace(v.Buffer())
+		}
+	})
+}
+
+// Функция проверки формата времени для фильтрации
+func (app *App) timestampCheckFormat(input string) bool {
+	formats := []string{
+		"15:04",               // 00:00
+		"15:04:05",            // 00:00:00
+		"2006-01-02",          // 2025-04-14
+		"2006-01-02 15:04",    // 2025-04-14 00:00
+		"2006-01-02 15:04:05", // 2025-04-14 00:00:00
+	}
+	for _, layout := range formats {
+		if _, err := time.Parse(layout, input); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // Функция для фильтрации всех списоков журналов
@@ -4878,11 +4934,23 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("filter", gocui.KeyArrowDown, gocui.ModNone, app.setFilterModeLeft); err != nil {
 		return err
 	}
+	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyArrowUp, gocui.ModNone, app.setFilterModeRight); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyArrowDown, gocui.ModNone, app.setFilterModeLeft); err != nil {
+		return err
+	}
 	// PgUp/PgDn Filter
 	if err := app.gui.SetKeybinding("filter", gocui.KeyPgup, gocui.ModNone, app.setFilterModeRight); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("filter", gocui.KeyPgdn, gocui.ModNone, app.setFilterModeLeft); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyPgup, gocui.ModNone, app.setFilterModeRight); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyPgdn, gocui.ModNone, app.setFilterModeLeft); err != nil {
 		return err
 	}
 	// Переключение для количества строк вывода (tail mode) Alt+Left
@@ -5175,6 +5243,16 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+	if err := app.gui.SetKeybinding("sinceFilter", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.setSelectView(g, "sinceFilter")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("untilFilter", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.setSelectView(g, "untilFilter")
+	}); err != nil {
+		return err
+	}
 	if err := app.gui.SetKeybinding("logs", gocui.MouseLeft, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.setSelectView(g, "logs")
 	}); err != nil {
@@ -5417,6 +5495,8 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 			v.Title = "Since timestamp"
 			v.Editable = true
 			v.Wrap = true
+			// Обработка времени и даты
+			v.Editor = app.timestampFilterEditor("sinceFilter")
 			// Изменить цвет окна
 			v.FrameColor = gocui.ColorGreen
 			v.TitleColor = gocui.ColorGreen
@@ -5427,11 +5507,16 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 			v2.Title = "Until timestamp"
 			v2.Editable = true
 			v2.Wrap = true
+			v2.Editor = app.timestampFilterEditor("untilFilter")
 		}
 	case "Filter (Timestamp)":
 		// Удаляем временные два окна
 		g.DeleteView("sinceFilter")
 		g.DeleteView("untilFilter")
+		// Возвращяем фокус и цвет назад
+		g.SetCurrentView("filter")
+		v.FrameColor = gocui.ColorGreen
+		v.TitleColor = gocui.ColorGreen
 		selectedFilter.Title = "Filter (Default)"
 		app.selectFilterMode = "default"
 	}
@@ -5458,8 +5543,8 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 		if v, err := g.SetView("sinceFilter", leftPanelWidth+1, 0, leftPanelWidth+1+filterWidth, 2, 0); err != nil {
 			v.Title = "Since timestamp"
 			v.Editable = true
-			v.Editor = app.createFilterEditor("logs")
 			v.Wrap = true
+			v.Editor = app.timestampFilterEditor("sinceFilter")
 			v.FrameColor = gocui.ColorGreen
 			v.TitleColor = gocui.ColorGreen
 			g.SetCurrentView("sinceFilter")
@@ -5467,12 +5552,15 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 		if v2, err := g.SetView("untilFilter", leftPanelWidth+1+filterWidth+1, 0, maxX-1, 2, 0); err != nil {
 			v2.Title = "Until timestamp"
 			v2.Editable = true
-			v2.Editor = app.createFilterEditor("alt")
 			v2.Wrap = true
+			v2.Editor = app.timestampFilterEditor("untilFilter")
 		}
 	case "Filter (Timestamp)":
 		g.DeleteView("sinceFilter")
 		g.DeleteView("untilFilter")
+		g.SetCurrentView("filter")
+		v.FrameColor = gocui.ColorGreen
+		v.TitleColor = gocui.ColorGreen
 		selectedFilter.Title = "Filter (Regex)"
 		app.selectFilterMode = "regex"
 	case "Filter (Regex)":
@@ -5483,30 +5571,6 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 		app.selectFilterMode = "default"
 	}
 	return nil
-}
-
-// Горутина для проверки режима фильтрации по временной метке
-func (app *App) timestampFilterBackground() {
-	if app.timestampFilterMode {
-
-	}
-}
-
-// Функция на проверку формата времени
-func (app *App) timestampCheckFormat(input string) bool {
-	formats := []string{
-		"15:04",               // 00:00
-		"15:04:05",            // 00:00:00
-		"2006-01-02",          // 2025-04-14
-		"2006-01-02 15:04",    // 2025-04-14 00:00
-		"2006-01-02 15:04:05", // 2025-04-14 00:00:00
-	}
-	for _, layout := range formats {
-		if _, err := time.Parse(layout, input); err == nil {
-			return true
-		}
-	}
-	return false
 }
 
 // Функции для переключения выбора журналов из journalctl
@@ -5930,8 +5994,8 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case currentView.Name() == "filter" || currentView.Name() == "untilFilter":
 			if app.timestampFilterView {
-				untilFilter.FrameColor = gocui.ColorDefault
-				untilFilter.TitleColor = gocui.ColorDefault
+				untilFilter.FrameColor = gocui.ColorDefault // new
+				untilFilter.TitleColor = gocui.ColorDefault // new
 			}
 			nextView = "logs"
 			selectedFilterList.FrameColor = gocui.ColorDefault
@@ -6093,8 +6157,8 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
 		case currentView.Name() == "filter" || currentView.Name() == "sinceFilter":
 			if app.timestampFilterView {
-				sinceFilter.FrameColor = gocui.ColorDefault
-				sinceFilter.TitleColor = gocui.ColorDefault
+				sinceFilter.FrameColor = gocui.ColorDefault // new
+				sinceFilter.TitleColor = gocui.ColorDefault // new
 			}
 			nextView = "docker"
 			selectedFilterList.FrameColor = gocui.ColorDefault
@@ -6147,7 +6211,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 
 func (app *App) setSelectView(g *gocui.Gui, viewName string) error {
 	// Сбрасываем цвет всех окон
-	views := []string{"filterList", "services", "varLogs", "docker", "filter", "logs"}
+	views := []string{"filterList", "services", "varLogs", "docker", "filter", "sinceFilter", "untilFilter", "logs"}
 	for _, name := range views {
 		if v, err := g.View(name); err == nil {
 			v.FrameColor = gocui.ColorDefault
