@@ -93,7 +93,14 @@ type App struct {
 	startDockerContainers      int
 	selectedDockerContainer    int
 
-	filterListText string // текст для фильтрации список журналов
+	// Фильтрация по времени
+	timestampFilterView bool   // отображение окон
+	timestampFilterMode bool   // использовать режим фильтрации
+	sinceFilter         string // начало отрезка времени
+	untilFilter         string // конец отрезка времени
+
+	// Текст для фильтрации список журналов
+	filterListText string
 
 	// Массивы для хранения списка журналов без фильтрации
 	journalsNotFilter         []Journal
@@ -449,9 +456,11 @@ func runGoCui(mock bool) {
 		debugLoadTime:                "0s",
 		debugColorTime:               "0s",
 		selectUnits:                  "services",  // "UNIT" || "USER_UNIT" || "kernel" || "audit"
-		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для MacOS) + /root/
-		selectContainerizationSystem: "docker",    // "podman" || kubernetes
-		selectFilterMode:             "default",   // "fuzzy" || "regex"
+		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для MacOS) + /root/ || "descriptor"
+		selectContainerizationSystem: "docker",    // "podman" || "kubernetes"
+		selectFilterMode:             "default",   // "fuzzy" || "regex" || "timestamp"
+		timestampFilterView:          false,
+		timestampFilterMode:          false,
 		journalListFrameColor:        gocui.ColorDefault,
 		fileSystemFrameColor:         gocui.ColorDefault,
 		dockerFrameColor:             gocui.ColorDefault,
@@ -5383,8 +5392,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-// Функции для переключения режима фильтрации
-
+// Функция для переключения режима фильтрации (вверх)
 func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 	selectedFilter, err := g.View("filter")
 	if err != nil {
@@ -5398,13 +5406,43 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 		selectedFilter.Title = "Filter (Regex)"
 		app.selectFilterMode = "regex"
 	case "Filter (Regex)":
+		// Фиксируем название
+		selectedFilter.Title = "Filter (Timestamp)"
+		app.selectFilterMode = "timestamp"
+		// Создаем два новых окна
+		maxX, _ := g.Size()
+		leftPanelWidth := maxX / 4
+		filterWidth := (maxX - leftPanelWidth - 1) / 2
+		if v, err := g.SetView("sinceFilter", leftPanelWidth+1, 0, leftPanelWidth+1+filterWidth, 2, 0); err != nil {
+			v.Title = "Since timestamp"
+			v.Editable = true
+			v.Wrap = true
+			// Изменить цвет окна
+			v.FrameColor = gocui.ColorGreen
+			v.TitleColor = gocui.ColorGreen
+			// Выбираем новое окно
+			g.SetCurrentView("sinceFilter")
+		}
+		if v2, err := g.SetView("untilFilter", leftPanelWidth+1+filterWidth+1, 0, maxX-1, 2, 0); err != nil {
+			v2.Title = "Until timestamp"
+			v2.Editable = true
+			v2.Wrap = true
+		}
+	case "Filter (Timestamp)":
+		// Удаляем временные два окна
+		g.DeleteView("sinceFilter")
+		g.DeleteView("untilFilter")
 		selectedFilter.Title = "Filter (Default)"
 		app.selectFilterMode = "default"
 	}
-	app.applyFilter(false)
+	if app.selectFilterMode == "timestamp" {
+	} else {
+		app.applyFilter(false)
+	}
 	return nil
 }
 
+// Функция для переключения режима фильтрации (вниз)
 func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 	selectedFilter, err := g.View("filter")
 	if err != nil {
@@ -5412,6 +5450,29 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 	}
 	switch selectedFilter.Title {
 	case "Filter (Default)":
+		selectedFilter.Title = "Filter (Timestamp)"
+		app.selectFilterMode = "timestamp"
+		maxX, _ := g.Size()
+		leftPanelWidth := maxX / 4
+		filterWidth := (maxX - leftPanelWidth - 1) / 2
+		if v, err := g.SetView("sinceFilter", leftPanelWidth+1, 0, leftPanelWidth+1+filterWidth, 2, 0); err != nil {
+			v.Title = "Since timestamp"
+			v.Editable = true
+			v.Editor = app.createFilterEditor("logs")
+			v.Wrap = true
+			v.FrameColor = gocui.ColorGreen
+			v.TitleColor = gocui.ColorGreen
+			g.SetCurrentView("sinceFilter")
+		}
+		if v2, err := g.SetView("untilFilter", leftPanelWidth+1+filterWidth+1, 0, maxX-1, 2, 0); err != nil {
+			v2.Title = "Until timestamp"
+			v2.Editable = true
+			v2.Editor = app.createFilterEditor("alt")
+			v2.Wrap = true
+		}
+	case "Filter (Timestamp)":
+		g.DeleteView("sinceFilter")
+		g.DeleteView("untilFilter")
 		selectedFilter.Title = "Filter (Regex)"
 		app.selectFilterMode = "regex"
 	case "Filter (Regex)":
@@ -5421,8 +5482,31 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 		selectedFilter.Title = "Filter (Default)"
 		app.selectFilterMode = "default"
 	}
-	app.applyFilter(false)
 	return nil
+}
+
+// Горутина для проверки режима фильтрации по временной метке
+func (app *App) timestampFilterBackground() {
+	if app.timestampFilterMode {
+
+	}
+}
+
+// Функция на проверку формата времени
+func (app *App) timestampCheckFormat(input string) bool {
+	formats := []string{
+		"15:04",               // 00:00
+		"15:04:05",            // 00:00:00
+		"2006-01-02",          // 2025-04-14
+		"2006-01-02 15:04",    // 2025-04-14 00:00
+		"2006-01-02 15:04:05", // 2025-04-14 00:00:00
+	}
+	for _, layout := range formats {
+		if _, err := time.Parse(layout, input); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // Функции для переключения выбора журналов из journalctl
@@ -5729,6 +5813,18 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		log.Panicln(err)
 	}
+	sinceFilter, err := g.View("sinceFilter")
+	if err != nil {
+		app.timestampFilterView = false
+	} else {
+		app.timestampFilterView = true
+	}
+	untilFilter, err := g.View("untilFilter")
+	if err != nil {
+		app.timestampFilterView = false
+	} else {
+		app.timestampFilterView = true
+	}
 	selectedLogs, err := g.View("logs")
 	if err != nil {
 		log.Panicln(err)
@@ -5743,8 +5839,8 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 	if currentView == nil {
 		nextView = "services"
 	} else {
-		switch currentView.Name() {
-		case "filterList":
+		switch {
+		case currentView.Name() == "filterList":
 			nextView = "services"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
@@ -5758,7 +5854,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
-		case "services":
+		case currentView.Name() == "services":
 			nextView = "varLogs"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
@@ -5772,7 +5868,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
-		case "varLogs":
+		case currentView.Name() == "varLogs":
 			nextView = "docker"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
@@ -5786,8 +5882,38 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
-		case "docker":
-			nextView = "filter"
+		case currentView.Name() == "docker":
+			if app.timestampFilterView {
+				nextView = "sinceFilter"
+				selectedFilterList.FrameColor = gocui.ColorDefault
+				selectedFilterList.TitleColor = gocui.ColorDefault
+				selectedServices.FrameColor = app.journalListFrameColor
+				selectedServices.TitleColor = gocui.ColorDefault
+				selectedVarLog.FrameColor = app.fileSystemFrameColor
+				selectedVarLog.TitleColor = gocui.ColorDefault
+				selectedDocker.FrameColor = app.dockerFrameColor
+				selectedDocker.TitleColor = gocui.ColorDefault
+				sinceFilter.FrameColor = gocui.ColorGreen // new
+				sinceFilter.TitleColor = gocui.ColorGreen // new
+				selectedLogs.FrameColor = gocui.ColorDefault
+				selectedScrollLogs.FrameColor = gocui.ColorDefault
+			} else {
+				nextView = "filter"
+				selectedFilterList.FrameColor = gocui.ColorDefault
+				selectedFilterList.TitleColor = gocui.ColorDefault
+				selectedServices.FrameColor = app.journalListFrameColor
+				selectedServices.TitleColor = gocui.ColorDefault
+				selectedVarLog.FrameColor = app.fileSystemFrameColor
+				selectedVarLog.TitleColor = gocui.ColorDefault
+				selectedDocker.FrameColor = app.dockerFrameColor
+				selectedDocker.TitleColor = gocui.ColorDefault
+				selectedFilter.FrameColor = gocui.ColorGreen
+				selectedFilter.TitleColor = gocui.ColorGreen
+				selectedLogs.FrameColor = gocui.ColorDefault
+				selectedScrollLogs.FrameColor = gocui.ColorDefault
+			}
+		case currentView.Name() == "sinceFilter":
+			nextView = "untilFilter"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
 			selectedServices.FrameColor = app.journalListFrameColor
@@ -5796,11 +5922,17 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedVarLog.TitleColor = gocui.ColorDefault
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorGreen
-			selectedFilter.TitleColor = gocui.ColorGreen
+			sinceFilter.FrameColor = gocui.ColorDefault // new
+			sinceFilter.TitleColor = gocui.ColorDefault // new
+			untilFilter.FrameColor = gocui.ColorGreen   // new
+			untilFilter.TitleColor = gocui.ColorGreen   // new
 			selectedLogs.FrameColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
-		case "filter":
+		case currentView.Name() == "filter" || currentView.Name() == "untilFilter":
+			if app.timestampFilterView {
+				untilFilter.FrameColor = gocui.ColorDefault
+				untilFilter.TitleColor = gocui.ColorDefault
+			}
 			nextView = "logs"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
@@ -5814,7 +5946,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorGreen
 			selectedScrollLogs.FrameColor = gocui.ColorGreen
-		case "logs":
+		case currentView.Name() == "logs":
 			nextView = "filterList"
 			selectedFilterList.FrameColor = gocui.ColorGreen
 			selectedFilterList.TitleColor = gocui.ColorGreen
@@ -5859,6 +5991,18 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		log.Panicln(err)
 	}
+	sinceFilter, err := g.View("sinceFilter")
+	if err != nil {
+		app.timestampFilterView = false
+	} else {
+		app.timestampFilterView = true
+	}
+	untilFilter, err := g.View("untilFilter")
+	if err != nil {
+		app.timestampFilterView = false
+	} else {
+		app.timestampFilterView = true
+	}
 	selectedLogs, err := g.View("logs")
 	if err != nil {
 		log.Panicln(err)
@@ -5872,8 +6016,8 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 	if currentView == nil {
 		nextView = "services"
 	} else {
-		switch currentView.Name() {
-		case "filterList":
+		switch {
+		case currentView.Name() == "filterList":
 			nextView = "logs"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
@@ -5887,7 +6031,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorGreen
 			selectedScrollLogs.FrameColor = gocui.ColorGreen
-		case "services":
+		case currentView.Name() == "services":
 			nextView = "filterList"
 			selectedFilterList.FrameColor = gocui.ColorGreen
 			selectedFilterList.TitleColor = gocui.ColorGreen
@@ -5901,8 +6045,38 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
-		case "logs":
-			nextView = "filter"
+		case currentView.Name() == "logs":
+			if app.timestampFilterView {
+				nextView = "untilFilter"
+				selectedFilterList.FrameColor = gocui.ColorDefault
+				selectedFilterList.TitleColor = gocui.ColorDefault
+				selectedServices.FrameColor = app.journalListFrameColor
+				selectedServices.TitleColor = gocui.ColorDefault
+				selectedVarLog.FrameColor = app.fileSystemFrameColor
+				selectedVarLog.TitleColor = gocui.ColorDefault
+				selectedDocker.FrameColor = app.dockerFrameColor
+				selectedDocker.TitleColor = gocui.ColorDefault
+				untilFilter.FrameColor = gocui.ColorGreen // new
+				untilFilter.TitleColor = gocui.ColorGreen // new
+				selectedLogs.FrameColor = gocui.ColorDefault
+				selectedScrollLogs.FrameColor = gocui.ColorDefault
+			} else {
+				nextView = "filter"
+				selectedFilterList.FrameColor = gocui.ColorDefault
+				selectedFilterList.TitleColor = gocui.ColorDefault
+				selectedServices.FrameColor = app.journalListFrameColor
+				selectedServices.TitleColor = gocui.ColorDefault
+				selectedVarLog.FrameColor = app.fileSystemFrameColor
+				selectedVarLog.TitleColor = gocui.ColorDefault
+				selectedDocker.FrameColor = app.dockerFrameColor
+				selectedDocker.TitleColor = gocui.ColorDefault
+				selectedFilter.FrameColor = gocui.ColorGreen
+				selectedFilter.TitleColor = gocui.ColorGreen
+				selectedLogs.FrameColor = gocui.ColorDefault
+				selectedScrollLogs.FrameColor = gocui.ColorDefault
+			}
+		case currentView.Name() == "untilFilter":
+			nextView = "sinceFilter"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
 			selectedServices.FrameColor = app.journalListFrameColor
@@ -5911,11 +6085,17 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedVarLog.TitleColor = gocui.ColorDefault
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorGreen
-			selectedFilter.TitleColor = gocui.ColorGreen
+			sinceFilter.FrameColor = gocui.ColorGreen   // new
+			sinceFilter.TitleColor = gocui.ColorGreen   // new
+			untilFilter.FrameColor = gocui.ColorDefault // new
+			untilFilter.TitleColor = gocui.ColorDefault // new
 			selectedLogs.FrameColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
-		case "filter":
+		case currentView.Name() == "filter" || currentView.Name() == "sinceFilter":
+			if app.timestampFilterView {
+				sinceFilter.FrameColor = gocui.ColorDefault
+				sinceFilter.TitleColor = gocui.ColorDefault
+			}
 			nextView = "docker"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
@@ -5929,7 +6109,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
-		case "docker":
+		case currentView.Name() == "docker":
 			nextView = "varLogs"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
@@ -5943,7 +6123,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.TitleColor = gocui.ColorDefault
 			selectedLogs.FrameColor = gocui.ColorDefault
 			selectedScrollLogs.FrameColor = gocui.ColorDefault
-		case "varLogs":
+		case currentView.Name() == "varLogs":
 			nextView = "services"
 			selectedFilterList.FrameColor = gocui.ColorDefault
 			selectedFilterList.TitleColor = gocui.ColorDefault
