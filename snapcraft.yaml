@@ -1,8 +1,8 @@
 name: lazyjournal
 version: '0.7.7'
-summary: A TUI for reading logs from journalctl, file system and containers
+summary: A TUI for reading logs from journald, auditd, file system and containers.
 description: |
-  A TUI for reading logs from journalctl, file system, Docker and Podman containers, as well Kubernetes pods for quick viewing and filtering with fuzzy find, regex support and coloring the output, written in Go with the gocui.
+  Terminal user interface for reading logs from journald, auditd, file system, Docker and Podman containers, as well Kubernetes pods for quick viewing and filtering with fuzzy find, regex support and coloring the output, written in Go with the gocui.
 
 base: core20
 confinement: classic

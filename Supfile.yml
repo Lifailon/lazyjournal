@@ -63,7 +63,7 @@ commands:
     desc: Run unit tests
     run: |
       cd lazyjournal
-      go test -v -cover --run "TestUnixFiles|TestColor|TestFilter|TestFlags|TestCommandColor|TestMainInterface|TestMockInterface"
+      go test -v -cover --run "TestUnixFiles|TestColor|TestFilter|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface"
 
   docker:
     desc: Run docker containers test
@@ -94,7 +94,9 @@ commands:
       echo test > /opt/test.log
       lazyjournal -a
       rm /opt/test.log
-      time cat /var/log/messages | lazyjournal -c > /dev/null
+      curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -c
+      curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -f "success"
+      curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -r "http|127"
 
   tmux:
     desc: Check run interface from release
