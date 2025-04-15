@@ -208,6 +208,7 @@ jobs:
           tmux send-keys -t test-session "$(echo -e '\x1b[A')"    # Up
           tmux send-keys -t test-session "$(echo -e '\x1b[B')"    # Down
           tmux send-keys -t test-session "$(echo -e '\x1b[B')"
+          tmux send-keys -t test-session "$(echo -e '\x1b[B')"
           tmux send-keys -t test-session "$(echo -e 'tty|port')"
           sleep 3
           tmux capture-pane -p
@@ -235,6 +236,8 @@ jobs:
       - name: Build deb package
         if: ${{ github.event.inputs.Binary == 'true' }}
         run: |
+          pwd
+          ls -lh
           version=$VERSION
           mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
           architectures=("amd64" "arm64")
@@ -252,7 +255,7 @@ jobs:
               mv lazyjournal-$version-$arch.deb bin/lazyjournal-$version-$arch.deb
           done
           ls -lh bin/*.deb
-          sudo dpkg -i lazyjournal-0.7.7-amd64.deb
+          sudo dpkg -i lazyjournal-$version-amd64.deb
           sudo dpkg -r lazyjournal
 
       - name: Upload binaries
