@@ -819,12 +819,15 @@ func TestMockInterface(t *testing.T) {
 	var err error
 	// Отключение tcell для CI
 	g, err = gocui.NewGui(gocui.OutputSimulator, true)
-	// Включить отображение интерфейса
+	var debug bool = true
+
+	// Включить отображение интерфейса для отладки
 	// g, err = gocui.NewGui(gocui.OutputNormal, true)
+	// var debug bool = false
+
 	if err != nil {
 		log.Panicln(err)
 	}
-	// defer g.Close()
 
 	app.gui = g
 	g.SetManagerFunc(app.layout)
@@ -959,7 +962,9 @@ func TestMockInterface(t *testing.T) {
 	app.updateDelimiter(true)
 	app.applyFilter(true)
 	time.Sleep(3 * time.Second)
-	t.Log("PASS: test coloring")
+	if debug {
+		t.Log("PASS: test coloring")
+	}
 
 	// Проверяем фильтрацию текста для списков
 	app.filterListText = "a"
@@ -968,7 +973,17 @@ func TestMockInterface(t *testing.T) {
 	app.filterListText = ""
 	app.applyFilterList()
 	time.Sleep(1 * time.Second)
-	t.Log("PASS: test filter list")
+	if debug {
+		t.Log("PASS: test filter list")
+	}
+
+	// Проверяем фильтрацию для timestamp
+	app.timestampFilterEditor("sinceFilter")
+	app.timestampFilterEditor("untilFilter")
+	time.Sleep(1 * time.Second)
+	if debug {
+		t.Log("PASS: test fiter timestamp")
+	}
 
 	// TAB journal
 	app.nextView(g, nil)
@@ -988,31 +1003,49 @@ func TestMockInterface(t *testing.T) {
 			// Right
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
-			t.Log("PASS: UNIT")
+			if debug {
+				t.Log("PASS: UNIT")
+			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
-			t.Log("PASS: USER_UNIT")
+			if debug {
+				t.Log("PASS: USER_UNIT")
+			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
-			t.Log("PASS: Kernel")
+			if debug {
+				t.Log("PASS: Kernel")
+			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
-			t.Log("PASS: Services")
+			if debug {
+				t.Log("PASS: Services")
+			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
-			t.Log("PASS: Kernel")
+			if debug {
+				t.Log("PASS: Kernel")
+			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
-			t.Log("PASS: USER_UNIT")
+			if debug {
+				t.Log("PASS: USER_UNIT")
+			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
-			t.Log("PASS: UNIT")
+			if debug {
+				t.Log("PASS: UNIT")
+			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
-			t.Log("PASS: Services")
+			if debug {
+				t.Log("PASS: Services")
+			}
 		}
 	}
-	t.Log("PASS: test journals")
+	if debug {
+		t.Log("PASS: test journals")
+	}
 
 	// TAB filesystem
 	app.nextView(g, nil)
@@ -1027,31 +1060,49 @@ func TestMockInterface(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			app.setLogFilesListRight(g, v)
 			time.Sleep(5 * time.Second)
-			t.Log("PASS: /opt/log")
+			if debug {
+				t.Log("PASS: /opt/log")
+			}
 			app.setLogFilesListRight(g, v)
 			time.Sleep(5 * time.Second)
-			t.Log("PASS: /home")
+			if debug {
+				t.Log("PASS: /home")
+			}
 			app.setLogFilesListRight(g, v)
 			time.Sleep(5 * time.Second)
-			t.Log("PASS: descriptor")
+			if debug {
+				t.Log("PASS: descriptor")
+			}
 			app.setLogFilesListRight(g, v)
 			time.Sleep(5 * time.Second)
-			t.Log("PASS: /var/log")
+			if debug {
+				t.Log("PASS: /var/log")
+			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(5 * time.Second)
-			t.Log("PASS: descriptor")
+			if debug {
+				t.Log("PASS: descriptor")
+			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(5 * time.Second)
-			t.Log("PASS: /home")
+			if debug {
+				t.Log("PASS: /home")
+			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(5 * time.Second)
-			t.Log("PASS: /opt/log")
+			if debug {
+				t.Log("PASS: /opt/log")
+			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(5 * time.Second)
-			t.Log("PASS: /var/log")
+			if debug {
+				t.Log("PASS: /var/log")
+			}
 		}
 	}
-	t.Log("PASS: test filesystem")
+	if debug {
+		t.Log("PASS: test filesystem")
+	}
 
 	// TAB docker
 	app.nextView(g, nil)
@@ -1064,28 +1115,42 @@ func TestMockInterface(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			app.setContainersListRight(g, v)
 			time.Sleep(1 * time.Second)
-			t.Log("PASS: Podman")
+			if debug {
+				t.Log("PASS: Podman")
+			}
 			app.setContainersListRight(g, v)
 			time.Sleep(1 * time.Second)
-			t.Log("PASS: Kubernetes")
+			if debug {
+				t.Log("PASS: Kubernetes")
+			}
 			app.setContainersListRight(g, v)
 			time.Sleep(1 * time.Second)
-			t.Log("PASS: Docker")
+			if debug {
+				t.Log("PASS: Docker")
+			}
 			app.setContainersListLeft(g, v)
 			time.Sleep(1 * time.Second)
-			t.Log("PASS: Kubernetes")
+			if debug {
+				t.Log("PASS: Kubernetes")
+			}
 			app.setContainersListLeft(g, v)
 			time.Sleep(1 * time.Second)
-			t.Log("PASS: Podman")
+			if debug {
+				t.Log("PASS: Podman")
+			}
 			app.setContainersListLeft(g, v)
 			time.Sleep(1 * time.Second)
-			t.Log("PASS: Docker")
+			if debug {
+				t.Log("PASS: Docker")
+			}
 		}
 		time.Sleep(1 * time.Second)
 		app.selectDocker(g, v)
 		time.Sleep(3 * time.Second)
 	}
-	t.Log("PASS: test containers")
+	if debug {
+		t.Log("PASS: test containers")
+	}
 
 	// TAB filter logs
 	app.nextView(g, nil)
@@ -1098,30 +1163,56 @@ func TestMockInterface(t *testing.T) {
 	app.clearFilterEditor(g)
 	app.applyFilter(true)
 	time.Sleep(3 * time.Second)
-	t.Log("PASS: test filter logs")
+	if debug {
+		t.Log("PASS: test filter logs")
+	}
 
 	// Проверяем режимы фильтрации
 	if v, err := g.View("filter"); err == nil {
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Filter fuzzy")
+		if debug {
+			t.Log("PASS: Filter fuzzy")
+		}
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Filter regex")
+		if debug {
+			t.Log("PASS: Filter regex")
+		}
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Filter default")
+		if debug {
+			t.Log("PASS: Filter timestamp")
+		}
+		app.setFilterModeRight(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("PASS: Filter default")
+		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Filter regex")
+		if debug {
+			t.Log("PASS: Filter timestamp")
+		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Filter fuzzy")
+		if debug {
+			t.Log("PASS: Filter regex")
+		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Filter default")
+		if debug {
+			t.Log("PASS: Filter fuzzy")
+		}
+		app.setFilterModeLeft(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("PASS: Filter default")
+		}
 	}
-	t.Log("PASS: test filter modes")
+	if debug {
+		t.Log("PASS: test filter modes")
+	}
 
 	// TAB logs output
 	app.nextView(g, nil)
@@ -1130,70 +1221,110 @@ func TestMockInterface(t *testing.T) {
 		// Alt+Right
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 100000")
+		if debug {
+			t.Log("PASS: Tail 100000")
+		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 150000")
+		if debug {
+			t.Log("PASS: Tail 150000")
+		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 200000")
+		if debug {
+			t.Log("PASS: Tail 200000")
+		}
 		// Alt+Left
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 150000")
+		if debug {
+			t.Log("PASS: Tail 150000")
+		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 100000")
+		if debug {
+			t.Log("PASS: Tail 100000")
+		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 50000")
+		if debug {
+			t.Log("PASS: Tail 50000")
+		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 30000")
+		if debug {
+			t.Log("PASS: Tail 30000")
+		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 20000")
+		if debug {
+			t.Log("PASS: Tail 20000")
+		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 10000")
+		if debug {
+			t.Log("PASS: Tail 10000")
+		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 5000")
+		if debug {
+			t.Log("PASS: Tail 5000")
+		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 1000")
+		if debug {
+			t.Log("PASS: Tail 1000")
+		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 500")
+		if debug {
+			t.Log("PASS: Tail 500")
+		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 200")
+		if debug {
+			t.Log("PASS: Tail 200")
+		}
 		// Alt+Right
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 500")
+		if debug {
+			t.Log("PASS: Tail 500")
+		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 1000")
+		if debug {
+			t.Log("PASS: Tail 1000")
+		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 5000")
+		if debug {
+			t.Log("PASS: Tail 5000")
+		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 10000")
+		if debug {
+			t.Log("PASS: Tail 10000")
+		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 20000")
+		if debug {
+			t.Log("PASS: Tail 20000")
+		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 30000")
+		if debug {
+			t.Log("PASS: Tail 30000")
+		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		t.Log("PASS: Tail 50000")
+		if debug {
+			t.Log("PASS: Tail 50000")
+		}
 		// UP output
 		app.scrollUpLogs(1)
 		time.Sleep(1 * time.Second)
@@ -1207,7 +1338,9 @@ func TestMockInterface(t *testing.T) {
 		app.updateLogsView(true)
 		time.Sleep(1 * time.Second)
 	}
-	t.Log("PASS: test log output")
+	if debug {
+		t.Log("PASS: test log output")
+	}
 
 	// TAB filter list
 	app.nextView(g, nil)
@@ -1228,9 +1361,11 @@ func TestMockInterface(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	app.backView(g, nil)
 	time.Sleep(1 * time.Second)
-	t.Log("PASS: test Shift+Tab")
+	if debug {
+		t.Log("PASS: test Shift+Tab")
+	}
 
-	// Select window use mouse
+	// Проверяем переключение окон с помощью мыши
 	app.setSelectView(g, "filterList")
 	time.Sleep(1 * time.Second)
 	app.setSelectView(g, "services")
@@ -1243,7 +1378,34 @@ func TestMockInterface(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	app.setSelectView(g, "logs")
 	time.Sleep(1 * time.Second)
-	t.Log("PASS: test mouse")
+	if debug {
+		t.Log("PASS: test mouse")
+	}
+
+	// Переключаем режим фильтрации на timestamp
+	g.SetCurrentView("filter")
+	if v, err := g.View("filter"); err == nil {
+		app.setFilterModeRight(g, v)
+		time.Sleep(1 * time.Second)
+		app.setFilterModeRight(g, v)
+		time.Sleep(1 * time.Second)
+		app.setFilterModeRight(g, v)
+		time.Sleep(1 * time.Second)
+	}
+
+	// Проверяем переключение окон в режиме timestamp
+	app.nextView(g, nil)
+	time.Sleep(1 * time.Second)
+	app.nextView(g, nil)
+	time.Sleep(1 * time.Second)
+	app.setSelectView(g, "logs")
+	time.Sleep(1 * time.Second)
+	app.setSelectView(g, "logs")
+	time.Sleep(1 * time.Second)
+	app.setSelectView(g, "logs")
+	time.Sleep(1 * time.Second)
+	app.nextView(g, nil)
+	time.Sleep(1 * time.Second)
 
 	quit(g, nil)
 }
