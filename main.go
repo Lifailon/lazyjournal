@@ -165,7 +165,7 @@ type App struct {
 }
 
 func showHelp() {
-	fmt.Println("lazyjournal - A TUI for reading logs from journald, auditd, file system, Docker and Podman containers, as well Kubernetes pods.")
+	fmt.Println("lazyjournal - A TUI for reading logs from journald, auditd, file system, Docker containers, Podman and Kubernetes pods.")
 	fmt.Println("Source code: https://github.com/Lifailon/lazyjournal")
 	fmt.Println("If you have problems with the application, please open issue: https://github.com/Lifailon/lazyjournal/issues")
 	fmt.Println("")
@@ -438,6 +438,8 @@ var (
 	integersInputRegex = regexp.MustCompile(`^[^a-zA-Z]*\d+[^a-zA-Z]*$`)
 	// Syslog UNIT
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
+	// Замена пробелов на T для фильтрации по дате+время
+	reSpace = regexp.MustCompile(`\s+`)
 )
 
 var g *gocui.Gui
@@ -1332,7 +1334,7 @@ func (app *App) selectService(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-// Функция для загрузки записей журнала выбранной службы через journalctl
+// Функция для загрузки записей журнала выбранной службы через journalctl.
 // Второй параметр для обнолвения позиции делимитра нового вывода лога а также сброса автоскролл
 func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 	app.debugStartTime = time.Now()
@@ -1417,14 +1419,24 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if err != nil && app.testMode {
 			log.Print("Error: getting kernal logs. ", err)
 		}
-	// Для юнитов systemd
+	// Для юнитов systemd и других журналов по названию (--unit=UNIT)
 	default:
 		if selectUnits == "services" {
 			// Удаляем статусы с покраской из навзания
 			var ansiEscape = regexp.MustCompile(`\s\(.+\)`)
 			serviceName = ansiEscape.ReplaceAllString(serviceName, "")
 		}
-		cmd := exec.Command("journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)
+		var cmd *exec.Cmd
+		switch {
+		case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+			cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)
+		case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+			cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)
+		case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+			cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)
+		default:
+			cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)
+		}
 		output, err = cmd.Output()
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
@@ -2788,13 +2800,15 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		if containerizationSystem == "kubectl" {
 			cmd = exec.Command(containerizationSystem, "logs", "--timestamps=true", "--tail", app.logViewCount, containerId)
 		} else {
+			sinceFilterTextNotSpace := reSpace.ReplaceAllString(app.sinceFilterText, "T")
+			untilFilterTextNotSpace := reSpace.ReplaceAllString(app.untilFilterText, "T")
 			switch {
 			case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
-				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--since", app.sinceFilterText, "--until", app.untilFilterText, "--tail", app.logViewCount, containerId)
+				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--since", sinceFilterTextNotSpace, "--until", untilFilterTextNotSpace, "--tail", app.logViewCount, containerId)
 			case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
-				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--since", app.sinceFilterText, "--tail", app.logViewCount, containerId)
+				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--since", sinceFilterTextNotSpace, "--tail", app.logViewCount, containerId)
 			case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
-				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--until", app.untilFilterText, "--tail", app.logViewCount, containerId)
+				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--until", untilFilterTextNotSpace, "--tail", app.logViewCount, containerId)
 			default:
 				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount, containerId)
 			}
@@ -2964,9 +2978,9 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 		// Пропускаем "-" для даты и ":" для времени
 		case ch == '-' || ch == ':':
 			v.EditWrite(ch)
-		// Обновляем пробел на T и поднимаем регистр для строчной T
-		case key == gocui.KeySpace || ch == 't' || ch == 'T':
-			v.EditWrite('T')
+		// Пропускаем пробел (работает в journalctl для разделения времени, но необходимо обновить в docker logs на T)
+		case key == gocui.KeySpace:
+			v.EditWrite(' ')
 		case key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
 			v.EditDelete(true)
 		case key == gocui.KeyDelete:
@@ -2980,27 +2994,29 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			// Обновляем текст в буфере
 			app.sinceFilterText = strings.TrimSpace(v.Buffer())
 			// Если фильтр пустой, отключаем фильтрацию
-			if strings.TrimSpace(v.Buffer()) == "" {
+			switch {
+			case strings.TrimSpace(v.Buffer()) == "":
 				v.FrameColor = gocui.ColorGreen
 				app.sinceTimestampFilterMode = false
 				// Проверяем формат и активируем фильтрацию
-			} else if app.timestampCheckFormat(strings.TrimSpace(v.Buffer())) {
+			case app.timestampCheckFormat(strings.TrimSpace(v.Buffer())):
 				v.FrameColor = gocui.ColorGreen
 				app.sinceTimestampFilterMode = true
-			} else {
+			default:
 				v.FrameColor = gocui.ColorRed
 				app.sinceTimestampFilterMode = false
 			}
 		} else if window == "untilFilter" {
 			app.untilFilterText = strings.TrimSpace(v.Buffer())
-			if strings.TrimSpace(v.Buffer()) == "" {
+			switch {
+			case strings.TrimSpace(v.Buffer()) == "":
 				v.FrameColor = gocui.ColorGreen
 				app.untilTimestampFilterMode = false
 				// Проверяем формат и активируем фильтрацию
-			} else if app.timestampCheckFormat(strings.TrimSpace(v.Buffer())) {
+			case app.timestampCheckFormat(strings.TrimSpace(v.Buffer())):
 				v.FrameColor = gocui.ColorGreen
 				app.untilTimestampFilterMode = true
-			} else {
+			default:
 				v.FrameColor = gocui.ColorRed
 				app.untilTimestampFilterMode = false
 			}
@@ -3014,8 +3030,8 @@ func (app *App) timestampCheckFormat(input string) bool {
 		"15:04",               // 00:00
 		"15:04:05",            // 00:00:00
 		"2006-01-02",          // 2025-04-14
-		"2006-01-02T15:04",    // 2025-04-14T00:00
-		"2006-01-02T15:04:05", // 2025-04-14T00:00:00
+		"2006-01-02 15:04",    // 2025-04-14 00:00
+		"2006-01-02 15:04:05", // 2025-04-14 00:00:00
 	}
 	for _, layout := range formats {
 		if _, err := time.Parse(layout, input); err == nil {
@@ -4585,6 +4601,20 @@ func (app *App) updateWindowSize(seconds int) {
 				}
 				app.applyFilterList()
 			}
+			// Обновляем ширину для фильтрации по дате
+			maxX, _ := g.Size()
+			leftPanelWidth := maxX / 4
+			filterWidth := (maxX - leftPanelWidth - 1) / 2
+			if _, err := g.View("sinceFilter"); err == nil {
+				if _, err := g.SetView("sinceFilter", leftPanelWidth+1, 0, leftPanelWidth+1+filterWidth, 2, 0); err != nil {
+					return nil
+				}
+			}
+			if _, err := g.View("untilFilter"); err == nil {
+				if _, err := g.SetView("untilFilter", leftPanelWidth+1+filterWidth+1, 0, maxX-1, 2, 0); err != nil {
+					return nil
+				}
+			}
 			return nil
 		})
 		time.Sleep(time.Duration(seconds) * time.Second)
@@ -5382,7 +5412,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 37
+	width, height := 108, 45
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -5406,7 +5436,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "                  \033[32m|______|\\__,_|/___| \\__, | \033[36m\\____/  \\___/  \\__,_||_|   |_| |_| \\__,_||_|")
 	fmt.Fprintln(helpView, "                  \033[32m					 __/ |                                             ")
 	fmt.Fprintln(helpView, "                  \033[32m                    |___/\033[0m")
-	fmt.Fprintln(helpView, "\n    Version: \033[36m"+programVersion+"\033[0m")
+	fmt.Fprintln(helpView, "\n    Version: "+app.wordColor(programVersion))
 	fmt.Fprintln(helpView, "\n    Hotkeys:")
 	fmt.Fprintln(helpView, "\n    \033[32mTab\033[0m - switch between windows.")
 	fmt.Fprintln(helpView, "    \033[32mShift+Tab\033[0m - return to previous window.")
@@ -5427,7 +5457,13 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+C\033[0m - exit.")
-	fmt.Fprintln(helpView, "\n    Source code: \033[36mhttps://github.com/Lifailon/lazyjournal\033[0m")
+	fmt.Fprintln(helpView, "\n    Supported formats for filtering by timestamp:")
+	fmt.Fprintln(helpView, "\n    "+app.wordColor("00:00"))
+	fmt.Fprintln(helpView, "    "+app.wordColor("00:00:00"))
+	fmt.Fprintln(helpView, "    "+app.wordColor("2025-04-14"))
+	fmt.Fprintln(helpView, "    "+app.wordColor("2025-04-14 00:00"))
+	fmt.Fprintln(helpView, "    "+app.wordColor("2025-04-14 00:00:00"))
+	fmt.Fprintln(helpView, "\n    Source code: "+app.wordColor("https://github.com/Lifailon/lazyjournal"))
 }
 
 func (app *App) closeHelp(g *gocui.Gui) error {
@@ -5540,11 +5576,15 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 			v.FrameColor = gocui.ColorGreen
 			v.TitleColor = gocui.ColorGreen
 			// Выбираем новое окно
-			g.SetCurrentView("sinceFilter")
+			if _, err := g.SetCurrentView("sinceFilter"); err != nil {
+				return nil
+			}
 			// Возобновляет текст из переменной
 			fmt.Fprint(v, app.sinceFilterText)
 			// Корректируем позицию курсора
-			v.SetCursor(len(app.sinceFilterText), 0)
+			if err = v.SetCursor(len(app.sinceFilterText), 0); err != nil {
+				return nil
+			}
 		}
 		if v2, err := g.SetView("untilFilter", leftPanelWidth+1+filterWidth+1, 0, maxX-1, 2, 0); err != nil {
 			v2.Title = "Until timestamp"
@@ -5552,14 +5592,22 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 			v2.Wrap = true
 			v2.Editor = app.timestampFilterEditor("untilFilter")
 			fmt.Fprint(v2, app.untilFilterText)
-			v2.SetCursor(len(app.untilFilterText), 0)
+			if err = v2.SetCursor(len(app.untilFilterText), 0); err != nil {
+				return nil
+			}
 		}
 	case "Filter (Timestamp)":
 		// Удаляем временные два окна
-		g.DeleteView("sinceFilter")
-		g.DeleteView("untilFilter")
+		if err = g.DeleteView("sinceFilter"); err != nil {
+			return nil
+		}
+		if err = g.DeleteView("untilFilter"); err != nil {
+			return nil
+		}
 		// Возвращяем фокус и цвет назад
-		g.SetCurrentView("filter")
+		if _, err := g.SetCurrentView("filter"); err != nil {
+			return nil
+		}
 		v.FrameColor = gocui.ColorGreen
 		v.TitleColor = gocui.ColorGreen
 		selectedFilter.Title = "Filter (Default)"
@@ -5592,9 +5640,13 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 			v.Editor = app.timestampFilterEditor("sinceFilter")
 			v.FrameColor = gocui.ColorGreen
 			v.TitleColor = gocui.ColorGreen
-			g.SetCurrentView("sinceFilter")
+			if _, err := g.SetCurrentView("sinceFilter"); err != nil {
+				return nil
+			}
 			fmt.Fprint(v, app.sinceFilterText)
-			v.SetCursor(len(app.sinceFilterText), 0)
+			if err = v.SetCursor(len(app.sinceFilterText), 0); err != nil {
+				return nil
+			}
 		}
 		if v2, err := g.SetView("untilFilter", leftPanelWidth+1+filterWidth+1, 0, maxX-1, 2, 0); err != nil {
 			v2.Title = "Until timestamp"
@@ -5602,12 +5654,20 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 			v2.Wrap = true
 			v2.Editor = app.timestampFilterEditor("untilFilter")
 			fmt.Fprint(v2, app.untilFilterText)
-			v2.SetCursor(len(app.untilFilterText), 0)
+			if err = v2.SetCursor(len(app.untilFilterText), 0); err != nil {
+				return nil
+			}
 		}
 	case "Filter (Timestamp)":
-		g.DeleteView("sinceFilter")
-		g.DeleteView("untilFilter")
-		g.SetCurrentView("filter")
+		if err = g.DeleteView("sinceFilter"); err != nil {
+			return nil
+		}
+		if err = g.DeleteView("untilFilter"); err != nil {
+			return nil
+		}
+		if _, err := g.SetCurrentView("filter"); err != nil {
+			return nil
+		}
 		v.FrameColor = gocui.ColorGreen
 		v.TitleColor = gocui.ColorGreen
 		selectedFilter.Title = "Filter (Regex)"
