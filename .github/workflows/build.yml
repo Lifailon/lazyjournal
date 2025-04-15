@@ -236,8 +236,7 @@ jobs:
       - name: Build deb package
         if: ${{ github.event.inputs.Binary == 'true' }}
         run: |
-          pwd
-          ls -lh
+          rm -f lazyjournal
           version=$VERSION
           mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
           architectures=("amd64" "arm64")
