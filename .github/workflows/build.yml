@@ -218,6 +218,7 @@ jobs:
         if: ${{ github.event.inputs.Binary == 'true' }}
         run: |
           version=$(go run main.go -v)
+          echo "VERSION=$version" >> $GITHUB_ENV
           echo "Current version: $version"
           mkdir -p bin
           architectures=("amd64" "arm64")
@@ -234,7 +235,7 @@ jobs:
       - name: Build deb package
         if: ${{ github.event.inputs.Binary == 'true' }}
         run: |
-          version=$(go run main.go -v)
+          version=$VERSION
           mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
           architectures=("amd64" "arm64")
           for arch in "${architectures[@]}"; do
