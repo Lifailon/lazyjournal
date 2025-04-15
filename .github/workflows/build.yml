@@ -236,8 +236,8 @@ jobs:
       - name: Build deb package
         if: ${{ github.event.inputs.Binary == 'true' }}
         run: |
-          rm -f lazyjournal
           version=$VERSION
+          rm -f lazyjournal
           mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
           architectures=("amd64" "arm64")
           for arch in "${architectures[@]}"; do
@@ -254,7 +254,7 @@ jobs:
               mv lazyjournal-$version-$arch.deb bin/lazyjournal-$version-$arch.deb
           done
           ls -lh bin/*.deb
-          sudo dpkg -i lazyjournal-$version-amd64.deb
+          sudo dpkg -i bin/lazyjournal-$version-amd64.deb
           sudo dpkg -r lazyjournal
 
       - name: Upload binaries
