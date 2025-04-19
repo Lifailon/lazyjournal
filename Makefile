@@ -1,7 +1,13 @@
 VERSION := $(shell go run main.go -v)
+BINPATH := $(HOME)/.local/bin
 
-clean:
-	@go clean -cache -modcache -testcache
+OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+ARCH := $(shell uname -m)
+ifeq ($(ARCH),x86_64)
+	ARCH := amd64
+else ifeq ($(ARCH),aarch64)
+	ARCH := arm64
+endif
 
 prep:
 	@go fmt ./...
@@ -10,6 +16,9 @@ prep:
 	@go mod tidy
 	@go mod verify
 	@go build -o /dev/null -v ./...
+
+clean:
+	@go clean -cache -modcache -testcache
 
 update: prep
 	go get -u ./...
@@ -31,7 +40,17 @@ list:
 test: prep
 	go test -v -cover --run $(n) ./...
 
-build: prep
+test-all: prep
+	go test -v -cover ./...
+
+build:
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -o lazyjournal
+
+install: build
+	@mkdir -p $(BINPATH)
+	@mv ./lazyjournal $(BINPATH)/lazyjournal
+
+build-all: prep
 	@echo "Build version: $(VERSION)"
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-linux-amd64
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-linux-arm64
@@ -41,5 +60,5 @@ build: prep
 	CGO_ENABLED=0 GOOS=openbsd GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-openbsd-arm64
 	CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-freebsd-amd64
 	CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-freebsd-arm64
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-windows-amd64
-	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-windows-arm64
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-windows-amd64.exe
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-windows-arm64.exe

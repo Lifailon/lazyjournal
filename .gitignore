@@ -1,6 +1,7 @@
 # Build
 /bin/
 *.exe
+lazyjournal
 
 # Packages
 /DEBIAN/
