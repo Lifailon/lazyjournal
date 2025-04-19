@@ -1,14 +1,3 @@
-VERSION := $(shell go run main.go -v)
-BINPATH := $(HOME)/.local/bin
-
-OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
-ARCH := $(shell uname -m)
-ifeq ($(ARCH),x86_64)
-	ARCH := amd64
-else ifeq ($(ARCH),aarch64)
-	ARCH := arm64
-endif
-
 prep:
 	@go fmt ./...
 	@go vet ./...
@@ -43,22 +32,38 @@ test: prep
 test-all: prep
 	go test -v -cover ./...
 
+OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+ARCH := $(shell uname -m)
+ifeq ($(ARCH),x86_64)
+	ARCH := amd64
+else ifeq ($(ARCH),aarch64)
+	ARCH := arm64
+endif
+
 build:
 	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -o lazyjournal
+
+BINPATH := $(HOME)/.local/bin
 
 install: build
 	@mkdir -p $(BINPATH)
 	@mv ./lazyjournal $(BINPATH)/lazyjournal
 
+VERSION := $(shell go run main.go -v)
+OS_LIST := linux darwin openbsd freebsd windows
+ARCH_LIST := amd64 arm64
+
 build-all: prep
+	@rm -rf bin
 	@echo "Build version: $(VERSION)"
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-linux-amd64
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-linux-arm64
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-darwin-amd64
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-darwin-arm64
-	CGO_ENABLED=0 GOOS=openbsd GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-openbsd-amd64
-	CGO_ENABLED=0 GOOS=openbsd GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-openbsd-arm64
-	CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-freebsd-amd64
-	CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-freebsd-arm64
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/lazyjournal-$(VERSION)-windows-amd64.exe
-	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o bin/lazyjournal-$(VERSION)-windows-arm64.exe
+	@for os in $(OS_LIST); do \
+		for arch in $(ARCH_LIST); do \
+			ext=""; \
+			if [ "$$os" = "windows" ]; then \
+				ext=".exe"; \
+			fi; \
+			echo "Build lazyjournal-$(VERSION)-$$os-$$arch$$ext"; \
+			CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -o bin/lazyjournal-$(VERSION)-$$os-$$arch$$ext || exit 1; \
+		done; \
+	done
+	@ls -lh bin
