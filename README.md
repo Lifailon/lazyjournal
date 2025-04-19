@@ -16,7 +16,7 @@
     <a href="https://hub.docker.com/r/lifailon/lazyjournal"><img title="Docker Hub" src="https://img.shields.io/docker/image-size/lifailon/lazyjournal/latest?logo=docker&color=blue&label=Docker+Hub"></a>
 </p>
 
-Terminal user interface for reading logs from `journald`, `auditd`, file system, Docker containers, Podman and Kubernetes pods for quick viewing and filtering with fuzzy find, regex support and coloring the output, written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
+Terminal user interface for reading logs from `journald`, `auditd`, file system, Docker containers, Podman and Kubernetes pods for quick viewing, coloring output and filtering with fuzzy find, regex support and timestamp. Written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
 
 This tool is inspired by and with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit). It is also included in [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging), [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
 
@@ -49,7 +49,7 @@ Supports 4 filtering modes:
 - **Regex** (like `grep`) - search with regular expression support, based on the built-in [regexp](https://pkg.go.dev/regexp) library, case-insensitive by default (in case a regular expression syntax error occurs, the input field will be highlighted in red).
 - **Timestamp** - filter `since` and/or `until` by date and time for `journald`, docker and podman logs from streams. This mode affects the loading of the log (thereby increasing performance) and can be used in conjunction with other filtering modes, so the current log should be reloaded by pressing `Enter` in the current input field.
 
-Supported formats for `timestamp`:
+Supported formats for timestamp:
 
 - `00:00`
 - `00:00:00`
@@ -97,13 +97,21 @@ This command will run a script that will download the latest executable from the
 
 ### Debian / Ubuntu
 
-If you are using a Debian-based system, you can also install from the `deb` package:
+If you are using a Debian-based system, you can also use the `deb` package to manage installation and removal:
 
 ```bash
 arch=$( [ "$(uname -m)" = "aarch64" ] && echo "arm64" || echo "amd64" )
 version=$(curl -L -sS -H 'Accept: application/json' https://github.com/Lifailon/lazyjournal/releases/latest | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
 curl -L -sS https://github.com/Lifailon/lazyjournal/releases/download/$version/lazyjournal-$version-$arch.deb -o /tmp/lazyjournal.deb
-sudo dpkg -i /tmp/lazyjournal.deb
+sudo apt install /tmp/lazyjournal.deb # or sudo dpkg -i /tmp/lazyjournal.deb
+```
+
+### Eget
+
+You can use the universal way to install the latest version binaries from the GitHub repository using [eget](https://github.com/zyedidia/eget):
+
+```shell
+eget lifailon/lazyjournal --to ~/.local/bin
 ```
 
 ### Arch Linux
@@ -151,7 +159,7 @@ docker exec -it lazyjournal lazyjournal
 
 The image is based on Debian with `systemd` and docker cli pre-installed. The necessary **read-only** permissions are already preset in `docker-compose` to support all log sources from the host system (review it to customize for your individual use).
 
-Supports running in the web interface via [ttyd](https://github.com/tsl0922/ttyd) and mouse control. To do this, edit the variables in the `.env` file:
+Supports running in the Web interface via [ttyd](https://github.com/tsl0922/ttyd). To do this, edit the variables in the `.env` file:
 
 ```shell
 TTYD=true
@@ -233,7 +241,11 @@ cat /var/log/syslog | lj -f "error"
 cat /var/log/syslog | lj -r "failed|fatal|crash"
 ```
 
-### Hotkeys
+### Control
+
+Mouse control is supported for window selection, history, list scrolling and history. To copy text, use `Alt+Shift` when selecting.
+
+List of all used keyboard shortcuts:
 
 - `F1` - show help on hotkeys.
 - `Tab` - switch between windows.
@@ -264,15 +276,13 @@ cd lazyjournal
 go run main.go
 ```
 
-Use make or [go-task](https://github.com/go-task/task) to build binaries for different platforms and systems:
+Use `make` to build the binary for the current system and platform:
 
 ```shell
 make build
-# or
-task build
 ```
 
-Check the source code on the base linters using [golangci-lint](https://github.com/golangci/golangci-lint) (including critic and security):
+Check the source code on the base linters using [golangci-lint](https://github.com/golangci/golangci-lint) (including all [critic](https://github.com/go-critic/go-critic) and severity high in [security](https://github.com/securego/gosec)):
 
 ```shell
 make lint
@@ -285,8 +295,9 @@ Unit tests cover all main functions and interface operation.
 ```shell
 # Get a list of all tests
 make list
-# Run the selected test
+# Run selected or all tests
 make test n=TestMockInterface
+make test-all
 ```
 
 The test coverage report using CI Actions for Linux, macOS and Windows systems is available on the [Wiki](https://github.com/Lifailon/lazyjournal/wiki) page.
