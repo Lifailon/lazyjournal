@@ -4985,7 +4985,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Alt+k
+	// Alt+k (100)
 	if err := app.gui.SetKeybinding("services", 'k', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 100)
 	}); err != nil {
@@ -5003,10 +5003,18 @@ func (app *App) setupKeybindings() error {
 	}
 	// Переключение выбора журналов для systemd/journald и отключаем для Windows
 	if app.getOS != "windows" {
+		// Right/Left
 		if err := app.gui.SetKeybinding("services", gocui.KeyArrowRight, gocui.ModNone, app.setUnitListRight); err != nil {
 			return err
 		}
 		if err := app.gui.SetKeybinding("services", gocui.KeyArrowLeft, gocui.ModNone, app.setUnitListLeft); err != nil {
+			return err
+		}
+		// l/h
+		if err := app.gui.SetKeybinding("services", 'l', gocui.ModNone, app.setUnitListRight); err != nil {
+			return err
+		}
+		if err := app.gui.SetKeybinding("services", 'h', gocui.ModNone, app.setUnitListLeft); err != nil {
 			return err
 		}
 	}
@@ -5019,6 +5027,12 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.SetKeybinding("varLogs", gocui.KeyArrowLeft, gocui.ModNone, app.setLogFilesListLeft); err != nil {
 			return err
 		}
+		if err := app.gui.SetKeybinding("varLogs", 'l', gocui.ModNone, app.setLogFilesListRight); err != nil {
+			return err
+		}
+		if err := app.gui.SetKeybinding("varLogs", 'h', gocui.ModNone, app.setLogFilesListLeft); err != nil {
+			return err
+		}
 	} else {
 		// Удаление привязок
 		if err := app.gui.DeleteKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone); err != nil {
@@ -5027,12 +5041,24 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.DeleteKeybinding("varLogs", gocui.KeyArrowLeft, gocui.ModNone); err != nil {
 			return err
 		}
+		if err := app.gui.DeleteKeybinding("varLogs", 'l', gocui.ModNone); err != nil {
+			return err
+		}
+		if err := app.gui.DeleteKeybinding("varLogs", 'h', gocui.ModNone); err != nil {
+			return err
+		}
 	}
 	// Переключение выбора журналов для Containerization System
 	if err := app.gui.SetKeybinding("docker", gocui.KeyArrowRight, gocui.ModNone, app.setContainersListRight); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("docker", gocui.KeyArrowLeft, gocui.ModNone, app.setContainersListLeft); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", 'l', gocui.ModNone, app.setContainersListRight); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", 'h', gocui.ModNone, app.setContainersListLeft); err != nil {
 		return err
 	}
 	// Переключение между режимами фильтрации через Up/Down для выбранного окна (filter)
