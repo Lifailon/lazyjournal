@@ -162,6 +162,9 @@ type App struct {
 	dateTimeRegex        *regexp.Regexp
 	integersInputRegex   *regexp.Regexp
 	syslogUnitRegex      *regexp.Regexp
+
+	lastCurrentView string // фиксируем последнее используемое окно для Esc после /
+	backCurrentView bool   // отключаем/ключаем возврат
 }
 
 func showHelp() {
@@ -480,6 +483,8 @@ func runGoCui(mock bool) {
 		keybindingsEnabled:           true,
 		timestampDocker:              true,
 		streamTypeDocker:             true,
+		lastCurrentView:              "services",
+		backCurrentView:              false,
 	}
 
 	// Определяем используемую ОС (linux/darwin/*bsd/windows) и архитектуру
@@ -5254,21 +5259,29 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Открыть или закрыть окно справки (F1)
+	// Открие окна справки (F1)
 	if err := app.gui.SetKeybinding("", gocui.KeyF1, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		// Если окно уже существует, закрываем его
-		if _, err := g.View("help"); err == nil {
-			return app.closeHelp(g)
-		}
 		app.showInterfaceHelp(g)
-		return nil
-	}); err != nil {
-		return err
-	}
-	// Закрыть окно справки (Esc)
-	if err := app.gui.SetKeybinding("", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if err := app.closeHelp(g); err != nil {
+		// Удаляем глобальные биндинги
+		g.DeleteKeybindings("")
+		// Удаляем все биндинги назначенные для окон
+		viewsRange := []string{"filterList", "services", "varLogs", "docker", "filter", "sinceFilter", "untilFilter", "logs"}
+		for _, viewName := range viewsRange {
+			g.DeleteKeybindings(viewName)
+		}
+		// Создаем временный биндинг на Esc для закрытия окна
+		if err := app.gui.SetKeybinding("", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+			if err := app.closeHelp(g); err != nil {
+				return nil
+			}
+			// Возвращяем стандартные биндиги после закрытия окна справки
+			app.setupKeybindings()
 			return nil
+		}); err != nil {
+			return err
+		}
+		if err := app.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
+			return err
 		}
 		return nil
 	}); err != nil {
@@ -5402,6 +5415,56 @@ func (app *App) setupKeybindings() error {
 		}
 		app.updateLogOutput(false)
 		return nil
+	}); err != nil {
+		return err
+	}
+	// Изменяем фокус окна на фильтрацию
+	if err := app.gui.SetKeybinding("services", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.lastCurrentView = "services"
+		app.backCurrentView = true
+		return app.setSelectView(app.gui, "filterList")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.lastCurrentView = "varLogs"
+		app.backCurrentView = true
+		return app.setSelectView(app.gui, "filterList")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.lastCurrentView = "docker"
+		app.backCurrentView = true
+		return app.setSelectView(app.gui, "filterList")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.lastCurrentView = "logs"
+		app.backCurrentView = true
+		return app.setSelectView(app.gui, "filter")
+	}); err != nil {
+		return err
+	}
+	// Возврат к последнему окну до слэша
+	if err := app.gui.SetKeybinding("filterList", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.backCurrentView {
+			app.backCurrentView = false
+			return app.setSelectView(app.gui, app.lastCurrentView)
+		} else {
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("filter", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.backCurrentView {
+			app.backCurrentView = false
+			return app.setSelectView(app.gui, app.lastCurrentView)
+		} else {
+			return nil
+		}
 	}); err != nil {
 		return err
 	}
