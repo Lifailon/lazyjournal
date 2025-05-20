@@ -4856,6 +4856,22 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+	// Ctrl+j (100) для поддержки в macOS
+	if err := app.gui.SetKeybinding("services", gocui.KeyCtrlJ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.nextService(v, 100)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", gocui.KeyCtrlJ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.nextFileName(v, 100)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", gocui.KeyCtrlJ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.nextDockerContainer(v, 100)
+	}); err != nil {
+		return err
+	}
 	// Пролистывание вверх
 	// Up (1)
 	if err := app.gui.SetKeybinding("services", gocui.KeyArrowUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
@@ -4997,6 +5013,22 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	if err := app.gui.SetKeybinding("docker", 'k', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+		return app.prevDockerContainer(v, 100)
+	}); err != nil {
+		return err
+	}
+	// Ctrl+k (100)
+	if err := app.gui.SetKeybinding("services", gocui.KeyCtrlK, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.prevService(v, 100)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", gocui.KeyCtrlK, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.prevFileName(v, 100)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", gocui.KeyCtrlK, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevDockerContainer(v, 100)
 	}); err != nil {
 		return err
@@ -5159,7 +5191,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Alt + Down/PgDown/k (500)
+	// Alt + Down/PgDown/j (500)
 	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowDown, gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollDownLogs(500)
 	}); err != nil {
@@ -5171,6 +5203,12 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	if err := app.gui.SetKeybinding("logs", 'j', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollDownLogs(500)
+	}); err != nil {
+		return err
+	}
+	// Ctrl + j (500)
+	if err := app.gui.SetKeybinding("logs", gocui.KeyCtrlJ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollDownLogs(500)
 	}); err != nil {
 		return err
@@ -5219,6 +5257,12 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	if err := app.gui.SetKeybinding("logs", 'k', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollUpLogs(500)
+	}); err != nil {
+		return err
+	}
+	// Ctrl + k
+	if err := app.gui.SetKeybinding("logs", gocui.KeyCtrlK, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollUpLogs(500)
 	}); err != nil {
 		return err
@@ -5549,7 +5593,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 45
+	width, height := 108, 47
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -5578,13 +5622,13 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "\n    \033[32mTab\033[0m - switch between windows.")
 	fmt.Fprintln(helpView, "    \033[32mShift+Tab\033[0m - return to previous window.")
 	fmt.Fprintln(helpView, "    \033[32mEnter\033[0m - selection a journal from the list to display log output.")
-	fmt.Fprintln(helpView, "    \033[32mLeft/Right\033[0m - switch between journal lists in the selected window.")
-	fmt.Fprintln(helpView, "    \033[32m<Up/PgUp>\033[0m and \033[32m<Down/PgDown>\033[0m - move up and down through all journal lists and log output,")
+	fmt.Fprintln(helpView, "    \033[32m<Left/h>\033[0m and \033[32m<Right/l>\033[0m - switch between journal lists in the selected window.")
+	fmt.Fprintln(helpView, "    \033[32m<Up/PgUp/k>\033[0m and \033[32m<Down/PgDown/j>\033[0m - move up and down through all journal lists and log output,")
 	fmt.Fprintln(helpView, "    as well as changing the filtering mode in the filter window.")
 	fmt.Fprintln(helpView, "    \033[32m<Shift/Alt>+<Up/Down>\033[0m - quickly move up and down through all journal lists and log output")
 	fmt.Fprintln(helpView, "    every 10 or 100 lines (500 for log output).")
-	fmt.Fprintln(helpView, "    \033[32m<Shift/Ctrl>+<U/D>\033[0m - quickly move up and down (alternative for macOS).")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+A\033[0m or \033[32mHome\033[0m - go to top of log.")
+	fmt.Fprintln(helpView, "    \033[32mShift/<Alt/Ctrl>+<k/j>\033[0m - quickly move up and down (like Vim and alternative for macOS).")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+A\033[0m or \033[32mHome\033[0m - go to the top of the log.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+E\033[0m or \033[32mEnd\033[0m - go to the end of the log.")
 	fmt.Fprintln(helpView, "    \033[32mAlt+<Left/Right>\033[0m - change the number of log lines to output (default: 50000, range: 200-200000).")
 	fmt.Fprintln(helpView, "    \033[32mShift+<Left/Right>\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
@@ -5593,6 +5637,8 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - enable or disable coloring via tailspin.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
+	fmt.Fprintln(helpView, "    \033[32m/\033[0m - go to the filter window from the current list window or log output.")
+	fmt.Fprintln(helpView, "    \033[32mEsc\033[0m - return to the previous window from filter window or close help.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+C\033[0m - exit.")
 	fmt.Fprintln(helpView, "\n    Supported formats for filtering by timestamp:")
 	fmt.Fprintln(helpView, "\n    "+app.wordColor("00:00"))
