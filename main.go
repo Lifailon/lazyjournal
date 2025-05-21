@@ -57,10 +57,11 @@ type dockerLogLines struct {
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
 
-	testMode     bool // исключаем вызовы к gocui при тестирование функций
-	tailSpinMode bool // режим покраски через tailspin
-	colorMode    bool // отключение/включение покраски ключевых слов
-	disableMouse bool // отключение/включение поддержки мыши
+	testMode         bool // исключаем вызовы к gocui при тестирование функций
+	tailSpinMode     bool // режим покраски через tailspin
+	colorMode        bool // отключение/включение покраски ключевых слов
+	mouseSupport     bool // отключение/включение поддержки мыши
+	dockerStreamLogs bool // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
 
 	getOS         string   // название ОС
 	getArch       string   // архитектура процессора
@@ -182,7 +183,8 @@ func showHelp() {
 	fmt.Println("    lazyjournal --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	fmt.Println("    lazyjournal --disable-mouse, -m        Disable mouse support")
 	fmt.Println("    lazyjournal --disable-color, -d        Disable output coloring")
-	fmt.Println("    lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs")
+	fmt.Println("    lazyjournal --disable-timestamp, -p    Disable timestamp for docker logs")
+	fmt.Println("    lazyjournal --docker-stream, -s        Force reading Docker container log from streams")
 	fmt.Println("    lazyjournal --command-color, -c        Coloring in command line mode")
 	fmt.Println("    lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
@@ -455,7 +457,8 @@ func runGoCui(mock bool) {
 		testMode:                     false,
 		tailSpinMode:                 false,
 		colorMode:                    true,
-		disableMouse:                 true,
+		mouseSupport:                 true,
+		dockerStreamLogs:             false,
 		startServices:                0, // начальная позиция списка юнитов
 		selectedJournal:              0, // начальный индекс выбранного журнала
 		startFiles:                   0,
@@ -510,7 +513,9 @@ func runGoCui(mock bool) {
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
 	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for docker logs")
-	flag.BoolVar(disableTimeStamp, "s", false, "Disable timestamp for docker logs")
+	flag.BoolVar(disableTimeStamp, "p", false, "Disable timestamp for docker logs")
+	dockerStreamFlag := flag.Bool("docker-stream", false, "Force reading Docker container log from streams")
+	flag.BoolVar(dockerStreamFlag, "s", false, "Force reading Docker container log from streams")
 	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
 	flag.BoolVar(commandColor, "c", false, "Coloring in command line mode")
 	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
@@ -550,7 +555,7 @@ func runGoCui(mock bool) {
 	}
 
 	if *disableMouse {
-		app.disableMouse = false
+		app.mouseSupport = false
 	}
 
 	if *disableColor {
@@ -559,6 +564,10 @@ func runGoCui(mock bool) {
 
 	if *disableTimeStamp {
 		app.timestampDocker = false
+	}
+
+	if *dockerStreamFlag {
+		app.dockerStreamLogs = true
 	}
 
 	// Определяем переменные и массивы для покраски вывода
@@ -646,7 +655,7 @@ func runGoCui(mock bool) {
 	g.SetManagerFunc(app.layout)
 
 	// Включить поддержку мыши
-	if app.disableMouse {
+	if app.mouseSupport {
 		g.Mouse = true
 	}
 
@@ -2729,9 +2738,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	} else {
 		containerId = app.lastContainerId
 	}
-	// Читаем локальный лог Docker в формате JSON
+	// Читаем журналы Docker из файловой системы в формате JSON (если не отключено флагом и есть доступ)
 	var readFileContainer bool = false
-	if containerizationSystem == "docker" {
+	if containerizationSystem == "docker" && !app.dockerStreamLogs {
 		basePath := "/var/lib/docker/containers"
 		var logFilePath string
 		// Ищем файл лога в локальной системе по id
