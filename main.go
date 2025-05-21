@@ -183,8 +183,8 @@ func showHelp() {
 	fmt.Println("    lazyjournal --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	fmt.Println("    lazyjournal --disable-mouse, -m        Disable mouse support")
 	fmt.Println("    lazyjournal --disable-color, -d        Disable output coloring")
-	fmt.Println("    lazyjournal --disable-timestamp, -p    Disable timestamp for docker logs")
-	fmt.Println("    lazyjournal --docker-stream, -s        Force reading Docker container log from streams")
+	fmt.Println("    lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs")
+	fmt.Println("    lazyjournal --only-streams, -o         Force reading docker container log from streams (by default from file system)")
 	fmt.Println("    lazyjournal --command-color, -c        Coloring in command line mode")
 	fmt.Println("    lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
@@ -513,9 +513,9 @@ func runGoCui(mock bool) {
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
 	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for docker logs")
-	flag.BoolVar(disableTimeStamp, "p", false, "Disable timestamp for docker logs")
-	dockerStreamFlag := flag.Bool("docker-stream", false, "Force reading Docker container log from streams")
-	flag.BoolVar(dockerStreamFlag, "s", false, "Force reading Docker container log from streams")
+	flag.BoolVar(disableTimeStamp, "s", false, "Disable timestamp for docker logs")
+	dockerStreamFlag := flag.Bool("only-streams", false, "Force reading Docker container log from streams (by default from file system)")
+	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading Docker container log from streams (by default from file system)")
 	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
 	flag.BoolVar(commandColor, "c", false, "Coloring in command line mode")
 	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
@@ -2741,19 +2741,33 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	// Читаем журналы Docker из файловой системы в формате JSON (если не отключено флагом и есть доступ)
 	var readFileContainer bool = false
 	if containerizationSystem == "docker" && !app.dockerStreamLogs {
-		basePath := "/var/lib/docker/containers"
-		var logFilePath string
-		// Ищем файл лога в локальной системе по id
-		_ = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
-			if err == nil && strings.Contains(info.Name(), containerId) && strings.HasSuffix(info.Name(), "-json.log") {
-				logFilePath = path
-				// Фиксируем, если найден файловый журнал
-				readFileContainer = true
-				// Останавливаем поиск
-				return filepath.SkipDir
-			}
-			return nil
-		})
+		// basePath := "/var/lib/docker/containers"
+		// var logFilePath string
+		// // Ищем файл лога в локальной системе по id
+		// _ = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
+		// 	// Проверяем что нет ошибки и имя содержит id (например c41443da2adb) и кончается на json.log
+		// 	if err == nil && strings.Contains(info.Name(), containerId) && strings.HasSuffix(info.Name(), "-json.log") {
+		// 		logFilePath = path
+		// 		// Фиксируем, если найден файловый журнал
+		// 		readFileContainer = true
+		// 		// Останавливаем поиск
+		// 		return filepath.SkipDir
+		// 	}
+		// 	return nil
+		// })
+		// Получаем путь с помощью метода docker cli
+		cmd := exec.Command("docker", "inspect", "--format", "{{.LogPath}}", containerId)
+		logFilePathBytes, err := cmd.Output()
+		if err != nil && !app.testMode {
+			v, _ := app.gui.View("logs")
+			v.Clear()
+			fmt.Fprintln(v, "\033[31mError get log path via docker inspect:", err, "\033[0m")
+			return
+		}
+		if err != nil && app.testMode {
+			log.Print("Error: get log path via docker inspect. ", err)
+		}
+		logFilePath := strings.TrimSpace(string(logFilePathBytes))
 		// Читаем файл с конца с помощью tail
 		if readFileContainer {
 			cmd := exec.Command("tail", "-n", app.logViewCount, logFilePath)
