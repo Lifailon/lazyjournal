@@ -1,0 +1,58 @@
+{
+  "configurations": [
+    {
+      "name": "Default",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": []
+    },
+    {
+      "name": "Custom (200K/10s)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-t", "200000", "-u", "10"]
+    },
+    {
+      "name": "Only streams",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-o"]
+    },
+    {
+      "name": "Disable timestamp",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-s"]
+    },
+    {
+      "name": "Disable color",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-d"]
+    },
+    {
+      "name": "Disable mouse",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-m"]
+    }
+  ]
+}
