@@ -60,6 +60,7 @@ type App struct {
 	testMode     bool // исключаем вызовы к gocui при тестирование функций
 	tailSpinMode bool // режим покраски через tailspin
 	colorMode    bool // отключение/включение покраски ключевых слов
+	disableMouse bool // отключение/включение поддержки мыши
 
 	getOS         string   // название ОС
 	getArch       string   // архитектура процессора
@@ -179,6 +180,7 @@ func showHelp() {
 	fmt.Println("    lazyjournal --audit, -a                Show audit information")
 	fmt.Println("    lazyjournal --tail, -t                 Change the number of log lines to output (default: 50000, range: 200-200000)")
 	fmt.Println("    lazyjournal --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
+	fmt.Println("    lazyjournal --disable-mouse, -m        Disable mouse support")
 	fmt.Println("    lazyjournal --disable-color, -d        Disable output coloring")
 	fmt.Println("    lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs")
 	fmt.Println("    lazyjournal --command-color, -c        Coloring in command line mode")
@@ -453,6 +455,7 @@ func runGoCui(mock bool) {
 		testMode:                     false,
 		tailSpinMode:                 false,
 		colorMode:                    true,
+		disableMouse:                 true,
 		startServices:                0, // начальная позиция списка юнитов
 		selectedJournal:              0, // начальный индекс выбранного журнала
 		startFiles:                   0,
@@ -502,6 +505,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
+	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse support")
+	flag.BoolVar(disableMouse, "m", false, "Disable mouse support")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
 	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for docker logs")
@@ -542,6 +547,10 @@ func runGoCui(mock bool) {
 	} else {
 		fmt.Println("Valid range: 2-10 (default: 5 seconds)")
 		os.Exit(1)
+	}
+
+	if *disableMouse {
+		app.disableMouse = false
 	}
 
 	if *disableColor {
@@ -635,8 +644,11 @@ func runGoCui(mock bool) {
 	app.gui = g
 	// Функция, которая будет вызываться при обновлении интерфейса
 	g.SetManagerFunc(app.layout)
+
 	// Включить поддержку мыши
-	g.Mouse = true
+	if app.disableMouse {
+		g.Mouse = true
+	}
 
 	// Цветовая схема GUI
 	g.FgColor = gocui.ColorDefault // поля всех окон и цвет текста
