@@ -4600,7 +4600,7 @@ func (app *App) pageUpLogs() {
 	app.updateLogsView(false)
 }
 
-// Функция для очистки поля ввода фильтра
+// Функция для очистки поля ввода фильтра вывода лога
 func (app *App) clearFilterEditor(g *gocui.Gui) {
 	v, _ := g.View("filter")
 	// Очищаем содержимое View
@@ -4612,6 +4612,17 @@ func (app *App) clearFilterEditor(g *gocui.Gui) {
 	// Очищаем буфер фильтра
 	app.filterText = ""
 	app.applyFilter(false)
+}
+
+// Функция для очистки поля ввода фильтра списков
+func (app *App) clearFilterListEditor(g *gocui.Gui) {
+	v, _ := g.View("filterList")
+	v.Clear()
+	if err := v.SetCursor(0, 0); err != nil {
+		return
+	}
+	app.filterListText = ""
+	app.applyFilterList()
 }
 
 // Функция для обновления последнего выбранного вывода лога (параметр для загрузки журнала)
@@ -5663,7 +5674,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Изменяем фокус окна на фильтрацию
+	// Изменяем фокус окна на фильтрацию с помощью слэша (slash)
 	if err := app.gui.SetKeybinding("services", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		app.lastCurrentView = "services"
 		app.backCurrentView = true
@@ -5692,8 +5703,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Возврат к последнему окну до слэша
-	if err := app.gui.SetKeybinding("filterList", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	// Возврат к последнему окну до использования слэша с использование Enter из окна фильтрации
+	if err := app.gui.SetKeybinding("filterList", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.backCurrentView {
 			app.backCurrentView = false
 			return app.setSelectView(app.gui, app.lastCurrentView)
@@ -5703,13 +5714,51 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("filter", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("filter", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.backCurrentView {
 			app.backCurrentView = false
 			return app.setSelectView(app.gui, app.lastCurrentView)
 		} else {
 			return nil
 		}
+	}); err != nil {
+		return err
+	}
+	// Очистка поля ввода для фильтрации фильтрации списков
+	if err := app.gui.SetKeybinding("filterList", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.clearFilterListEditor(g)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("services", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.clearFilterListEditor(g)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.clearFilterListEditor(g)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.clearFilterListEditor(g)
+		return nil
+	}); err != nil {
+		return err
+	}
+	// Очистка поля ввода для фильтрации вывода логов
+	if err := app.gui.SetKeybinding("filter", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.clearFilterEditor(g)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.clearFilterEditor(g)
+		return nil
 	}); err != nil {
 		return err
 	}
@@ -5746,9 +5795,11 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "                  \033[32m                    |___/\033[0m")
 	fmt.Fprintln(helpView, "\n    Version: "+app.wordColor(programVersion))
 	fmt.Fprintln(helpView, "\n    Hotkeys:")
-	fmt.Fprintln(helpView, "\n    \033[32mTab\033[0m - switch between windows.")
+	fmt.Fprintln(helpView, "\n    \033[32mTab\033[0m - switch to next window.")
 	fmt.Fprintln(helpView, "    \033[32mShift+Tab\033[0m - return to previous window.")
-	fmt.Fprintln(helpView, "    \033[32mEnter\033[0m - selection a journal from the list to display log output.")
+	fmt.Fprintln(helpView, "    \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
+	fmt.Fprintln(helpView, "    \033[32mEnter\033[0m - load a log from the list window or return to the previous window from the filter window.")
+	fmt.Fprintln(helpView, "    \033[32mEsc\033[0m - clear text in the filter window or close the help.")
 	fmt.Fprintln(helpView, "    \033[32m<Left/h>\033[0m and \033[32m<Right/l>\033[0m - switch between journal lists in the selected window.")
 	fmt.Fprintln(helpView, "    \033[32m<Up/PgUp/k>\033[0m and \033[32m<Down/PgDown/j>\033[0m - move up and down through all journal lists and log output,")
 	fmt.Fprintln(helpView, "    as well as changing the filtering mode in the filter window.")
@@ -5761,13 +5812,11 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32mShift+<Left/Right>\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+D\033[0m - change read mode for docker logs (streams only or json from file system).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - change streams display mode for docker logs (all, stdout or stderr only).")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+T\033[0m - disable or enable built-in timestamp and stream type for docker logs.")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - disable or enable ANSI coloring for output.")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+N\033[0m - disable or enable coloring via tailspin.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+T\033[0m - enable or disable built-in timestamp and stream type for docker logs.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - enable or disable ANSI coloring for output.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+N\033[0m - enable or disable coloring via tailspin.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
-	fmt.Fprintln(helpView, "    \033[32m/\033[0m - go to the filter window from the current list window or log output.")
-	fmt.Fprintln(helpView, "    \033[32mEsc\033[0m - return to the previous window from filter window or close help.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+C\033[0m - exit.")
 	fmt.Fprintln(helpView, "\n    Supported formats for filtering by timestamp:")
 	fmt.Fprintln(helpView, "\n    "+app.wordColor("00:00"))
