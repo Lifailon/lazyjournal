@@ -875,7 +875,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Title = "Logs"
 		v.Wrap = true
 		v.Autoscroll = false
-		v.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+		v.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 	}
 
 	// Включение курсора в режиме фильтра и отключение в остальных окнах
@@ -2802,12 +2802,12 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				timeStr, _ := jsonData["time"].(string)
 				logMessage, _ := jsonData["log"].(string)
 				// Проверяем режим вывода потоков и пропускаем лишние строки
-				// Если текущий режим соответствует стандартному выводу и текущая строка содержит поток ошибки, пропускаем интерацию
+				// Если текущий режим соответствует стандартному выводу и текущая строка содержит поток ошибки (или наоборот), пропускаем интерацию
 				if app.dockerStreamMode == "stdout" && stream == "stderr" {
-					return
+					continue
 				}
 				if app.dockerStreamMode == "stderr" && stream == "stdout" {
-					return
+					continue
 				}
 				// Удаляем встроенный экранированный символ переноса строки
 				logMessage = strings.TrimSuffix(logMessage, "\n")
@@ -3336,7 +3336,7 @@ func (app *App) applyFilter(color bool) {
 		// Включаем автоскролл и сбрасываем позицию
 		app.autoScroll = true
 		vLog, _ := app.gui.View("logs")
-		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		app.logScrollPos = 0
 		app.updateLogsView(true)
 	}
@@ -4561,7 +4561,7 @@ func (app *App) scrollDownLogs(step int) error {
 				if err != nil {
 					return err
 				}
-				vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+				vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 			}
 		}
 		// Вызываем функцию для обновления отображения журнала
@@ -4583,7 +4583,7 @@ func (app *App) scrollUpLogs(step int) error {
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 	}
 	app.updateLogsView(false)
 	return nil
@@ -4595,7 +4595,7 @@ func (app *App) pageUpLogs() {
 	app.autoScroll = false
 	if !app.testMode {
 		vLog, _ := app.gui.View("logs")
-		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 	}
 	app.updateLogsView(false)
 }
@@ -4625,7 +4625,7 @@ func (app *App) updateLogOutput(newUpdate bool) {
 			if err != nil {
 				return err
 			}
-			vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+			vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		}
 		switch app.lastWindow {
 		case "services":
@@ -4736,7 +4736,7 @@ func (app *App) updateDelimiter(newUpdate bool) {
 		app.autoScroll = true
 		if !app.testMode {
 			vLog, _ := app.gui.View("logs")
-			vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+			vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		}
 		// Фиксируем новое время загрузки журнала
 		app.updateTime = time.Now().Format("15:04:05")
@@ -5234,7 +5234,7 @@ func (app *App) setupKeybindings() error {
 			}
 			// Изменяем интервал в горутине
 			app.secondsChan <- app.logUpdateSeconds
-			v.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+			v.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		}
 		return nil
 	}); err != nil {
@@ -5249,7 +5249,7 @@ func (app *App) setupKeybindings() error {
 				return err
 			}
 			app.secondsChan <- app.logUpdateSeconds
-			v.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+			v.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		}
 		return nil
 	}); err != nil {
@@ -5372,7 +5372,7 @@ func (app *App) setupKeybindings() error {
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
@@ -5384,7 +5384,7 @@ func (app *App) setupKeybindings() error {
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
@@ -5439,13 +5439,13 @@ func (app *App) setupKeybindings() error {
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		return nil
 	}); err != nil {
 		return err
 	}
-	// Включение/выключение режима покраски через tailspin (Ctrl+S)
-	if err := app.gui.SetKeybinding("", gocui.KeyCtrlS, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	// Включение/выключение режима покраски через tailspin (Ctrl+N)
+	if err := app.gui.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.tailSpinMode {
 			app.tailSpinMode = false
 		} else {
@@ -5634,8 +5634,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Переключение режима вывода потоков журналов Docker (Ctrl+D)
-	if err := app.gui.SetKeybinding("", gocui.KeyCtrlD, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	// Переключение режима вывода потоков журналов Docker (Ctrl+S)
+	if err := app.gui.SetKeybinding("", gocui.KeyCtrlS, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		switch {
 		case app.dockerStreamMode == "all":
 			app.dockerStreamMode = "stdout"
@@ -5643,6 +5643,20 @@ func (app *App) setupKeybindings() error {
 			app.dockerStreamMode = "stderr"
 		case app.dockerStreamMode == "stderr":
 			app.dockerStreamMode = "all"
+		}
+		app.updateLogOutput(false)
+		return nil
+	}); err != nil {
+		return err
+	}
+	// Переключение режима чтения журналов Docker из потоков или файловой системы (Ctrl+D)
+	if err := app.gui.SetKeybinding("", gocui.KeyCtrlD, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.dockerStreamLogs {
+			app.dockerStreamLogs = false
+			app.dockerStreamLogsStr = "json"
+		} else {
+			app.dockerStreamLogs = true
+			app.dockerStreamLogsStr = "stream"
 		}
 		app.updateLogOutput(false)
 		return nil
@@ -5706,7 +5720,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 47
+	width, height := 108, 49
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -5740,14 +5754,16 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    as well as changing the filtering mode in the filter window.")
 	fmt.Fprintln(helpView, "    \033[32m<Shift/Alt>+<Up/Down>\033[0m - quickly move up and down through all journal lists and log output")
 	fmt.Fprintln(helpView, "    every 10 or 100 lines (500 for log output).")
-	fmt.Fprintln(helpView, "    \033[32mShift/<Alt/Ctrl>+<k/j>\033[0m - quickly move up and down (like Vim and alternative for macOS).")
+	fmt.Fprintln(helpView, "    \033[32m<Shift/Alt/Ctrl>+<k/j>\033[0m - quickly move up and down (like Vim and alternative for macOS).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+A\033[0m or \033[32mHome\033[0m - go to the top of the log.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+E\033[0m or \033[32mEnd\033[0m - go to the end of the log.")
 	fmt.Fprintln(helpView, "    \033[32mAlt+<Left/Right>\033[0m - change the number of log lines to output (default: 50000, range: 200-200000).")
 	fmt.Fprintln(helpView, "    \033[32mShift+<Left/Right>\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+T\033[0m - enable or disable timestamp for Docker logs.")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - enable or disable built-in output coloring.")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - enable or disable coloring via tailspin.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+D\033[0m - change read mode for docker logs (streams only or json from file system).")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - change streams display mode for docker logs (all, stdout or stderr only).")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+T\033[0m - disable or enable built-in timestamp and stream type for docker logs.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - disable or enable ANSI coloring for output.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+N\033[0m - disable or enable coloring via tailspin.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
 	fmt.Fprintln(helpView, "    \033[32m/\033[0m - go to the filter window from the current list window or log output.")
@@ -5803,7 +5819,7 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 	return nil
 }
 
@@ -5837,7 +5853,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
+	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 	return nil
 }
 
