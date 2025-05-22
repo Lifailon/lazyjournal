@@ -57,11 +57,12 @@ type dockerLogLines struct {
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
 
-	testMode         bool // исключаем вызовы к gocui при тестирование функций
-	tailSpinMode     bool // режим покраски через tailspin
-	colorMode        bool // отключение/включение покраски ключевых слов
-	mouseSupport     bool // отключение/включение поддержки мыши
-	dockerStreamLogs bool // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
+	testMode         bool   // исключаем вызовы к gocui при тестирование функций
+	tailSpinMode     bool   // режим покраски через tailspin
+	colorMode        bool   // отключение/включение покраски ключевых слов
+	mouseSupport     bool   // отключение/включение поддержки мыши
+	dockerStreamLogs bool   // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
+	dockerStreamMode string // переменная для хранения режима чтения потоков (all, stdout или stderr)
 
 	getOS         string   // название ОС
 	getArch       string   // архитектура процессора
@@ -459,6 +460,7 @@ func runGoCui(mock bool) {
 		colorMode:                    true,
 		mouseSupport:                 true,
 		dockerStreamLogs:             false,
+		dockerStreamMode:             "all",
 		startServices:                0, // начальная позиция списка юнитов
 		selectedJournal:              0, // начальный индекс выбранного журнала
 		startFiles:                   0,
@@ -2741,21 +2743,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	// Читаем журналы Docker из файловой системы в формате JSON (если не отключено флагом и есть доступ)
 	var readFileContainer bool = false
 	if containerizationSystem == "docker" && !app.dockerStreamLogs {
-		// basePath := "/var/lib/docker/containers"
-		// var logFilePath string
-		// // Ищем файл лога в локальной системе по id
-		// _ = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
-		// 	// Проверяем что нет ошибки и имя содержит id (например c41443da2adb) и кончается на json.log
-		// 	if err == nil && strings.Contains(info.Name(), containerId) && strings.HasSuffix(info.Name(), "-json.log") {
-		// 		logFilePath = path
-		// 		// Фиксируем, если найден файловый журнал
-		// 		readFileContainer = true
-		// 		// Останавливаем поиск
-		// 		return filepath.SkipDir
-		// 	}
-		// 	return nil
-		// })
-		// Получаем путь с помощью метода docker cli
+		// Получаем путь к журналу контейнера в файловой системе по id с помощью метода docker cli
 		cmd := exec.Command("docker", "inspect", "--format", "{{.LogPath}}", containerId)
 		logFilePathBytes, err := cmd.Output()
 		if err != nil && !app.testMode {
@@ -2796,6 +2784,14 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				stream, _ := jsonData["stream"].(string)
 				timeStr, _ := jsonData["time"].(string)
 				logMessage, _ := jsonData["log"].(string)
+				// Проверяем режим вывода потоков и пропускаем лишние строки
+				// Если текущий режим соответствует стандартному выводу и текущая строка содержит поток ошибки, пропускаем интерацию
+				if app.dockerStreamMode == "stdout" && stream == "stderr" {
+					return
+				}
+				if app.dockerStreamMode == "stderr" && stream == "stdout" {
+					return
+				}
 				// Удаляем встроенный экранированный символ переноса строки
 				logMessage = strings.TrimSuffix(logMessage, "\n")
 				// Парсим строку времени в объект time.Time
@@ -2837,6 +2833,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			containerId = parts[0]
 		}
 		var cmd *exec.Cmd
+		// Формируем команду с нужными ключами
 		if containerizationSystem == "kubectl" {
 			cmd = exec.Command(containerizationSystem, "logs", "--timestamps=true", "--tail", app.logViewCount, containerId)
 		} else {
@@ -2853,75 +2850,123 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				cmd = exec.Command(containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount, containerId)
 			}
 		}
-		// Читаем стандартный вывод
-		stdoutPipe, _ := cmd.StdoutPipe()
-		// Читаем вывод ошибок
-		stderrPipe, _ := cmd.StderrPipe()
-		_ = cmd.Start()
-		// Читаем параллельно (чтобы не блокировать)
+		// Храним байты вывода
 		var stdoutBytes, stderrBytes []byte
 		var stdoutErr, stderrErr error
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			stdoutBytes, stdoutErr = io.ReadAll(stdoutPipe)
-		}()
-		go func() {
-			defer wg.Done()
-			stderrBytes, stderrErr = io.ReadAll(stderrPipe)
-		}()
-		wg.Wait()
-		_ = cmd.Wait()
-		// Обработка ошибок чтения
-		if stdoutErr != nil || stderrErr != nil {
-			if !app.testMode {
-				v, _ := app.gui.View("logs")
-				v.Clear()
-				fmt.Fprintln(v, "\033[31mError getting logs from", containerName, "(id:", containerId, ")", "container.\033[0m")
-				return
-			} else {
-				log.Print("Error: getting logs from ", containerName, " (id:", containerId, ")", " container.")
-			}
-		}
-		// Получаем 2 массива вывода
-		stdoutLines := strings.Split(string(stdoutBytes), "\n")
-		stderrLines := strings.Split(string(stderrBytes), "\n")
-		// Объединяем два массив
+		// Храним комбинированный вывод двух потоков
 		var combined []dockerLogLines
-		for _, line := range stdoutLines {
-			if strings.TrimSpace(line) == "" {
-				continue
+		switch {
+		case app.dockerStreamMode == "stdout":
+			// Читаем стандартный вывод
+			stdoutPipe, _ := cmd.StdoutPipe()
+			_ = cmd.Start()
+			stdoutBytes, stdoutErr = io.ReadAll(stdoutPipe)
+			stdoutLines := strings.Split(string(stdoutBytes), "\n")
+			// Формируем итоговый массив
+			for _, line := range stdoutLines {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				ts, err := parseTimestamp(line)
+				if err != nil {
+					continue
+				}
+				combined = append(combined, dockerLogLines{
+					isError:   false,
+					timestamp: ts,
+					content:   line,
+				})
 			}
-			ts, err := parseTimestamp(line)
-			if err != nil {
-				continue
+		case app.dockerStreamMode == "stderr":
+			// Читаем вывод ошибок
+			stderrPipe, _ := cmd.StderrPipe()
+			_ = cmd.Start()
+			stderrBytes, stderrErr = io.ReadAll(stderrPipe)
+			stderrLines := strings.Split(string(stderrBytes), "\n")
+			// Формируем итоговый массив
+			for _, line := range stderrLines {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				ts, err := parseTimestamp(line)
+				if err != nil {
+					continue
+				}
+				combined = append(combined, dockerLogLines{
+					isError:   true,
+					timestamp: ts,
+					content:   line,
+				})
 			}
-			combined = append(combined, dockerLogLines{
-				isError:   false,
-				timestamp: ts,
-				content:   line,
+		default:
+			// Читаем стандартный вывод
+			stdoutPipe, _ := cmd.StdoutPipe()
+			// Читаем вывод ошибок
+			stderrPipe, _ := cmd.StderrPipe()
+			// Запускаем команду
+			_ = cmd.Start()
+			// Читаем два потока параллельно, чтобы не блокировать
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				stdoutBytes, stdoutErr = io.ReadAll(stdoutPipe)
+			}()
+			go func() {
+				defer wg.Done()
+				stderrBytes, stderrErr = io.ReadAll(stderrPipe)
+			}()
+			wg.Wait()
+			_ = cmd.Wait()
+			// Обработка ошибок чтения
+			if stdoutErr != nil || stderrErr != nil {
+				if !app.testMode {
+					v, _ := app.gui.View("logs")
+					v.Clear()
+					fmt.Fprintln(v, "\033[31mError getting logs from", containerName, "(id:", containerId, ")", "container.\033[0m")
+					return
+				} else {
+					log.Print("Error: getting logs from ", containerName, " (id:", containerId, ")", " container.")
+				}
+			}
+			// Получаем 2 массива вывода
+			stdoutLines := strings.Split(string(stdoutBytes), "\n")
+			stderrLines := strings.Split(string(stderrBytes), "\n")
+			// Объединяем два массив
+			for _, line := range stdoutLines {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				ts, err := parseTimestamp(line)
+				if err != nil {
+					continue
+				}
+				combined = append(combined, dockerLogLines{
+					isError:   false,
+					timestamp: ts,
+					content:   line,
+				})
+			}
+			for _, line := range stderrLines {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				ts, err := parseTimestamp(line)
+				if err != nil {
+					continue
+				}
+				combined = append(combined, dockerLogLines{
+					isError:   true,
+					timestamp: ts,
+					content:   line,
+				})
+			}
+			// Cортируем итоговый массив по timestamp
+			sort.Slice(combined, func(i, j int) bool {
+				return combined[i].timestamp.Before(combined[j].timestamp)
 			})
 		}
-		for _, line := range stderrLines {
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-			ts, err := parseTimestamp(line)
-			if err != nil {
-				continue
-			}
-			combined = append(combined, dockerLogLines{
-				isError:   true,
-				timestamp: ts,
-				content:   line,
-			})
-		}
-		// Cортируем итоговый массив по timestamp
-		sort.Slice(combined, func(i, j int) bool {
-			return combined[i].timestamp.Before(combined[j].timestamp)
-		})
-		// Добавляем префиксы с типом данных (stdout или stderr)
+		// Добавляем префиксы с типом данных (stdout или stderr) в зависимости от режима флагов
 		var finalLines []string
 		for _, entry := range combined {
 			entryLine := entry.content
@@ -5555,6 +5600,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+	// Переключение режима вывода timestamp и названия потока (Ctrl+T)
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlT, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		switch {
 		case app.timestampDocker && app.streamTypeDocker:
@@ -5565,6 +5611,21 @@ func (app *App) setupKeybindings() error {
 			app.streamTypeDocker = true
 		case !app.timestampDocker && app.streamTypeDocker:
 			app.timestampDocker = true
+		}
+		app.updateLogOutput(false)
+		return nil
+	}); err != nil {
+		return err
+	}
+	// Переключение режима вывода потоков журналов Docker (Ctrl+D)
+	if err := app.gui.SetKeybinding("", gocui.KeyCtrlD, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		switch {
+		case app.dockerStreamMode == "all":
+			app.dockerStreamMode = "stdout"
+		case app.dockerStreamMode == "stdout":
+			app.dockerStreamMode = "stderr"
+		case app.dockerStreamMode == "stderr":
+			app.dockerStreamMode = "all"
 		}
 		app.updateLogOutput(false)
 		return nil
