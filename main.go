@@ -57,12 +57,13 @@ type dockerLogLines struct {
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
 
-	testMode         bool   // исключаем вызовы к gocui при тестирование функций
-	tailSpinMode     bool   // режим покраски через tailspin
-	colorMode        bool   // отключение/включение покраски ключевых слов
-	mouseSupport     bool   // отключение/включение поддержки мыши
-	dockerStreamLogs bool   // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
-	dockerStreamMode string // переменная для хранения режима чтения потоков (all, stdout или stderr)
+	testMode            bool   // исключаем вызовы к gocui при тестирование функций
+	tailSpinMode        bool   // режим покраски через tailspin
+	colorMode           bool   // отключение/включение покраски ключевых слов
+	mouseSupport        bool   // отключение/включение поддержки мыши
+	dockerStreamLogs    bool   // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
+	dockerStreamLogsStr string // отображаемый режим чтения журнала Docker (в зависимости от прав доступа и флага)
+	dockerStreamMode    string // переменная для хранения режима чтения потоков (all, stdout или stderr)
 
 	getOS         string   // название ОС
 	getArch       string   // архитектура процессора
@@ -570,6 +571,23 @@ func runGoCui(mock bool) {
 
 	if *dockerStreamFlag {
 		app.dockerStreamLogs = true
+		app.dockerStreamLogsStr = "stream"
+	} else {
+		// Проверяем доступность директории на чтение
+		dir := "/var/lib/docker/containers"
+		f, err := os.Open(dir)
+		if err != nil {
+			app.dockerStreamLogsStr = "stream"
+		} else {
+			// Пробуем прочитать имя первого элемента (проверить список файлов/директорий)
+			_, err = f.Readdirnames(1)
+			f.Close()
+			if err != nil {
+				app.dockerStreamLogsStr = "stream"
+			} else {
+				app.dockerStreamLogsStr = "json"
+			}
+		}
 	}
 
 	// Определяем переменные и массивы для покраски вывода
@@ -857,7 +875,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Title = "Logs"
 		v.Wrap = true
 		v.Autoscroll = false
-		v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+		v.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 	}
 
 	// Включение курсора в режиме фильтра и отключение в остальных окнах
@@ -2741,7 +2759,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		containerId = app.lastContainerId
 	}
 	// Читаем журналы Docker из файловой системы в формате JSON (если не отключено флагом и есть доступ)
-	var readFileContainer bool = false
+	var readFileContainer bool
 	if containerizationSystem == "docker" && !app.dockerStreamLogs {
 		// Получаем путь к журналу контейнера в файловой системе по id с помощью метода docker cli
 		cmd := exec.Command("docker", "inspect", "--format", "{{.LogPath}}", containerId)
@@ -2757,18 +2775,17 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		}
 		logFilePath := strings.TrimSpace(string(logFilePathBytes))
 		// Читаем файл с конца с помощью tail
+		cmd = exec.Command("tail", "-n", app.logViewCount, logFilePath)
+		output, err := cmd.Output()
+		// Если ошибка чтения, значит нет доступа и переходим к чтению из потока
+		if err != nil {
+			readFileContainer = false
+			app.dockerStreamLogsStr = "stream"
+		} else {
+			readFileContainer = true
+			app.dockerStreamLogsStr = "json"
+		}
 		if readFileContainer {
-			cmd := exec.Command("tail", "-n", app.logViewCount, logFilePath)
-			output, err := cmd.Output()
-			if err != nil && !app.testMode {
-				v, _ := app.gui.View("logs")
-				v.Clear()
-				fmt.Fprintln(v, "\033[31mError reading log (tail):", err, "\033[0m")
-				return
-			}
-			if err != nil && app.testMode {
-				log.Print("Error: reading log via tail. ", err)
-			}
 			// Разбиваем строки на массив
 			lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 			var formattedLines []string
@@ -3319,7 +3336,7 @@ func (app *App) applyFilter(color bool) {
 		// Включаем автоскролл и сбрасываем позицию
 		app.autoScroll = true
 		vLog, _ := app.gui.View("logs")
-		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 		app.logScrollPos = 0
 		app.updateLogsView(true)
 	}
@@ -4544,7 +4561,7 @@ func (app *App) scrollDownLogs(step int) error {
 				if err != nil {
 					return err
 				}
-				vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+				vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 			}
 		}
 		// Вызываем функцию для обновления отображения журнала
@@ -4566,7 +4583,7 @@ func (app *App) scrollUpLogs(step int) error {
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 	}
 	app.updateLogsView(false)
 	return nil
@@ -4578,7 +4595,7 @@ func (app *App) pageUpLogs() {
 	app.autoScroll = false
 	if !app.testMode {
 		vLog, _ := app.gui.View("logs")
-		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 	}
 	app.updateLogsView(false)
 }
@@ -4608,7 +4625,7 @@ func (app *App) updateLogOutput(newUpdate bool) {
 			if err != nil {
 				return err
 			}
-			vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+			vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 		}
 		switch app.lastWindow {
 		case "services":
@@ -4719,7 +4736,7 @@ func (app *App) updateDelimiter(newUpdate bool) {
 		app.autoScroll = true
 		if !app.testMode {
 			vLog, _ := app.gui.View("logs")
-			vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+			vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 		}
 		// Фиксируем новое время загрузки журнала
 		app.updateTime = time.Now().Format("15:04:05")
@@ -5217,7 +5234,7 @@ func (app *App) setupKeybindings() error {
 			}
 			// Изменяем интервал в горутине
 			app.secondsChan <- app.logUpdateSeconds
-			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+			v.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 		}
 		return nil
 	}); err != nil {
@@ -5232,7 +5249,7 @@ func (app *App) setupKeybindings() error {
 				return err
 			}
 			app.secondsChan <- app.logUpdateSeconds
-			v.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+			v.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 		}
 		return nil
 	}); err != nil {
@@ -5355,7 +5372,7 @@ func (app *App) setupKeybindings() error {
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
@@ -5367,7 +5384,7 @@ func (app *App) setupKeybindings() error {
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
@@ -5422,7 +5439,7 @@ func (app *App) setupKeybindings() error {
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+		vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 		return nil
 	}); err != nil {
 		return err
@@ -5786,7 +5803,7 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+	vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 	return nil
 }
 
@@ -5820,7 +5837,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf("[tail: %s lines | update: %t | interval: %d sec | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode)
+	vLog.Subtitle = fmt.Sprintf("[auto-update: %t | tail: %s lines | interval: %d sec | color: %t | docker: %s (%s)]", app.autoScroll, app.logViewCount, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStr, app.dockerStreamMode)
 	return nil
 }
 
