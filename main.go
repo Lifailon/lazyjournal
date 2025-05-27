@@ -5493,11 +5493,11 @@ func (app *App) setupKeybindings() error {
 		}
 		// Создаем временный биндинг на Esc для закрытия окна
 		if err := app.gui.SetKeybinding("", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-			if err := app.closeHelp(g); err != nil {
-				return nil
-			}
+			app.closeHelp(g)
 			// Возвращяем стандартные биндиги после закрытия окна справки
-			app.setupKeybindings()
+			if err := app.setupKeybindings(); err != nil {
+				log.Panicln("Error key bindings", err)
+			}
 			return nil
 		}); err != nil {
 			return err
@@ -5726,7 +5726,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Очистка поля ввода для фильтрации фильтрации списков
+	// Очистка поля ввода для фильтрации списков
 	if err := app.gui.SetKeybinding("filterList", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		app.clearFilterListEditor(g)
 		return nil
@@ -5829,11 +5829,10 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "\n    Source code: "+app.wordColor("https://github.com/Lifailon/lazyjournal"))
 }
 
-func (app *App) closeHelp(g *gocui.Gui) error {
+func (app *App) closeHelp(g *gocui.Gui) {
 	if err := g.DeleteView("help"); err != nil {
-		return nil
+		return
 	}
-	return nil
 }
 
 // Функции для переключения количества строк для вывода логов
