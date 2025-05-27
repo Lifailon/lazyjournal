@@ -59,6 +59,7 @@ type App struct {
 
 	testMode            bool   // исключаем вызовы к gocui при тестирование функций
 	tailSpinMode        bool   // режим покраски через tailspin
+	tailSpinBinName     string // название исполняемого файла (tailspin/tspin)
 	colorMode           bool   // отключение/включение покраски ключевых слов
 	mouseSupport        bool   // отключение/включение поддержки мыши
 	dockerStreamLogs    bool   // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
@@ -3303,7 +3304,7 @@ func (app *App) applyFilter(color bool) {
 		if app.colorMode {
 			// Режим покраски через tailspin
 			if app.tailSpinMode {
-				cmd := exec.Command("tailspin")
+				cmd := exec.Command(app.tailSpinBinName)
 				logLines := strings.Join(app.filteredLogLines, "\n")
 				// Создаем пайп для передачи данных
 				cmd.Stdin = bytes.NewBufferString(logLines)
@@ -5467,6 +5468,7 @@ func (app *App) setupKeybindings() error {
 				_, err := cmd.Output()
 				if err == nil {
 					app.tailSpinMode = true
+					app.tailSpinBinName = ts
 				}
 			}
 		}
