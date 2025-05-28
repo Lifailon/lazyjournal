@@ -2796,60 +2796,92 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			app.dockerStreamLogsStr = "json"
 		}
 		if readFileContainer {
-			// Разбиваем строки на массив
-			lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-			var formattedLines []string
-			// Обрабатываем вывод в формате JSON построчно
-			for i, line := range lines {
-				// JSON-структура для парсинга
-				var jsonData map[string]interface{}
-				err := json.Unmarshal([]byte(line), &jsonData)
+			// Проверяем, что есть изменения в файле при повторном считывание
+			if newUpdate {
+				// Фиксируем новую дату изменения и размер для выбранного файла
+				fileInfo, err := os.Stat(logFilePath)
 				if err != nil {
-					continue
+					return
 				}
-				// Извлекаем JSON данные
-				stream, _ := jsonData["stream"].(string)
-				timeStr, _ := jsonData["time"].(string)
-				logMessage, _ := jsonData["log"].(string)
-				// Проверяем режим вывода потоков и пропускаем лишние строки
-				// Если текущий режим соответствует стандартному выводу и текущая строка содержит поток ошибки (или наоборот), пропускаем интерацию
-				if app.dockerStreamMode == "stdout" && stream == "stderr" {
-					continue
+				fileModTime := fileInfo.ModTime()
+				fileSize := fileInfo.Size()
+				app.lastDateUpdateFile = fileModTime
+				app.lastSizeFile = fileSize
+				app.updateFile = true
+			} else {
+				// Проверяем дату изменения
+				fileInfo, err := os.Stat(logFilePath)
+				if err != nil {
+					return
 				}
-				if app.dockerStreamMode == "stderr" && stream == "stdout" {
-					continue
-				}
-				// Удаляем встроенный экранированный символ переноса строки
-				logMessage = strings.TrimSuffix(logMessage, "\n")
-				// Парсим строку времени в объект time.Time
-				parsedTime, err := time.Parse(time.RFC3339Nano, timeStr)
-				if err == nil {
-					// Форматируем дату в формате: YYYY-MM-DDTHH:MM:SS.MS(x9)Z
-					timeStr = parsedTime.Format("2006-01-02T15:04:05.000000000Z")
-				}
-				var formattedLine string
-				// Заполняем строку в формате
-				switch {
-				case app.timestampDocker && app.streamTypeDocker:
-					// stream time log
-					formattedLine = fmt.Sprintf("%s %s %s", stream, timeStr, logMessage)
-				case app.timestampDocker && !app.streamTypeDocker:
-					// time log
-					formattedLine = fmt.Sprintf("%s %s", timeStr, logMessage)
-				case !app.timestampDocker && app.streamTypeDocker:
-					// stream log
-					formattedLine = fmt.Sprintf("%s %s", stream, logMessage)
-				case !app.timestampDocker && !app.streamTypeDocker:
-					// log only
-					formattedLine = logMessage
-				}
-				formattedLines = append(formattedLines, formattedLine)
-				// Если это последняя строка в выводе, добавляем перенос строки
-				if i == len(lines)-1 {
-					formattedLines = append(formattedLines, "\n")
+				fileModTime := fileInfo.ModTime()
+				fileSize := fileInfo.Size()
+				// Обновлять файл, только если есть изменения (проверяем дату модификации и размер)
+				if fileModTime != app.lastDateUpdateFile || fileSize != app.lastSizeFile {
+					app.lastDateUpdateFile = fileModTime
+					app.lastSizeFile = fileSize
+					app.updateFile = true
+				} else {
+					app.updateFile = false
 				}
 			}
-			app.currentLogLines = formattedLines
+			// Читаем файл, толькое если были изменения
+			if app.updateFile {
+				// Разбиваем строки на массив
+				lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+				var formattedLines []string
+				// Обрабатываем вывод в формате JSON построчно
+				for i, line := range lines {
+					// JSON-структура для парсинга
+					var jsonData map[string]interface{}
+					err := json.Unmarshal([]byte(line), &jsonData)
+					if err != nil {
+						continue
+					}
+					// Извлекаем JSON данные
+					stream, _ := jsonData["stream"].(string)
+					timeStr, _ := jsonData["time"].(string)
+					logMessage, _ := jsonData["log"].(string)
+					// Проверяем режим вывода потоков и пропускаем лишние строки
+					// Если текущий режим соответствует стандартному выводу и текущая строка содержит поток ошибки (или наоборот), пропускаем интерацию
+					if app.dockerStreamMode == "stdout" && stream == "stderr" {
+						continue
+					}
+					if app.dockerStreamMode == "stderr" && stream == "stdout" {
+						continue
+					}
+					// Удаляем встроенный экранированный символ переноса строки
+					logMessage = strings.TrimSuffix(logMessage, "\n")
+					// Парсим строку времени в объект time.Time
+					parsedTime, err := time.Parse(time.RFC3339Nano, timeStr)
+					if err == nil {
+						// Форматируем дату в формате: YYYY-MM-DDTHH:MM:SS.MS(x9)Z
+						timeStr = parsedTime.Format("2006-01-02T15:04:05.000000000Z")
+					}
+					var formattedLine string
+					// Заполняем строку в формате
+					switch {
+					case app.timestampDocker && app.streamTypeDocker:
+						// stream time log
+						formattedLine = fmt.Sprintf("%s %s %s", stream, timeStr, logMessage)
+					case app.timestampDocker && !app.streamTypeDocker:
+						// time log
+						formattedLine = fmt.Sprintf("%s %s", timeStr, logMessage)
+					case !app.timestampDocker && app.streamTypeDocker:
+						// stream log
+						formattedLine = fmt.Sprintf("%s %s", stream, logMessage)
+					case !app.timestampDocker && !app.streamTypeDocker:
+						// log only
+						formattedLine = logMessage
+					}
+					formattedLines = append(formattedLines, formattedLine)
+					// Если это последняя строка в выводе, добавляем перенос строки
+					if i == len(lines)-1 {
+						formattedLines = append(formattedLines, "\n")
+					}
+				}
+				app.currentLogLines = formattedLines
+			}
 		}
 	}
 	// Читаем лог через Docker cli (если файл не найден или к нему нет доступа) или Podman/k8s
@@ -3015,7 +3047,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		}
 		app.currentLogLines = finalLines
 	}
-	if !app.testMode {
+	// Обновляем фильтр и делиметр всегда для потоков ИЛИ если есть изменения в файле при его чтение
+	if !readFileContainer || (readFileContainer && app.updateFile) || containerizationSystem == "podman" || containerizationSystem == "kubectl" {
 		app.updateDelimiter(newUpdate)
 		app.applyFilter(false)
 	}
