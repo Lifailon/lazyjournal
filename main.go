@@ -123,9 +123,10 @@ type App struct {
 	logScrollPos     int      // позиция прокрутки для отображаемых строк журнала
 	lastFilterText   string   // фиксируем содержимое последнего ввода текста для фильтрации
 
-	autoScroll     bool   // используется для автоматического скроллинга вниз при обновлении (если это не ручной скроллинг)
-	lastUpdateLine string // фиксируем предпоследнюю строку для делимитра
-	updateTime     string // фиксируем время загрузки журнала для делимитра
+	autoScroll        bool   // используется для автоматического скроллинга вниз при обновлении (если это не ручной скроллинг)
+	disableAutoScroll bool   // отключение автоматического обновления вывода
+	lastUpdateLine    string // фиксируем предпоследнюю строку для делимитра
+	updateTime        string // фиксируем время загрузки журнала для делимитра
 
 	lastDateUpdateFile time.Time // последняя дата изменения файла
 	lastSizeFile       int64     // размер файла
@@ -184,11 +185,12 @@ func showHelp() {
 	fmt.Println("    lazyjournal --audit, -a                Show audit information")
 	fmt.Println("    lazyjournal --tail, -t                 Change the number of log lines to output (default: 50000, range: 200-200000)")
 	fmt.Println("    lazyjournal --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
-	fmt.Println("    lazyjournal --disable-mouse, -m        Disable mouse support")
+	fmt.Println("    lazyjournal --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)")
 	fmt.Println("    lazyjournal --disable-color, -d        Disable output coloring")
+	fmt.Println("    lazyjournal --disable-mouse, -m        Disable mouse control support")
 	fmt.Println("    lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs")
-	fmt.Println("    lazyjournal --only-streams, -o         Force reading docker container log from streams (by default from file system)")
-	fmt.Println("    lazyjournal --command-color, -c        Coloring in command line mode")
+	fmt.Println("    lazyjournal --only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)")
+	fmt.Println("    lazyjournal --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
 }
@@ -512,14 +514,16 @@ func runGoCui(mock bool) {
 	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
-	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse support")
-	flag.BoolVar(disableMouse, "m", false, "Disable mouse support")
+	disableScroll := flag.Bool("disable-autoupdate", false, "Disable streaming of new events (log is loaded once without automatic update) (like tail)")
+	flag.BoolVar(disableScroll, "e", false, "Disable streaming of new events (log is loaded once without automatic update) (like tail)")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
+	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse control support")
+	flag.BoolVar(disableMouse, "m", false, "Disable mouse control support")
 	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for docker logs")
 	flag.BoolVar(disableTimeStamp, "s", false, "Disable timestamp for docker logs")
-	dockerStreamFlag := flag.Bool("only-streams", false, "Force reading Docker container log from streams (by default from file system)")
-	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading Docker container log from streams (by default from file system)")
+	dockerStreamFlag := flag.Bool("only-stream", false, "Force reading of docker container logs in stream mode (by default from the file system)")
+	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of docker container logs in stream mode (by default from the file system)")
 	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
 	flag.BoolVar(commandColor, "c", false, "Coloring in command line mode")
 	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
@@ -556,6 +560,11 @@ func runGoCui(mock bool) {
 	} else {
 		fmt.Println("Valid range: 2-10 (default: 5 seconds)")
 		os.Exit(1)
+	}
+
+	if *disableScroll {
+		app.disableAutoScroll = true
+		app.autoScroll = false
 	}
 
 	if *disableMouse {
@@ -3335,7 +3344,11 @@ func (app *App) applyFilter(color bool) {
 	// Обновляем автоскролл (всегда опускаем вывод в самый низ) для отображения отфильтрованных записей
 	if !app.testMode {
 		// Включаем автоскролл и сбрасываем позицию
-		app.autoScroll = true
+		if !app.disableAutoScroll {
+			app.autoScroll = true
+		} else {
+			app.autoScroll = false
+		}
 		vLog, _ := app.gui.View("logs")
 		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		app.logScrollPos = 0
@@ -4555,8 +4568,12 @@ func (app *App) scrollDownLogs(step int) error {
 		// Если достигнут конец списка, останавливаем на максимальной длинне с учетом высоты окна
 		if app.logScrollPos > len(app.filteredLogLines)-1-viewHeight {
 			app.logScrollPos = len(app.filteredLogLines) - 1 - viewHeight
-			// Включаем автоскролл
-			app.autoScroll = true
+			// Включаем автоскролл (если он не отключен)
+			if !app.disableAutoScroll {
+				app.autoScroll = true
+			} else {
+				app.autoScroll = false
+			}
 			if !app.testMode {
 				vLog, err := app.gui.View("logs")
 				if err != nil {
@@ -4631,7 +4648,11 @@ func (app *App) updateLogOutput(newUpdate bool) {
 	// Выполняем обновление интерфейса через метод Update для иницилизации перерисовки интерфейса
 	app.gui.Update(func(g *gocui.Gui) error {
 		// Сбрасываем автоскролл, что бы опустить журнал вниз, т.к. это всегда ручное обновление
-		app.autoScroll = true
+		if !app.disableAutoScroll {
+			app.autoScroll = true
+		} else {
+			app.autoScroll = false
+		}
 		if !app.testMode {
 			vLog, err := app.gui.View("logs")
 			if err != nil {
@@ -4745,7 +4766,11 @@ func (app *App) updateDelimiter(newUpdate bool) {
 			return
 		}
 		// Сбрасываем автоскролл
-		app.autoScroll = true
+		if !app.disableAutoScroll {
+			app.autoScroll = true
+		} else {
+			app.autoScroll = false
+		}
 		if !app.testMode {
 			vLog, _ := app.gui.View("logs")
 			vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
@@ -5379,7 +5404,11 @@ func (app *App) setupKeybindings() error {
 	// Перемещение к концу журнала (Ctrl+E or End)
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlE, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		// Сбрасываем автоскролл
-		app.autoScroll = true
+		if !app.disableAutoScroll {
+			app.autoScroll = true
+		} else {
+			app.autoScroll = false
+		}
 		vLog, err := app.gui.View("logs")
 		if err != nil {
 			return err
@@ -5391,7 +5420,11 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	if err := app.gui.SetKeybinding("", gocui.KeyEnd, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.autoScroll = true
+		if !app.disableAutoScroll {
+			app.autoScroll = true
+		} else {
+			app.autoScroll = false
+		}
 		vLog, err := app.gui.View("logs")
 		if err != nil {
 			return err
@@ -5415,9 +5448,9 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Очистка поля ввода для фильтра (Ctrl+W)
-	if err := app.gui.SetKeybinding("", gocui.KeyCtrlW, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.clearFilterEditor(g)
+	// Ручное обновление текущего вывода журнала (Ctrl+Q) актуально в режиме выключенного автоматического обновления
+	if err := app.gui.SetKeybinding("", gocui.KeyCtrlQ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.updateLogOutput(false)
 		return nil
 	}); err != nil {
 		return err
@@ -5435,8 +5468,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Выключение/включение встроенной покраски ключевых слов (Ctrl+Q)
-	if err := app.gui.SetKeybinding("", gocui.KeyCtrlQ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	// Выключение/включение встроенной или через tailspin покраски (Ctrl+W)
+	if err := app.gui.SetKeybinding("", gocui.KeyCtrlW, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.colorMode {
 			app.colorMode = false
 		} else {
@@ -5676,6 +5709,25 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+	// Включение или отключение автоматического скроллинга (Ctrl+U)
+	if err := app.gui.SetKeybinding("", gocui.KeyCtrlU, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.disableAutoScroll {
+			app.disableAutoScroll = false
+			app.autoScroll = false
+		} else {
+			app.disableAutoScroll = true
+			app.autoScroll = false
+		}
+		vLog, err := app.gui.View("logs")
+		if err != nil {
+			return err
+		}
+		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
+		app.updateLogOutput(false)
+		return nil
+	}); err != nil {
+		return err
+	}
 	// Изменяем фокус окна на фильтрацию с помощью слэша (slash)
 	if err := app.gui.SetKeybinding("services", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		app.lastCurrentView = "services"
@@ -5771,7 +5823,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 49
+	width, height := 108, 50
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -5800,8 +5852,8 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "\n    \033[32mTab\033[0m - switch to next window.")
 	fmt.Fprintln(helpView, "    \033[32mShift+Tab\033[0m - return to previous window.")
 	fmt.Fprintln(helpView, "    \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
+	fmt.Fprintln(helpView, "    \033[32mEsc\033[0m - clear text in the current filter window or close help.")
 	fmt.Fprintln(helpView, "    \033[32mEnter\033[0m - load a log from the list window or return to the previous window from the filter window.")
-	fmt.Fprintln(helpView, "    \033[32mEsc\033[0m - clear text in the filter window or close the help.")
 	fmt.Fprintln(helpView, "    \033[32m<Left/h>\033[0m and \033[32m<Right/l>\033[0m - switch between journal lists in the selected window.")
 	fmt.Fprintln(helpView, "    \033[32m<Up/PgUp/k>\033[0m and \033[32m<Down/PgDown/j>\033[0m - move up and down through all journal lists and log output,")
 	fmt.Fprintln(helpView, "    as well as changing the filtering mode in the filter window.")
@@ -5815,10 +5867,11 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32mCtrl+D\033[0m - change read mode for docker logs (streams only or json from file system).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - change streams display mode for docker logs (all, stdout or stderr only).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+T\033[0m - enable or disable built-in timestamp and stream type for docker logs.")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - enable or disable ANSI coloring for output.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - enable or disable ANSI coloring for output.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+N\033[0m - enable or disable coloring via tailspin.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+U\033[0m - disable streaming of new events (log is loaded once without automatic update).")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - update the current log output manually.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - clear text input field for filter to quickly update current log output.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+C\033[0m - exit.")
 	fmt.Fprintln(helpView, "\n    Supported formats for filtering by timestamp:")
 	fmt.Fprintln(helpView, "\n    "+app.wordColor("00:00"))
