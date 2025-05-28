@@ -41,7 +41,11 @@ else ifeq ($(ARCH),aarch64)
 endif
 
 build:
-	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -o lazyjournal
+	@CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -o lazyjournal
+
+run: build
+	@./lazyjournal
+	@rm ./lazyjournal
 
 BINPATH := $(HOME)/.local/bin
 
