@@ -19,25 +19,16 @@
       "args": ["-t", "200000", "-u", "10"]
     },
     {
-      "name": "Only streams",
+      "name": "Disable autoupdate",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
-      "args": ["-o"]
+      "args": ["-e"]
     },
     {
-      "name": "Disable timestamp",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceFolder}/main.go",
-      "console": "integratedTerminal",
-      "args": ["-s"]
-    },
-    {
-      "name": "Disable color",
+      "name": "Disable coloring",
       "type": "go",
       "request": "launch",
       "mode": "debug",
@@ -46,13 +37,31 @@
       "args": ["-d"]
     },
     {
-      "name": "Disable mouse",
+      "name": "Disable mouse control",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
       "args": ["-m"]
+    },
+    {
+      "name": "Docker disable timestamp",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-s"]
+    },
+    {
+      "name": "Docker only stream",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-o"]
     }
   ]
 }
