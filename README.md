@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="/img/logo.jpg">
+    <img src="/img/logo.png">
 </p>
 
 <p align="center">
@@ -8,7 +8,7 @@
     <a href="https://goreportcard.com/report/github.com/Lifailon/lazyjournal"><img src="https://goreportcard.com/badge/github.com/Lifailon/lazyjournal" alt="Go Report"></a>
     <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
     <a href="https://github.com/Lifailon/lazyjournal/blob/rsa/LICENSE"><img title="License"src="https://img.shields.io/github/license/Lifailon/lazyjournal?logo=readme&color=white"></a>
-    <!-- <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a> -->
+    <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a>
 <br>
     <a href="https://aur.archlinux.org/packages/lazyjournal"><img title="Arch Linux" src="https://img.shields.io/aur/version/lazyjournal?logo=arch-linux&color=blue&label=AUR"></a>
     <a href="https://anaconda.org/conda-forge/lazyjournal"><img title="Conda Forge" src="https://img.shields.io/conda/vn/conda-forge/lazyjournal?logo=anaconda&color=green&label=Conda"></a>
@@ -20,7 +20,20 @@ Terminal user interface for reading logs from `journald`, `auditd`, file system,
 
 This tool is inspired by and with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit). It is also included in [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging), [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
 
-![interface](/img/regex.png)
+![Regex filtering](/img/regex.png)
+
+
+<details>
+    <summary>Screenshots</summary>
+    <li>Filtering the file log using fuzzy search:</li>
+    <img src="./img/fuzzy.jpg" alt="Filtering the file log using fuzzy search">
+    <li>Filtering by timestamp for ssh log from systemd:</li>
+    <img src="./img/timestamp.jpg" alt="Filtering by timestamp for ssh log from systemd" />
+    <li>Disabling built-in timestamp in docker logs and filtering by stream:</li>
+    <img src="./img/docker.jpg" alt="Disabling built-in timestamp in docker logs and filtering by stream" />
+    <li>Demo file of built-in output coloring for the log:</li>
+    <img src="./img/coloring.jpg" alt="Demo file of built-in output coloring for the log" />
+</details>
 
 ## Features
 
@@ -35,7 +48,7 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
 - Lists all log files in users home directories, as well as descriptor log files used by processes.
 - Reading archive logs truncated during rotation (`gz`, `xz` and `bz2` formats), Packet Capture (`pcap` format) and Apple System Log (`asl` format).
 - Search and analyze all logs from remote hosts in one interface using [rsyslog](https://www.rsyslog.com) configuration.
-- Docker logs, including archive logs, timestamp and all streams.
+- Docker logs from the file system or stream, including build-in timestamps and filtering by stream.
 - Podman logs, without the need to run a background process (socket).
 - Kubernetes pods (need to configure a connection to the cluster via `kubectl` in advance).
 - Windows Event Logs via `PowerShell` and `wevtutil`, as well as application logs from Windows file system.
@@ -47,7 +60,7 @@ Supports 4 filtering modes:
 - **Default** - case sensitive exact search.
 - **Fuzzy** (like `fzf`) - custom inexact case-insensitive search (searches for all phrases separated by a space anywhere on a line).
 - **Regex** (like `grep`) - search with regular expression support, based on the built-in [regexp](https://pkg.go.dev/regexp) library, case-insensitive by default (in case a regular expression syntax error occurs, the input field will be highlighted in red).
-- **Timestamp** - filter `since` and/or `until` by date and time for `journald`, docker and podman logs from streams. This mode affects the loading of the log (thereby increasing performance) and can be used in conjunction with other filtering modes, so the current log should be reloaded by pressing `Enter` in the current input field.
+- **Timestamp** - filter `since` and/or `until` by date and time for `journald` and docker or podman logs in stream mode. This mode affects the loading of the log (thereby increasing performance) and can be used in conjunction with other filtering modes, so the current log should be reloaded by pressing `Enter` in the current input field.
 
 Supported formats for timestamp:
 
@@ -210,21 +223,24 @@ lazyjournal --version, -v              Show version
 lazyjournal --audit, -a                Show audit information
 lazyjournal --tail, -t                 Change the number of log lines to output (default: 50000, range: 200-200000)
 lazyjournal --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)
+lazyjournal --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)
 lazyjournal --disable-color, -d        Disable output coloring
+lazyjournal --disable-mouse, -m        Disable mouse control support
 lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs
-lazyjournal --command-color, -c        Coloring in command line mode
+lazyjournal --only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)
+lazyjournal --command-color, -c        ANSI coloring in command line mode
 lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode
 lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode
 ```
 
-Access to all system logs and containers may require elevated privileges for the current user. For example, if a user does not have permission to access the `/var/lib/docker/containers` directory, they will not be able to access history data from the time the container was started, but only from the time the containerization system was started, so the process of reading logs is different.
+Access to all system logs and containers may require elevated privileges for the current user. For example, if a user does not have read permission to the directory `/var/lib/docker/containers`, he will not be able to access all archived logs from the moment the container is started, but only from the moment the containerization system is started, so the process of reading logs is different. However, reading in streaming mode is faster than parsing json logs from the file system.
 
 Information in the subtitle of the `Logs` window:
 
-- `tail` - maximum number of log lines to load.
-- `update` - current output auto-update status (disabled when manually scrolling the output).
-- `interval` - auto-update interval for output in seconds (file logs are updated only when there are changes).
-- `color` - whether the output coloring mode is currently enabled or disabled.
+- `tail` - maximum number of log lines to output (affects log loading performance).
+- `auto-update (interval)` - current mode of operation for automatic display of new events (disabled by manually scrolling the log output or using the `Ctrl+U` keyboard shortcut) and update interval (file logs are updated only when there are changes).
+- `docker` - displays the current mode for loading the container log (stream mode from the docker api or in json format from the file system) and stream display mode (all, stdout or stderr only).
+- `color` - displays the status (enabled or disabled) of the output coloring for the log.
 
 ### Command-line mode
 
@@ -247,23 +263,28 @@ Mouse control is supported for window selection, history, list scrolling and his
 
 List of all used keyboard shortcuts:
 
-- `F1` - show help on hotkeys.
-- `Tab` - switch between windows.
+- `F1` or `?` - show help on hotkeys.
+- `Tab` - switch to next window.
 - `Shift+Tab` - return to previous window.
-- `Enter` - selection a journal from the list to display log output.
-- `Left/Right` - switch between journal lists in the selected window.
-- `<Up/PgUp>` and `<Down/PgDown>` - move up and down through all journal lists and log output, as well as changing the filtering mode in the filter window.
+- `/` - go to the filter window from the current list window or logs window.
+- `Esc` - clear text in the current filter window or close help.
+- `Enter` - load a log from the list window or return to the previous window from the filter window.
+- `<Left/h>` and `<Right/l>` - switch between journal lists in the selected window.
+- `<Up/PgUp/k>` and `<Down/PgDown/j>` - move up and down through all journal lists and log output, as well as changing the filtering mode in the filter window.
 - `<Shift/Alt>+<Up/Down>` - quickly move up and down through all journal lists and log output every `10` or `100` lines (`500` for log output).
-- `<Shift/Ctrl>+<U/D>` - quickly move up and down (alternative for macOS).
-- `Ctrl+A` or `Home` - go to top of log.
+- `<Shift/Alt/Ctrl>+<k/j>` - quickly move up and down (like Vim and alternative for macOS).
+- `Ctrl+A` or `Home` - go to the top of the log.
 - `Ctrl+E` or `End` - go to the end of the log.
 - `Alt+Left/Right` - change the number of log lines to output (default: `50000`, range: `200-200000`).
 - `Shift+Left/Right` - change the auto refresh interval of the log output (default: `5`, range: `2-10`).
-- `Ctrl+T` - enable or disable timestamp for Docker logs.
-- `Ctrl+Q` - enable or disable built-in output coloring.
-- `Ctrl+S` - enable or disable coloring via [tailspin](https://github.com/bensadeh/tailspin).
+- `Ctrl+D` - change read mode for docker logs (streams only or json from file system).
+- `Ctrl+S` - change streams display mode for docker logs (all, stdout or stderr only).
+- `Ctrl+T` - enable or disable built-in timestamp and stream type for docker logs.
+- `Ctrl+W` - enable or disable ANSI coloring for output.
+- `Ctrl+N` - enable or disable coloring via [tailspin](https://github.com/bensadeh/tailspin).
+- `Ctrl+U` - disable streaming of new events (log is loaded once without automatic update).
+- `Ctrl+Q` - update the current log output manually.
 - `Ctrl+R` - update all log lists.
-- `Ctrl+W` - clear text input field for filter to quickly update current log output.
 - `Ctrl+C` - exit.
 
 ## Build
