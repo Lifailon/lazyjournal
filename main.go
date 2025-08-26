@@ -57,8 +57,8 @@ type dockerLogLines struct {
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
 
-	sshMode    bool   // использовать вызов команд (exec.Command) через ssh
-	sshOptions string // опции для ssh подключения
+	sshMode    bool     // использовать вызов команд (exec.Command) через ssh
+	sshOptions []string // опции для ssh подключения
 
 	testMode            bool   // исключаем вызовы к gocui при тестирование функций
 	tailSpinMode        bool   // режим покраски через tailspin
@@ -196,7 +196,7 @@ func showHelp() {
 	fmt.Println("    lazyjournal --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
-	fmt.Println("    lazyjournal --ssh, -s        			Connect to remote host (format: username@hostname:port)")
+	fmt.Println("    lazyjournal --ssh, -s        			Connect to remote host (pass standard ssh options in quotes)")
 }
 
 func (app *App) showAudit() {
@@ -535,8 +535,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(commandFuzzy, "f", "", "Filtering using fuzzy search in command line mode")
 	commandRegex := flag.String("command-regex", "", "Filtering using regular expression (regexp) in command line mode")
 	flag.StringVar(commandRegex, "r", "", "Filtering using regular expression (regexp) in command line mode")
-	sshModeFlag := flag.String("ssh", "", "Connect to remote host (format: username@hostname:port)")
-	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (format: username@hostname:port)")
+	sshModeFlag := flag.String("ssh", "", "Connect to remote host (pass standard ssh options in quotes)")
+	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (pass standard ssh options in quotes)")
 
 	// Обработка аргументов
 	flag.Parse()
@@ -674,9 +674,11 @@ func runGoCui(mock bool) {
 		os.Exit(0)
 	}
 
+	// Включаем режим ssh и заполняем параметры (включая sudo и другие стандартные опции ssh подключения, например, порт)
 	if *sshModeFlag != "" {
 		app.sshMode = true
-		app.sshOptions = *sshModeFlag
+		options := strings.Split(*sshModeFlag, " ")
+		app.sshOptions = append(app.sshOptions, options...)
 		if app.getOS == "windows" {
 			app.getOS = "linux"
 		}
@@ -937,7 +939,7 @@ func (app *App) loadServices(journalName string) {
 	// Проверка, что в системе установлен/поддерживается утилита journalctl
 	var checkJournald *exec.Cmd
 	if app.sshMode {
-		checkJournald = exec.Command("ssh", app.sshOptions, "journalctl", "--version")
+		checkJournald = exec.Command("ssh", append(app.sshOptions, "journalctl", "--version")...)
 	} else {
 		checkJournald = exec.Command("journalctl", "--version")
 	}
@@ -961,7 +963,7 @@ func (app *App) loadServices(journalName string) {
 		// Получаем список всех юнитов в системе через systemctl в формате JSON
 		var unitsList *exec.Cmd
 		if app.sshMode {
-			unitsList = exec.Command("ssh", app.sshOptions, "systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--output=json") // "--type=service"
+			unitsList = exec.Command("ssh", append(app.sshOptions, "systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--output=json")...) // "--type=service"
 		} else {
 			unitsList = exec.Command("systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--output=json") // "--type=service"
 		}
@@ -1044,7 +1046,7 @@ func (app *App) loadServices(journalName string) {
 		// Получаем список правил
 		var auditRulesList *exec.Cmd
 		if app.sshMode {
-			auditRulesList = exec.Command("ssh", app.sshOptions, "auditctl", "-l")
+			auditRulesList = exec.Command("ssh", append(app.sshOptions, "auditctl", "-l")...)
 		} else {
 			auditRulesList = exec.Command("auditctl", "-l")
 		}
@@ -1106,7 +1108,7 @@ func (app *App) loadServices(journalName string) {
 		// Получаем список загрузок системы
 		var bootCmd *exec.Cmd
 		if app.sshMode {
-			bootCmd = exec.Command("ssh", app.sshOptions, "journalctl", "--list-boots", "-o", "json")
+			bootCmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "--list-boots", "-o", "json")...)
 		} else {
 			bootCmd = exec.Command("journalctl", "--list-boots", "-o", "json")
 		}
@@ -1205,7 +1207,7 @@ func (app *App) loadServices(journalName string) {
 	default:
 		var cmd *exec.Cmd
 		if app.sshMode {
-			cmd = exec.Command("ssh", app.sshOptions, "journalctl", "--no-pager", "-F", journalName)
+			cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "--no-pager", "-F", journalName)...)
 		} else {
 			cmd = exec.Command("journalctl", "--no-pager", "-F", journalName)
 		}
@@ -1478,7 +1480,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		}
 		var cmd *exec.Cmd
 		if app.sshMode {
-			cmd = exec.Command("ssh", app.sshOptions, "ausearch", "-k", serviceName, "--format", "interpret")
+			cmd = exec.Command("ssh", append(app.sshOptions, "ausearch", "-k", serviceName, "--format", "interpret")...)
 		} else {
 			cmd = exec.Command("ausearch", "-k", serviceName, "--format", "interpret")
 		}
@@ -1511,7 +1513,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		}
 		var cmd *exec.Cmd
 		if app.sshMode {
-			cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount)
+			cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount)...)
 		} else {
 			cmd = exec.Command("journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount)
 		}
@@ -1536,13 +1538,13 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if app.sshMode {
 			switch {
 			case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
-				cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)...)
 			case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
-				cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)...)
 			case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
-				cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)...)
 			default:
-				cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)...)
 			}
 		} else {
 			switch {
@@ -1643,7 +1645,7 @@ func (app *App) loadFiles(logPath string) {
 		// c - имя команды (процесса)
 		var cmd *exec.Cmd
 		if app.sshMode {
-			cmd = exec.Command("ssh", app.sshOptions, "lsof", "-Fn")
+			cmd = exec.Command("ssh", append(app.sshOptions, "lsof", "-Fn")...)
 		} else {
 			cmd = exec.Command("lsof", "-Fn")
 		}
@@ -1704,7 +1706,7 @@ func (app *App) loadFiles(logPath string) {
 				"-name", "*.pcapng.gz",
 			}
 			if app.sshMode {
-				sshArgs := []string{app.sshOptions}
+				sshArgs := app.sshOptions
 				sshArgs = append(sshArgs, "find")
 				sshArgs = append(sshArgs, args...)
 				cmd = exec.Command("ssh", sshArgs...)
@@ -1727,7 +1729,7 @@ func (app *App) loadFiles(logPath string) {
 				"-name", "*.pcapng.gz",
 			}
 			if app.sshMode {
-				sshArgs := []string{app.sshOptions}
+				sshArgs := app.sshOptions
 				sshArgs = append(sshArgs, "find")
 				sshArgs = append(sshArgs, args...)
 				cmd = exec.Command("ssh", sshArgs...)
@@ -1795,11 +1797,13 @@ func (app *App) loadFiles(logPath string) {
 		var cmd *exec.Cmd
 		if app.sshMode {
 			cmd = exec.Command(
-				"ssh", app.sshOptions,
-				"find", logPath,
-				"-type", "f",
-				"-name", "*.log", "-o",
-				"-name", "*.log.*",
+				"ssh",
+				append(app.sshOptions,
+					"find", logPath,
+					"-type", "f",
+					"-name", "*.log", "-o",
+					"-name", "*.log.*",
+				)...,
 			)
 		} else {
 			cmd = exec.Command(
@@ -1865,7 +1869,7 @@ func (app *App) loadFiles(logPath string) {
 			")",
 		}
 		if app.sshMode {
-			sshArgs := []string{app.sshOptions}
+			sshArgs := app.sshOptions
 			sshArgs = append(sshArgs, "find")
 			sshArgs = append(sshArgs, args...)
 			cmd = exec.Command("ssh", sshArgs...)
@@ -1906,7 +1910,7 @@ func (app *App) loadFiles(logPath string) {
 			"-name", "*.pcapng.gz",
 		}
 		if app.sshMode {
-			sshArgs := []string{app.sshOptions}
+			sshArgs := app.sshOptions
 			sshArgs = append(sshArgs, "find")
 			sshArgs = append(sshArgs, args...)
 			cmdRootDir = exec.Command("ssh", sshArgs...)
@@ -1927,13 +1931,54 @@ func (app *App) loadFiles(logPath string) {
 			vError.Highlight = true
 		}
 	}
-	// Карта для уникальных названий файлов
-	serviceMap := make(map[string]bool)
-	// Читаем вывод построчно
+	// Массив путей
+	var logFullPaths []string
+	// Читаем вывод построчно и заполняем массив путей
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
-		// Получаем строку полного пути (/var/log/ or /home/)
-		logFullPath := scanner.Text()
+		logFullPaths = append(logFullPaths, scanner.Text())
+	}
+	// Аргументы для команды stats
+	// Ключ -L для перехода по символическим ссылкам для получения информации о целевых файлах (для проверки доступа)
+	// Форматирование вывода (пример вывода: /var/log/syslog|8744995|1756116219)
+	var stat *exec.Cmd
+	statArgs := []string{"-L", "-c", "'%n|%s|%Y'"}
+	statArgs = append(statArgs, logFullPaths...)
+	// Выполняем команду stat (один раз для всех путей)
+	if app.sshMode {
+		sshArgs := app.sshOptions
+		sshArgs = append(sshArgs, "stat")
+		sshArgs = append(sshArgs, statArgs...)
+		stat = exec.Command("ssh", sshArgs...)
+	} else {
+		stat = exec.Command("stat", statArgs...)
+	}
+	// Игнорируем ошибки (пропускаем файлы, к которым нет доступа)
+	statOutput, _ := stat.Output()
+	// Стркутура вывода
+	statResults := make(map[string]struct {
+		size int64
+		time int64
+	})
+	// Заполняем структуру результатами команды stat
+	scannerStat := bufio.NewScanner(strings.NewReader(string(statOutput)))
+	for scannerStat.Scan() {
+		line := scannerStat.Text()
+		parts := strings.Split(line, "|")
+		if len(parts) == 3 {
+			filePath := parts[0]
+			size, _ := strconv.ParseInt(parts[1], 10, 64)
+			modTime, _ := strconv.ParseInt(parts[2], 10, 64)
+			statResults[filePath] = struct {
+				size int64
+				time int64
+			}{size, modTime}
+		}
+	}
+	// Карта для уникальных названий файлов
+	serviceMap := make(map[string]bool)
+	// Основной цикл
+	for _, logFullPath := range logFullPaths {
 		// Удаляем префикс пути и расширение файла в конце
 		logName := logFullPath
 		if logPath != "descriptor" {
@@ -1956,51 +2001,22 @@ func (app *App) loadFiles(logPath string) {
 			logName = "\x1b[0;33m" + firstWord + "\033[0m" + ": " + lastWord
 		}
 		// Получаем информацию о файле
-		var formattedDate string
-		if app.sshMode {
-			// Команда получения информации о файле через команду stat с форматированием (размер в байтах и время изменения файла в unix timestamp)
-			statCmd := fmt.Sprintf("stat -c '%%s %%Y' \"%s\"", logFullPath)
-			cmd := exec.Command("ssh", app.sshOptions, statCmd)
-			statOutput, statErr := cmd.Output()
-			// Пропускаем файл, если к нему нет доступа (актуально для статических файлов из logPath)
-			if statErr != nil {
-				continue
-			}
-			// Парсим вывод команды stat
-			statInfo := strings.TrimSpace(string(statOutput))
-			statParts := strings.Split(statInfo, " ")
-			// Проверяем, что было получено оба значения или пропускаем файл
-			if len(statParts) < 2 {
-				continue
-			}
-			// Проверяем, что файл не пустой
-			fileSize, err := strconv.ParseInt(statParts[0], 10, 64)
-			if err != nil || fileSize == 0 {
-				continue
-			}
-			// Получаем дату изменения
-			modTimeUnix, err := strconv.ParseInt(statParts[1], 10, 64)
-			if err != nil {
-				continue
-			}
-			modTime := time.Unix(modTimeUnix, 0)
-			// Форматирование даты в формат DD.MM.YYYY
-			formattedDate = modTime.Format("02.01.2006")
-		} else {
-			fileInfo, err := os.Stat(logFullPath)
-			// Пропускаем файл, если к нему нет доступа
-			if err != nil {
-				continue
-			}
-			// Проверяем, что файл не пустой
-			if fileInfo.Size() == 0 {
-				continue
-			}
-			// Получаем дату изменения
-			modTime := fileInfo.ModTime()
-			formattedDate = modTime.Format("02.01.2006")
+		// fileInfo, err := os.Stat(logFullPath)
+		fileInfo, exists := statResults[logFullPath]
+		// Пропускаем файл, если он не найден в результатах
+		if !exists {
+			continue
 		}
-		// Проверяем, что полного пути до файла еще нет в списке
+		// Пропускаем пустой файл
+		if fileInfo.size == 0 {
+			continue
+		}
+		// Получаем дату изменения
+		// modTime := fileInfo.ModTime()
+		modTime := time.Unix(fileInfo.time, 0)
+		// Форматирование даты в формат DD.MM.YYYY
+		formattedDate := modTime.Format("02.01.2006")
+		// Проверяем, что полного пути до файла еще нет в карте
 		if logName != "" && !serviceMap[logFullPath] {
 			// Добавляем путь в массив для проверки уникальных путей
 			serviceMap[logFullPath] = true
@@ -2008,7 +2024,7 @@ func (app *App) loadFiles(logPath string) {
 			if logPath == "descriptor" {
 				var cmd *exec.Cmd
 				if app.sshMode {
-					cmd = exec.Command("ssh", app.sshOptions, "lsof", "-Fc", logFullPath)
+					cmd = exec.Command("ssh", append(app.sshOptions, "lsof", "-Fc", logFullPath)...)
 				} else {
 					cmd = exec.Command("lsof", "-Fc", logFullPath)
 				}
@@ -2051,16 +2067,16 @@ func (app *App) loadFiles(logPath string) {
 func (app *App) loadWinFiles(logPath string) {
 	app.logfiles = nil
 	// Определяем путь по параметру
-	switch {
-	case logPath == "ProgramFiles":
+	switch logPath {
+	case "ProgramFiles":
 		logPath = app.systemDisk + ":\\Program Files"
-	case logPath == "ProgramFiles86":
+	case "ProgramFiles86":
 		logPath = app.systemDisk + ":\\Program Files (x86)"
-	case logPath == "ProgramData":
+	case "ProgramData":
 		logPath = app.systemDisk + ":\\ProgramData"
-	case logPath == "AppDataLocal":
+	case "AppDataLocal":
 		logPath = app.systemDisk + ":\\Users\\" + app.userName + "\\AppData\\Local"
-	case logPath == "AppDataRoaming":
+	case "AppDataRoaming":
 		logPath = app.systemDisk + ":\\Users\\" + app.userName + "\\AppData\\Roaming"
 	}
 	// Ищем файлы с помощью WalkDir
@@ -2345,11 +2361,16 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 			}
 			app.currentLogLines = strings.Split(string(decodedOutput), "\n")
 		} else {
+			var cmd *exec.Cmd
 			// Читаем логи в системах UNIX (Linux/Darwin/*BSD)
 			switch {
 			// Читаем файлы в формате ASL (Apple System Log)
 			case strings.HasSuffix(logFullPath, "asl"):
-				cmd := exec.Command("syslog", "-f", logFullPath)
+				if app.sshMode {
+					cmd = exec.Command("ssh", append(app.sshOptions, "syslog", "-f", logFullPath)...)
+				} else {
+					cmd = exec.Command("syslog", "-f", logFullPath)
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -2363,7 +2384,11 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				app.currentLogLines = strings.Split(string(output), "\n")
 			// Читаем журналы Packet Capture в формате pcap/pcapng
 			case strings.HasSuffix(logFullPath, "pcap") || strings.HasSuffix(logFullPath, "pcapng"):
-				cmd := exec.Command("tcpdump", "-n", "-r", logFullPath)
+				if app.sshMode {
+					cmd = exec.Command("ssh", append(app.sshOptions, "tcpdump", "-n", "-r", logFullPath)...)
+				} else {
+					cmd = exec.Command("tcpdump", "-n", "-r", logFullPath)
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -2377,7 +2402,11 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				app.currentLogLines = strings.Split(string(output), "\n")
 			// Packet Filter (PF) Firewall OpenBSD
 			case strings.HasSuffix(logFullPath, "pflog"):
-				cmd := exec.Command("tcpdump", "-e", "-n", "-r", logFullPath)
+				if app.sshMode {
+					cmd = exec.Command("ssh", append(app.sshOptions, "tcpdump", "-e", "-n", "-r", logFullPath)...)
+				} else {
+					cmd = exec.Command("tcpdump", "-e", "-n", "-r", logFullPath)
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -2399,7 +2428,12 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				}
 				// Удаляем временный файл после обработки
 				defer os.Remove(tmpFile.Name())
-				cmdUnzip := exec.Command(unpacker, "-dc", logFullPath)
+				var cmdUnzip *exec.Cmd
+				if app.sshMode {
+					cmdUnzip = exec.Command("ssh", append(app.sshOptions, unpacker, "-dc", logFullPath)...)
+				} else {
+					cmdUnzip = exec.Command(unpacker, "-dc", logFullPath)
+				}
 				cmdUnzip.Stdout = tmpFile
 				if err := cmdUnzip.Start(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
@@ -2421,7 +2455,12 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					return
 				}
 				// Создаем команду для tcpdump
-				cmdTcpdump := exec.Command("tcpdump", "-n", "-r", tmpFile.Name())
+				var cmdTcpdump *exec.Cmd
+				if app.sshMode {
+					cmdTcpdump = exec.Command("ssh", append(app.sshOptions, "tcpdump", "-n", "-r", tmpFile.Name())...)
+				} else {
+					cmdTcpdump = exec.Command("tcpdump", "-n", "-r", tmpFile.Name())
+				}
 				tcpdumpOut, err := cmdTcpdump.StdoutPipe()
 				if err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
@@ -2467,8 +2506,15 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				case strings.HasSuffix(logFullPath, ".bz2"):
 					unpacker = "bzip2"
 				}
-				cmdUnzip := exec.Command(unpacker, "-dc", logFullPath)
-				cmdTail := exec.Command("tail", "-n", app.logViewCount)
+				var cmdUnzip *exec.Cmd
+				var cmdTail *exec.Cmd
+				if app.sshMode {
+					cmdUnzip = exec.Command("ssh", append(app.sshOptions, unpacker, "-dc", logFullPath)...)
+					cmdTail = exec.Command("ssh", append(app.sshOptions, "tail", "-n", app.logViewCount)...)
+				} else {
+					cmdUnzip = exec.Command(unpacker, "-dc", logFullPath)
+					cmdTail = exec.Command("tail", "-n", app.logViewCount)
+				}
 				pipe, err := cmdUnzip.StdoutPipe()
 				if err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
@@ -2523,7 +2569,11 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				app.currentLogLines = strings.Split(string(output), "\n")
 			// Читаем бинарные файлы с помощью last для wtmp, а также utmp (OpenBSD) и utx.log (FreeBSD)
 			case strings.Contains(logFullPath, "wtmp") || strings.Contains(logFullPath, "utmp") || strings.Contains(logFullPath, "utx.log"):
-				cmd := exec.Command("last", "-f", logFullPath)
+				if app.sshMode {
+					cmd = exec.Command("ssh", append(app.sshOptions, "last", "-f", logFullPath)...)
+				} else {
+					cmd = exec.Command("last", "-f", logFullPath)
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -2548,7 +2598,11 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				app.currentLogLines = filteredLines
 			// lastb for btmp
 			case strings.Contains(logFullPath, "btmp"):
-				cmd := exec.Command("lastb", "-f", logFullPath)
+				if app.sshMode {
+					cmd = exec.Command("ssh", append(app.sshOptions, "lastb", "-f", logFullPath)...)
+				} else {
+					cmd = exec.Command("lastb", "-f", logFullPath)
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -2570,7 +2624,11 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				app.currentLogLines = filteredLines
 			// Выводим содержимое из команды lastlog
 			case strings.HasSuffix(logFullPath, "lastlog"):
-				cmd := exec.Command("lastlog")
+				if app.sshMode {
+					cmd = exec.Command("ssh", append(app.sshOptions, "lastlog")...)
+				} else {
+					cmd = exec.Command("lastlog")
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -2581,7 +2639,11 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				app.currentLogLines = strings.Split(string(output), "\n")
 			// lastlogin for FreeBSD
 			case strings.HasSuffix(logFullPath, "lastlogin"):
-				cmd := exec.Command("lastlogin")
+				if app.sshMode {
+					cmd = exec.Command("ssh", append(app.sshOptions, "lastlogin")...)
+				} else {
+					cmd = exec.Command("lastlogin")
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -2591,7 +2653,11 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				}
 				app.currentLogLines = strings.Split(string(output), "\n")
 			default:
-				cmd := exec.Command("tail", "-n", app.logViewCount, logFullPath)
+				if app.sshMode {
+					cmd = exec.Command("ssh", append(app.sshOptions, "tail", "-n", app.logViewCount, logFullPath)...)
+				} else {
+					cmd = exec.Command("tail", "-n", app.logViewCount, logFullPath)
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
