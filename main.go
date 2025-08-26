@@ -57,6 +57,9 @@ type dockerLogLines struct {
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
 
+	sshMode    bool   // использовать вызов команд (exec.Command) через ssh
+	sshOptions string // опции для ssh подключения
+
 	testMode            bool   // исключаем вызовы к gocui при тестирование функций
 	tailSpinMode        bool   // режим покраски через tailspin
 	tailSpinBinName     string // название исполняемого файла (tailspin/tspin)
@@ -189,10 +192,11 @@ func showHelp() {
 	fmt.Println("    lazyjournal --disable-color, -d        Disable output coloring")
 	fmt.Println("    lazyjournal --disable-mouse, -m        Disable mouse control support")
 	fmt.Println("    lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs")
-	fmt.Println("    lazyjournal --only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)")
+	fmt.Println("    lazyjournal --only-stream, -p          Force reading of docker container logs in stream mode (by default from the file system)")
 	fmt.Println("    lazyjournal --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
+	fmt.Println("    lazyjournal --ssh, -s        			Connect to remote host (format: username@hostname:port)")
 }
 
 func (app *App) showAudit() {
@@ -459,6 +463,7 @@ var g *gocui.Gui
 func runGoCui(mock bool) {
 	// Инициализация значений по умолчанию + компиляция регулярных выражений для покраски
 	app := &App{
+		sshMode:                      false,
 		testMode:                     false,
 		tailSpinMode:                 false,
 		colorMode:                    true,
@@ -521,7 +526,7 @@ func runGoCui(mock bool) {
 	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse control support")
 	flag.BoolVar(disableMouse, "m", false, "Disable mouse control support")
 	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for docker logs")
-	flag.BoolVar(disableTimeStamp, "s", false, "Disable timestamp for docker logs")
+	flag.BoolVar(disableTimeStamp, "p", false, "Disable timestamp for docker logs")
 	dockerStreamFlag := flag.Bool("only-stream", false, "Force reading of docker container logs in stream mode (by default from the file system)")
 	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of docker container logs in stream mode (by default from the file system)")
 	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
@@ -530,6 +535,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(commandFuzzy, "f", "", "Filtering using fuzzy search in command line mode")
 	commandRegex := flag.String("command-regex", "", "Filtering using regular expression (regexp) in command line mode")
 	flag.StringVar(commandRegex, "r", "", "Filtering using regular expression (regexp) in command line mode")
+	sshModeFlag := flag.String("ssh", "", "Connect to remote host (format: username@hostname:port)")
+	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (format: username@hostname:port)")
 
 	// Обработка аргументов
 	flag.Parse()
@@ -665,6 +672,14 @@ func runGoCui(mock bool) {
 		}
 		app.commandLineRegex(regex)
 		os.Exit(0)
+	}
+
+	if *sshModeFlag != "" {
+		app.sshMode = true
+		app.sshOptions = *sshModeFlag
+		if app.getOS == "windows" {
+			app.getOS = "linux"
+		}
 	}
 
 	// Создаем GUI
@@ -920,7 +935,12 @@ func parseDateFromName(name string) time.Time {
 func (app *App) loadServices(journalName string) {
 	app.journals = nil
 	// Проверка, что в системе установлен/поддерживается утилита journalctl
-	checkJournald := exec.Command("journalctl", "--version")
+	var checkJournald *exec.Cmd
+	if app.sshMode {
+		checkJournald = exec.Command("ssh", app.sshOptions, "journalctl", "--version")
+	} else {
+		checkJournald = exec.Command("journalctl", "--version")
+	}
 	// Проверяем на ошибки (очищаем список служб, отключаем курсор и выводим ошибку)
 	_, err := checkJournald.Output()
 	if err != nil && !app.testMode {
@@ -939,7 +959,12 @@ func (app *App) loadServices(journalName string) {
 	// Services list from systemd
 	case journalName == "services":
 		// Получаем список всех юнитов в системе через systemctl в формате JSON
-		unitsList := exec.Command("systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--output=json") // "--type=service"
+		var unitsList *exec.Cmd
+		if app.sshMode {
+			unitsList = exec.Command("ssh", app.sshOptions, "systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--output=json") // "--type=service"
+		} else {
+			unitsList = exec.Command("systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--output=json") // "--type=service"
+		}
 		output, err := unitsList.Output()
 		if !app.testMode {
 			if err != nil {
@@ -1017,7 +1042,12 @@ func (app *App) loadServices(journalName string) {
 	// Audit rules keys from auditd
 	case journalName == "auditd":
 		// Получаем список правил
-		auditRulesList := exec.Command("auditctl", "-l")
+		var auditRulesList *exec.Cmd
+		if app.sshMode {
+			auditRulesList = exec.Command("ssh", app.sshOptions, "auditctl", "-l")
+		} else {
+			auditRulesList = exec.Command("auditctl", "-l")
+		}
 		output, err := auditRulesList.Output()
 		// Проверяем, что auditd установлен и на ошибку доступа
 		if !app.testMode {
@@ -1074,7 +1104,12 @@ func (app *App) loadServices(journalName string) {
 	// Boots list from journald
 	case journalName == "kernel":
 		// Получаем список загрузок системы
-		bootCmd := exec.Command("journalctl", "--list-boots", "-o", "json")
+		var bootCmd *exec.Cmd
+		if app.sshMode {
+			bootCmd = exec.Command("ssh", app.sshOptions, "journalctl", "--list-boots", "-o", "json")
+		} else {
+			bootCmd = exec.Command("journalctl", "--list-boots", "-o", "json")
+		}
 		bootOutput, err := bootCmd.Output()
 		if !app.testMode {
 			if err != nil {
@@ -1168,7 +1203,12 @@ func (app *App) loadServices(journalName string) {
 		})
 	// Journals list from journald
 	default:
-		cmd := exec.Command("journalctl", "--no-pager", "-F", journalName)
+		var cmd *exec.Cmd
+		if app.sshMode {
+			cmd = exec.Command("ssh", app.sshOptions, "journalctl", "--no-pager", "-F", journalName)
+		} else {
+			cmd = exec.Command("journalctl", "--no-pager", "-F", journalName)
+		}
 		output, err := cmd.Output()
 		if !app.testMode {
 			if err != nil {
@@ -1390,7 +1430,7 @@ func (app *App) selectService(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-// Функция для загрузки записей журнала выбранной службы через journalctl.
+// Функция для загрузки записей журнала выбранной службы через journalctl
 // Второй параметр для обнолвения позиции делимитра нового вывода лога а также сброса автоскролл
 func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 	app.debugStartTime = time.Now()
@@ -1436,7 +1476,12 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		} else {
 			serviceName = app.lastBootId
 		}
-		cmd := exec.Command("ausearch", "-k", serviceName, "--format", "interpret")
+		var cmd *exec.Cmd
+		if app.sshMode {
+			cmd = exec.Command("ssh", app.sshOptions, "ausearch", "-k", serviceName, "--format", "interpret")
+		} else {
+			cmd = exec.Command("ausearch", "-k", serviceName, "--format", "interpret")
+		}
 		output, err = cmd.Output()
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
@@ -1464,7 +1509,12 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		} else {
 			boot_id = app.lastBootId
 		}
-		cmd := exec.Command("journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount)
+		var cmd *exec.Cmd
+		if app.sshMode {
+			cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount)
+		} else {
+			cmd = exec.Command("journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount)
+		}
 		output, err = cmd.Output()
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
@@ -1483,15 +1533,28 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			serviceName = ansiEscape.ReplaceAllString(serviceName, "")
 		}
 		var cmd *exec.Cmd
-		switch {
-		case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
-			cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)
-		case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
-			cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)
-		case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
-			cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)
-		default:
-			cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)
+		if app.sshMode {
+			switch {
+			case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+				cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)
+			case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+				cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)
+			case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+				cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)
+			default:
+				cmd = exec.Command("ssh", app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)
+			}
+		} else {
+			switch {
+			case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)
+			case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)
+			case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)
+			default:
+				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)
+			}
 		}
 		output, err = cmd.Output()
 		if err != nil && !app.testMode {
@@ -1578,7 +1641,12 @@ func (app *App) loadFiles(logPath string) {
 	case logPath == "descriptor":
 		// n - имя файла (путь)
 		// c - имя команды (процесса)
-		cmd := exec.Command("lsof", "-Fn")
+		var cmd *exec.Cmd
+		if app.sshMode {
+			cmd = exec.Command("ssh", app.sshOptions, "lsof", "-Fn")
+		} else {
+			cmd = exec.Command("lsof", "-Fn")
+		}
 		// Подавить вывод ошибок при отсутствиее прав доступа (opendir: Permission denied)
 		cmd.Stderr = nil
 		output, _ = cmd.Output()
@@ -1622,8 +1690,8 @@ func (app *App) loadFiles(logPath string) {
 		var cmd *exec.Cmd
 		// Загрузка системных журналов для MacOS
 		if app.getOS == "darwin" {
-			cmd = exec.Command(
-				"find", logPath, "/Library/Logs",
+			args := []string{
+				logPath, "/Library/Logs",
 				"-type", "f",
 				"-name", "*.asl", "-o",
 				"-name", "*.log", "-o",
@@ -1634,11 +1702,19 @@ func (app *App) loadFiles(logPath string) {
 				"-name", "*.pcap.gz", "-o",
 				"-name", "*.pcapng", "-o",
 				"-name", "*.pcapng.gz",
-			)
+			}
+			if app.sshMode {
+				sshArgs := []string{app.sshOptions}
+				sshArgs = append(sshArgs, "find")
+				sshArgs = append(sshArgs, args...)
+				cmd = exec.Command("ssh", sshArgs...)
+			} else {
+				cmd = exec.Command("find", args...)
+			}
 		} else {
 			// Загрузка системных журналов для Linux: все файлы, которые содержат log в расширение или названии (архивы включительно), а также расширение с цифрой (архивные) и pcap/pcapng
-			cmd = exec.Command(
-				"find", logPath,
+			args := []string{
+				logPath,
 				"-type", "f",
 				"-name", "*.log", "-o",
 				"-name", "*log*", "-o",
@@ -1649,7 +1725,15 @@ func (app *App) loadFiles(logPath string) {
 				"-name", "*.pcap.gz", "-o",
 				"-name", "*.pcapng", "-o",
 				"-name", "*.pcapng.gz",
-			)
+			}
+			if app.sshMode {
+				sshArgs := []string{app.sshOptions}
+				sshArgs = append(sshArgs, "find")
+				sshArgs = append(sshArgs, args...)
+				cmd = exec.Command("ssh", sshArgs...)
+			} else {
+				cmd = exec.Command("find", args...)
+			}
 		}
 		output, _ = cmd.Output()
 		// Преобразуем вывод команды в строку и делим на массив строк
@@ -1709,12 +1793,22 @@ func (app *App) loadFiles(logPath string) {
 		}
 	case logPath == "/opt/":
 		var cmd *exec.Cmd
-		cmd = exec.Command(
-			"find", logPath,
-			"-type", "f",
-			"-name", "*.log", "-o",
-			"-name", "*.log.*",
-		)
+		if app.sshMode {
+			cmd = exec.Command(
+				"ssh", app.sshOptions,
+				"find", logPath,
+				"-type", "f",
+				"-name", "*.log", "-o",
+				"-name", "*.log.*",
+			)
+		} else {
+			cmd = exec.Command(
+				"find", logPath,
+				"-type", "f",
+				"-name", "*.log", "-o",
+				"-name", "*.log.*",
+			)
+		}
 		output, _ = cmd.Output()
 		files := strings.Split(strings.TrimSpace(string(output)), "\n")
 		if !app.testMode {
@@ -1747,8 +1841,9 @@ func (app *App) loadFiles(logPath string) {
 			logPath = "/Users/"
 		}
 		// Ищем файлы с помощью системной утилиты find
-		cmd := exec.Command(
-			"find", logPath,
+		var cmd *exec.Cmd
+		args := []string{
+			logPath,
 			"-type", "d",
 			"(",
 			"-name", "Library", "-o",
@@ -1768,7 +1863,15 @@ func (app *App) loadFiles(logPath string) {
 			"-name", "*.pcapng", "-o",
 			"-name", "*.pcapng.gz",
 			")",
-		)
+		}
+		if app.sshMode {
+			sshArgs := []string{app.sshOptions}
+			sshArgs = append(sshArgs, "find")
+			sshArgs = append(sshArgs, args...)
+			cmd = exec.Command("ssh", sshArgs...)
+		} else {
+			cmd = exec.Command("find", args...)
+		}
 		output, _ = cmd.Output()
 		files := strings.Split(strings.TrimSpace(string(output)), "\n")
 		if !app.testMode {
@@ -1792,15 +1895,24 @@ func (app *App) loadFiles(logPath string) {
 			}
 		}
 		// Получаем содержимое файлов из домашнего каталога пользователя root
-		cmdRootDir := exec.Command(
-			"find", "/root/",
+		var cmdRootDir *exec.Cmd
+		args = []string{
+			"/root/",
 			"-type", "f",
 			"-name", "*.log", "-o",
 			"-name", "*.pcap", "-o",
 			"-name", "*.pcap.gz", "-o",
 			"-name", "*.pcapng", "-o",
 			"-name", "*.pcapng.gz",
-		)
+		}
+		if app.sshMode {
+			sshArgs := []string{app.sshOptions}
+			sshArgs = append(sshArgs, "find")
+			sshArgs = append(sshArgs, args...)
+			cmdRootDir = exec.Command("ssh", sshArgs...)
+		} else {
+			cmdRootDir = exec.Command("find", args...)
+		}
 		outputRootDir, err := cmdRootDir.Output()
 		// Добавляем содержимое директории /root/ в общий массив, если есть доступ
 		if err == nil {
@@ -1815,10 +1927,12 @@ func (app *App) loadFiles(logPath string) {
 			vError.Highlight = true
 		}
 	}
+	// Карта для уникальных названий файлов
 	serviceMap := make(map[string]bool)
+	// Читаем вывод построчно
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
-		// Получаем строку полного пути
+		// Получаем строку полного пути (/var/log/ or /home/)
 		logFullPath := scanner.Text()
 		// Удаляем префикс пути и расширение файла в конце
 		logName := logFullPath
@@ -1842,28 +1956,62 @@ func (app *App) loadFiles(logPath string) {
 			logName = "\x1b[0;33m" + firstWord + "\033[0m" + ": " + lastWord
 		}
 		// Получаем информацию о файле
-		// cmd := exec.Command("bash", "-c", "stat --format='%y' /var/log/apache2/access.log | awk '{print $1}' | awk -F- '{print $3\".\"$2\".\"$1}'")
-		fileInfo, err := os.Stat(logFullPath)
-		if err != nil {
+		var formattedDate string
+		if app.sshMode {
+			// Команда получения информации о файле через команду stat с форматированием (размер в байтах и время изменения файла в unix timestamp)
+			statCmd := fmt.Sprintf("stat -c '%%s %%Y' \"%s\"", logFullPath)
+			cmd := exec.Command("ssh", app.sshOptions, statCmd)
+			statOutput, statErr := cmd.Output()
 			// Пропускаем файл, если к нему нет доступа (актуально для статических файлов из logPath)
-			continue
+			if statErr != nil {
+				continue
+			}
+			// Парсим вывод команды stat
+			statInfo := strings.TrimSpace(string(statOutput))
+			statParts := strings.Split(statInfo, " ")
+			// Проверяем, что было получено оба значения или пропускаем файл
+			if len(statParts) < 2 {
+				continue
+			}
+			// Проверяем, что файл не пустой
+			fileSize, err := strconv.ParseInt(statParts[0], 10, 64)
+			if err != nil || fileSize == 0 {
+				continue
+			}
+			// Получаем дату изменения
+			modTimeUnix, err := strconv.ParseInt(statParts[1], 10, 64)
+			if err != nil {
+				continue
+			}
+			modTime := time.Unix(modTimeUnix, 0)
+			// Форматирование даты в формат DD.MM.YYYY
+			formattedDate = modTime.Format("02.01.2006")
+		} else {
+			fileInfo, err := os.Stat(logFullPath)
+			// Пропускаем файл, если к нему нет доступа
+			if err != nil {
+				continue
+			}
+			// Проверяем, что файл не пустой
+			if fileInfo.Size() == 0 {
+				continue
+			}
+			// Получаем дату изменения
+			modTime := fileInfo.ModTime()
+			formattedDate = modTime.Format("02.01.2006")
 		}
-		// Проверяем, что файл не пустой
-		if fileInfo.Size() == 0 {
-			// Пропускаем пустой файл
-			continue
-		}
-		// Получаем дату изменения
-		modTime := fileInfo.ModTime()
-		// Форматирование даты в формат DD.MM.YYYY
-		formattedDate := modTime.Format("02.01.2006")
 		// Проверяем, что полного пути до файла еще нет в списке
 		if logName != "" && !serviceMap[logFullPath] {
 			// Добавляем путь в массив для проверки уникальных путей
 			serviceMap[logFullPath] = true
 			// Получаем имя процесса для файла дескриптора
 			if logPath == "descriptor" {
-				cmd := exec.Command("lsof", "-Fc", logFullPath)
+				var cmd *exec.Cmd
+				if app.sshMode {
+					cmd = exec.Command("ssh", app.sshOptions, "lsof", "-Fc", logFullPath)
+				} else {
+					cmd = exec.Command("lsof", "-Fc", logFullPath)
+				}
 				cmd.Stderr = nil
 				outputLsof, _ := cmd.Output()
 				processLines := strings.Split(strings.TrimSpace(string(outputLsof)), "\n")
@@ -3101,12 +3249,13 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 		case key == gocui.KeyArrowRight:
 			v.MoveCursor(1, 0)
 		}
-		if window == "logs" {
+		switch window {
+		case "logs":
 			// Обновляем текст в буфере
 			app.filterText = strings.TrimSpace(v.Buffer())
 			// Применяем функцию фильтрации к выводу записей журнала
 			app.applyFilter(true)
-		} else if window == "lists" {
+		case "lists":
 			app.filterListText = strings.TrimSpace(v.Buffer())
 			app.applyFilterList()
 		}
@@ -3135,7 +3284,8 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 		case key == gocui.KeyArrowRight:
 			v.MoveCursor(1, 0)
 		}
-		if window == "sinceFilter" {
+		switch window {
+		case "sinceFilter":
 			// Обновляем текст в буфере
 			app.sinceFilterText = strings.TrimSpace(v.Buffer())
 			// Если фильтр пустой, отключаем фильтрацию
@@ -3151,7 +3301,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				v.FrameColor = gocui.ColorRed
 				app.sinceTimestampFilterMode = false
 			}
-		} else if window == "untilFilter" {
+		case "untilFilter":
 			app.untilFilterText = strings.TrimSpace(v.Buffer())
 			switch {
 			case strings.TrimSpace(v.Buffer()) == "":
