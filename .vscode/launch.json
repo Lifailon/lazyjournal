@@ -62,6 +62,24 @@
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
       "args": ["-o"]
-    }
+    },
+    {
+      "name": "ssh mode",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-s", "192.168.3.105"]
+    },
+    {
+      "name": "sudo ssh mode",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-s", "192.168.3.105 sudo"]
+    },
   ]
 }
