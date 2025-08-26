@@ -8,7 +8,7 @@
     <a href="https://goreportcard.com/report/github.com/Lifailon/lazyjournal"><img src="https://goreportcard.com/badge/github.com/Lifailon/lazyjournal" alt="Go Report"></a>
     <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
     <a href="https://github.com/Lifailon/lazyjournal/blob/rsa/LICENSE"><img title="License"src="https://img.shields.io/github/license/Lifailon/lazyjournal?logo=readme&color=white"></a>
-    <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a>
+    <a href="https://github.com/avelino/awesome-go?tab=readme-ov-file#logging"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a>
 <br>
     <a href="https://aur.archlinux.org/packages/lazyjournal"><img title="Arch Linux" src="https://img.shields.io/aur/version/lazyjournal?logo=arch-linux&color=blue&label=AUR"></a>
     <a href="https://anaconda.org/conda-forge/lazyjournal"><img title="Conda Forge" src="https://img.shields.io/conda/vn/conda-forge/lazyjournal?logo=anaconda&color=green&label=Conda"></a>
@@ -16,12 +16,11 @@
     <a href="https://hub.docker.com/r/lifailon/lazyjournal"><img title="Docker Hub" src="https://img.shields.io/docker/image-size/lifailon/lazyjournal/latest?logo=docker&color=blue&label=Docker+Hub"></a>
 </p>
 
-Terminal user interface for reading logs from `journald`, `auditd`, file system, Docker containers, Podman and Kubernetes pods for quick viewing, coloring output and filtering with fuzzy find, regex support and timestamp. Written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
+Terminal user interface for reading logs from `journald`, `auditd`, file system, Docker (including Swarm) containers, Podman and Kubernetes pods with support for output coloring and multiple filtering modes. Written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
 
 This tool is inspired by and with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit). It is also included in [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging), [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
 
 ![Regex filtering](/img/regex.png)
-
 
 <details>
     <summary>Screenshots</summary>
@@ -40,17 +39,18 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
 - Simple installation, to run download one executable file without dependencies and settings.
 - Centralized search for the required journal by filtering all lists (log sources).
 - Streaming output of new events from the selected journal (like `tail`).
-- List of all units (`services`, `sockets`, etc.) with current running status via `systemctl` from `systemd`.
+- List of all units (`services`, `sockets`, etc.) with current running status from `systemd` to access their logs.
 - View all system and user journals via `journalctl` (tool for reading logs from [journald](https://github.com/systemd/systemd/tree/main/src/journal)).
 - List of all system boots for kernel log output.
 - List of audit rules from `auditd` for filtering by keys and viewing in `interpret` format.
 - File system logs such as for `Apache` or `Nginx`, as well as `syslog`, `messages`, etc. from `/var/log`.
 - Lists all log files in users home directories, as well as descriptor log files used by processes.
-- Reading archive logs truncated during rotation (`gz`, `xz` and `bz2` formats), Packet Capture (`pcap` format) and Apple System Log (`asl` format).
+- Reading archive logs truncated during rotation (`gz`, `xz` and `bz2` formats) and Packet Capture (`pcap` format).
+- Apple System Logs support (`asl` format).
 - Search and analyze all logs from remote hosts in one interface using [rsyslog](https://www.rsyslog.com) configuration.
-- Docker logs from the file system or stream, including build-in timestamps and filtering by stream.
+- Docker and Swarm logs from the file system or stream, including build-in timestamps and filtering by stream.
 - Podman logs, without the need to run a background process (socket).
-- Kubernetes pods (need to configure a connection to the cluster via `kubectl` in advance).
+- Kubernetes pods (you must first configure a connection to the cluster via `kubectl`).
 - Windows Event Logs via `PowerShell` and `wevtutil`, as well as application logs from Windows file system.
 
 ### Filtering
@@ -106,11 +106,12 @@ Run the command in the console to quickly install or update the stable version f
 curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh | bash
 ```
 
-This command will run a script that will download the latest executable from the GitHub repository into your current user's home directory along with other executables (or create a directory) and grant execution permission.
+> [!NOTE]
+> This command will run a script that downloads the latest version of the executable binary from the GitHub repository to the home directory along with other executable files for the current user (default path `~/.local/bin/`) and grants permission to execute it.
 
-### Debian / Ubuntu
+### Debian-based
 
-If you are using a Debian-based system, you can also use the `deb` package to manage installation and removal:
+If you are using Ubuntu or any other Debian-based system, you can also download the `deb` package to manage installation and removal:
 
 ```bash
 arch=$( [ "$(uname -m)" = "aarch64" ] && echo "arm64" || echo "amd64" )
@@ -172,6 +173,8 @@ docker exec -it lazyjournal lazyjournal
 
 The image is based on Debian with `systemd` and docker cli pre-installed. The necessary **read-only** permissions are already preset in `docker-compose` to support all log sources from the host system (review it to customize for your individual use).
 
+### Web mode
+
 Supports running in the Web interface via [ttyd](https://github.com/tsl0922/ttyd). To do this, edit the variables in the `.env` file:
 
 ```shell
@@ -204,9 +207,9 @@ To read logs, automatic detection of the following encodings is supported:
 - `UTF-16 without BOM`
 - `Windows-1251` by default
 
-### Go Package
+### Go package
 
-You can also use Go for install the dev version ([Go](https://go.dev/doc/install) must be installed in the system):
+You can also use Go to install ([Go](https://go.dev/doc/install) must be installed on the system):
 
 ```shell
 go install github.com/Lifailon/lazyjournal@latest
@@ -297,16 +300,13 @@ cd lazyjournal
 go run main.go
 ```
 
+> [!IMPORTANT]
+> The master branch is used for development, so it may not be stable when running from source, and is intended for testing new features before release.
+
 Use `make` to build the binary for the current system and platform:
 
 ```shell
 make build
-```
-
-Check the source code on the base linters using [golangci-lint](https://github.com/golangci/golangci-lint) (including all [critic](https://github.com/go-critic/go-critic) and severity high in [security](https://github.com/securego/gosec)):
-
-```shell
-make lint
 ```
 
 ## Testing
@@ -321,9 +321,14 @@ make test n=TestMockInterface
 make test-all
 ```
 
-The test coverage report using CI Actions for Linux, macOS and Windows systems is available on the [Wiki](https://github.com/Lifailon/lazyjournal/wiki) page.
+> [!NOTE]
+> The test coverage report using CI Actions for Linux, macOS and Windows systems is available on the [Wiki](https://github.com/Lifailon/lazyjournal/wiki) page. Testing on BSD-based systems is done in a home environment.
 
-Testing in BSD-based systems is done in a home environment using [usup](https://github.com/Lifailon/usup).
+Check the source code on the base linters using [golangci-lint](https://github.com/golangci/golangci-lint) (including all [critic](https://github.com/go-critic/go-critic) and severity high in [security](https://github.com/securego/gosec)):
+
+```shell
+make lint
+```
 
 ## Contributing
 
@@ -341,8 +346,6 @@ You can also upload the package yourself to any package manager you use and make
 - [Lnav](https://github.com/tstack/lnav) - The Logfile Navigator is a log file viewer for the terminal.
 - [TooLong](https://github.com/Textualize/toolong) - A terminal application to view, tail, merge, and search log files.
 - [Dozzle](https://github.com/amir20/dozzle) - A small lightweight application with a web based interface to monitor Docker logs.
-
-If you like using TUI tools, try [multranslate](https://github.com/Lifailon/multranslate) for translating text in multiple translators simultaneously and LLM, with support for translation history and automatic language detection.
 
 ## License
 
