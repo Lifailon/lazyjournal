@@ -1636,11 +1636,63 @@ func (app *App) loadWinEventLog(eventName string) (output []byte) {
 
 // ---------------------------------------- Filesystem ----------------------------------------
 
+// Базовая структура os.Stat
+type fileInfo struct {
+	name    string
+	size    int64
+	modTime time.Time
+}
+
+// Дочерние методы os.Stat
+func (fi *fileInfo) Name() string       { return fi.name }
+func (fi *fileInfo) Size() int64        { return fi.size }
+func (fi *fileInfo) ModTime() time.Time { return fi.modTime }
+func (fi *fileInfo) Mode() os.FileMode  { return 0644 }  // default rights
+func (fi *fileInfo) IsDir() bool        { return false } // only file
+func (fi *fileInfo) Sys() any           { return nil }
+
+// Имитация метода os.Stat через exec.Command
+func (app *App) statFile(path string) (os.FileInfo, error) {
+	if app.sshMode {
+		cmd := exec.Command("ssh", append(app.sshOptions, "stat", "-L", "-c", "'%n|%s|%Y'", path)...)
+		output, err := cmd.Output()
+		if err != nil {
+			return nil, err
+		}
+		// Парсим вывод stat
+		line := strings.TrimSpace(string(output))
+		parts := strings.Split(line, "|")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("invalid stat output: %s", line)
+		}
+		// Преобразуем размер и время
+		size, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		modTimeUnix, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		modTime := time.Unix(modTimeUnix, 0)
+		// Создаем кастомный FileInfo
+		return &fileInfo{
+			name:    parts[0],
+			size:    size,
+			modTime: modTime,
+		}, nil
+
+	} else {
+		// В локальном режиме возвращяем стандартный os.Stat
+		return os.Stat(path)
+	}
+}
+
 func (app *App) loadFiles(logPath string) {
 	app.logfiles = nil // сбрасываем (очищаем) массив перед загрузкой новых журналов
 	var output []byte
-	switch {
-	case logPath == "descriptor":
+	switch logPath {
+	case "descriptor":
 		// n - имя файла (путь)
 		// c - имя команды (процесса)
 		var cmd *exec.Cmd
@@ -1688,7 +1740,7 @@ func (app *App) loadFiles(logPath string) {
 				output = append(output, []byte(file+"\n")...)
 			}
 		}
-	case logPath == "/var/log/":
+	case "/var/log/":
 		var cmd *exec.Cmd
 		// Загрузка системных журналов для MacOS
 		if app.getOS == "darwin" {
@@ -1793,7 +1845,7 @@ func (app *App) loadFiles(logPath string) {
 		for _, path := range logPaths {
 			output = append([]byte(path), output...)
 		}
-	case logPath == "/opt/":
+	case "/opt/":
 		var cmd *exec.Cmd
 		if app.sshMode {
 			cmd = exec.Command(
@@ -2318,7 +2370,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 	if newUpdate {
 		app.lastLogPath = logFullPath
 		// Фиксируем новую дату изменения и размер для выбранного файла
-		fileInfo, err := os.Stat(logFullPath)
+		fileInfo, err := app.statFile(logFullPath)
 		if err != nil {
 			return
 		}
@@ -2330,7 +2382,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 	} else {
 		logFullPath = app.lastLogPath
 		// Проверяем дату изменения
-		fileInfo, err := os.Stat(logFullPath)
+		fileInfo, err := app.statFile(logFullPath)
 		if err != nil {
 			return
 		}
