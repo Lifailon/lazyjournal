@@ -196,7 +196,7 @@ func showHelp() {
 	fmt.Println("    lazyjournal --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
-	fmt.Println("    lazyjournal --ssh, -s        			Connect to remote host (pass standard ssh options in quotes)")
+	fmt.Println("    lazyjournal --ssh, -s                  Connect to remote host (format: username@hostname and standard options separated by space in quotes)")
 }
 
 func (app *App) showAudit() {
@@ -458,6 +458,17 @@ var (
 	reSpace = regexp.MustCompile(`\s+`)
 )
 
+// Определяем название удаленной системы
+func getOS(sshOptions []string) (string, error) {
+	cmd := exec.Command("ssh", append(sshOptions, "uname", "-s")...)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("%s %s", "Error connecting to", sshOptions[0])
+	} else {
+		return strings.ToLower(string(output)), nil
+	}
+}
+
 var g *gocui.Gui
 
 func runGoCui(mock bool) {
@@ -535,8 +546,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(commandFuzzy, "f", "", "Filtering using fuzzy search in command line mode")
 	commandRegex := flag.String("command-regex", "", "Filtering using regular expression (regexp) in command line mode")
 	flag.StringVar(commandRegex, "r", "", "Filtering using regular expression (regexp) in command line mode")
-	sshModeFlag := flag.String("ssh", "", "Connect to remote host (pass standard ssh options in quotes)")
-	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (pass standard ssh options in quotes)")
+	sshModeFlag := flag.String("ssh", "", "Connect to remote host (format: username@hostname and standard options separated by space in quotes)")
+	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (format: username@hostname and standard options separated by space in quotes)")
 
 	// Обработка аргументов
 	flag.Parse()
@@ -679,8 +690,12 @@ func runGoCui(mock bool) {
 		app.sshMode = true
 		options := strings.Split(*sshModeFlag, " ")
 		app.sshOptions = append(app.sshOptions, options...)
-		if app.getOS == "windows" {
-			app.getOS = "linux"
+		getOS, err := getOS(app.sshOptions)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		} else {
+			app.getOS = getOS
 		}
 	}
 
@@ -1693,8 +1708,6 @@ func (app *App) loadFiles(logPath string) {
 	var output []byte
 	switch logPath {
 	case "descriptor":
-		// n - имя файла (путь)
-		// c - имя команды (процесса)
 		var cmd *exec.Cmd
 		if app.sshMode {
 			cmd = exec.Command("ssh", append(app.sshOptions, "lsof", "-Fn")...)
