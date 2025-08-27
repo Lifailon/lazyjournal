@@ -1669,18 +1669,22 @@ func (fi *fileInfo) Sys() any           { return nil }
 // Имитация метода os.Stat через exec.Command
 func (app *App) statFile(path string) (os.FileInfo, error) {
 	if app.sshMode {
-		cmd := exec.Command("ssh", append(app.sshOptions, "stat", "-L", "-c", "'%n|%s|%Y'", path)...)
+		// Аргументы для команды stats. Ключи для перехода по символическим ссылкам
+		// для получения информации о целевых файлах (для проверки доступа) и форматирования вывода
+		statArgs := app.sshOptions
+		statArgs = append(statArgs, "stat", "-L", "-c", "'%n|%s|%Y'", path)
+		cmd := exec.Command("ssh", statArgs...)
 		output, err := cmd.Output()
 		if err != nil {
 			return nil, err
 		}
-		// Парсим вывод stat
+		// Парсим вывод stat (пример вывода: /var/log/syslog|8744995|1756116219)
 		line := strings.TrimSpace(string(output))
 		parts := strings.Split(line, "|")
 		if len(parts) != 3 {
 			return nil, fmt.Errorf("invalid stat output: %s", line)
 		}
-		// Преобразуем размер и время
+		// Преобразуем размер и время в int
 		size, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
 			return nil, err
@@ -1696,11 +1700,47 @@ func (app *App) statFile(path string) (os.FileInfo, error) {
 			size:    size,
 			modTime: modTime,
 		}, nil
-
 	} else {
 		// В локальном режиме возвращяем стандартный os.Stat
 		return os.Stat(path)
 	}
+}
+
+// Получение массива статистики по всем файлам
+func (app *App) statFiles(paths []string) (map[string]os.FileInfo, error) {
+	if len(paths) == 0 {
+		return make(map[string]os.FileInfo), nil
+	}
+	args := append(app.sshOptions, "stat", "-L", "-c", "'%n|%s|%Y'")
+	args = append(args, paths...)
+	cmd := exec.Command("ssh", args...)
+	output, _ := cmd.Output()
+	results := make(map[string]os.FileInfo)
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		parts := strings.Split(line, "|")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("invalid stat output: %s", line)
+		}
+		size, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		modTimeUnix, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		modTime := time.Unix(modTimeUnix, 0)
+		results[parts[0]] = &fileInfo{
+			name:    parts[0],
+			size:    size,
+			modTime: modTime,
+		}
+	}
+	return results, nil
 }
 
 func (app *App) loadFiles(logPath string) {
@@ -1996,51 +2036,14 @@ func (app *App) loadFiles(logPath string) {
 			vError.Highlight = true
 		}
 	}
-	// Массив путей
-	var logFullPaths []string
-	// Читаем вывод построчно и заполняем массив путей
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	for scanner.Scan() {
-		logFullPaths = append(logFullPaths, scanner.Text())
-	}
-	// Аргументы для команды stats
-	// Ключ -L для перехода по символическим ссылкам для получения информации о целевых файлах (для проверки доступа)
-	// Форматирование вывода (пример вывода: /var/log/syslog|8744995|1756116219)
-	var stat *exec.Cmd
-	statArgs := []string{"-L", "-c", "'%n|%s|%Y'"}
-	statArgs = append(statArgs, logFullPaths...)
-	// Выполняем команду stat (один раз для всех путей)
+	// Формируем массив путей
+	logFullPaths := strings.Split(strings.TrimSpace(string(output)), "\n")
+	// Получаем статистику по всем файлам одним вызовом в режиме ssh
+	var statFiles map[string]os.FileInfo
 	if app.sshMode {
-		sshArgs := app.sshOptions
-		sshArgs = append(sshArgs, "stat")
-		sshArgs = append(sshArgs, statArgs...)
-		stat = exec.Command("ssh", sshArgs...)
-	} else {
-		stat = exec.Command("stat", statArgs...)
+		statFiles, _ = app.statFiles(logFullPaths)
 	}
-	// Игнорируем ошибки (пропускаем файлы, к которым нет доступа)
-	statOutput, _ := stat.Output()
-	// Стркутура вывода
-	statResults := make(map[string]struct {
-		size int64
-		time int64
-	})
-	// Заполняем структуру результатами команды stat
-	scannerStat := bufio.NewScanner(strings.NewReader(string(statOutput)))
-	for scannerStat.Scan() {
-		line := scannerStat.Text()
-		parts := strings.Split(line, "|")
-		if len(parts) == 3 {
-			filePath := parts[0]
-			size, _ := strconv.ParseInt(parts[1], 10, 64)
-			modTime, _ := strconv.ParseInt(parts[2], 10, 64)
-			statResults[filePath] = struct {
-				size int64
-				time int64
-			}{size, modTime}
-		}
-	}
-	// Карта для уникальных названий файлов
+	// Карта уникальных путей
 	serviceMap := make(map[string]bool)
 	// Основной цикл
 	for _, logFullPath := range logFullPaths {
@@ -2066,22 +2069,33 @@ func (app *App) loadFiles(logPath string) {
 			logName = "\x1b[0;33m" + firstWord + "\033[0m" + ": " + lastWord
 		}
 		// Получаем информацию о файле
-		// fileInfo, err := os.Stat(logFullPath)
-		fileInfo, exists := statResults[logFullPath]
-		// Пропускаем файл, если он не найден в результатах
-		if !exists {
-			continue
+		var fileInfo os.FileInfo
+		var exists bool
+		var err error
+		if app.sshMode {
+			// Извлекаем статистику из массива
+			fileInfo, exists = statFiles[logFullPath]
+			// Пропускаем файл, если он не найден в результатах
+			if !exists {
+				continue
+			}
+		} else {
+			fileInfo, err = os.Stat(logFullPath)
+			if err != nil {
+				// Пропускаем файл, если к нему нет доступа (актуально для статических файлов из переменной logPath)
+				continue
+			}
 		}
-		// Пропускаем пустой файл
-		if fileInfo.size == 0 {
+		// Проверяем, что файл не пустой
+		if fileInfo.Size() == 0 {
+			// Пропускаем пустой файл
 			continue
 		}
 		// Получаем дату изменения
-		// modTime := fileInfo.ModTime()
-		modTime := time.Unix(fileInfo.time, 0)
+		modTime := fileInfo.ModTime()
 		// Форматирование даты в формат DD.MM.YYYY
 		formattedDate := modTime.Format("02.01.2006")
-		// Проверяем, что полного пути до файла еще нет в карте
+		// Проверяем, что полного пути до файла еще нет в списке
 		if logName != "" && !serviceMap[logFullPath] {
 			// Добавляем путь в массив для проверки уникальных путей
 			serviceMap[logFullPath] = true
