@@ -395,8 +395,8 @@ func (app *App) showAudit() {
 				csVersion = strings.Split(csVersion, "\n")[0]
 				auditText = append(auditText, "    version: "+csVersion)
 				cmd := exec.Command(
-					cs, "get", "pods", "-o",
-					"jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{'\\n'}{end}",
+					cs, "get", "pods", "-A",
+					"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{'\\n'}{end}",
 				)
 				_, err := cmd.Output()
 				if err == nil {
@@ -2117,6 +2117,13 @@ func (app *App) loadFiles(logPath string) {
 					}
 				}
 			}
+			// Выделение цветом подов и контейнеров k3s из файловой системы
+			if strings.HasPrefix(logName, "pods") {
+				logName = strings.Replace(logName, "pods", "\033[33mpod\033[0m", 1)
+			}
+			if strings.HasPrefix(logName, "containers") {
+				logName = strings.Replace(logName, "containers", "\033[32mcontainer\033[0m", 1)
+			}
 			// Добавляем в список
 			app.logfiles = append(app.logfiles, Logfile{
 				name: "[" + "\033[34m" + formattedDate + "\033[0m" + "] " + logName,
@@ -2863,13 +2870,13 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		// Получаем список подов из k8s
 		if app.sshMode {
 			cmd = exec.Command("ssh", append(app.sshOptions,
-				containerizationSystem, "get", "pods", "-o",
-				"'jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{'\\n'}{end}'",
+				containerizationSystem, "get", "pods", "-A",
+				"-o", "'jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{\"\\n\"}{end}'",
 			)...)
 		} else {
 			cmd = exec.Command(
-				containerizationSystem, "get", "pods", "-o",
-				"jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{'\\n'}{end}",
+				containerizationSystem, "get", "pods", "-A", // -A/--all-namespaces
+				"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{\"\\n\"}{end}",
 			)
 		}
 	} else {
@@ -2877,7 +2884,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		if app.sshMode {
 			cmd = exec.Command("ssh", append(app.sshOptions,
 				containerizationSystem, "ps", "-a",
-				"--format", "'{{.ID}} {{.Names}} {{.State}}'",
+				"--format", "'{{.ID}} {{.Names}} {{.State}}'", // добавляем кавычки для передаваемых через пробел параметров в ssh
 			)...)
 		} else {
 			cmd = exec.Command(
@@ -3202,7 +3209,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 		}
 	}
-	// Читаем лог через Docker cli (если файл не найден или к нему нет доступа) или Podman/k8s
+	// Читаем лог через docker cli (если файл не найден или к нему нет доступа) или podman/kubectl
 	if !readFileContainer || containerizationSystem == "podman" || containerizationSystem == "kubectl" {
 		// Извлекаем имя без статуса для k8s в containerId
 		if containerizationSystem == "kubectl" {
