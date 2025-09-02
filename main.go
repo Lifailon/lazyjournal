@@ -5231,10 +5231,6 @@ func (app *App) updateDelimiter(newUpdate bool) {
 
 // Функция для биндинга клавиш
 func (app *App) setupKeybindings() error {
-	// Ctrl+C для выхода из приложения
-	if err := app.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
-		return err
-	}
 	// Tab для переключения между окнами
 	if err := app.gui.SetKeybinding("", gocui.KeyTab, gocui.ModNone, app.nextView); err != nil {
 		return err
@@ -6225,7 +6221,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Очистка поля ввода для фильтрации списков или выход на Esc (#23)
+	// Exit
+	// Выход на Esc (#23) или очистка поля ввода для фильтрации списков
 	if err := app.gui.SetKeybinding("filterList", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.filterListText == "" {
 			return quit(g, v)
@@ -6266,7 +6263,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Очистка поля ввода для фильтрации вывода логов или выход на Esc (#23)
+	// Выход на Esc (#23) или очистка поля ввода для фильтрации логов
 	if err := app.gui.SetKeybinding("filter", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.filterText == "" {
 			return quit(g, v)
@@ -6287,6 +6284,67 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+	// Ctrl+C
+	if err := app.gui.SetKeybinding("filterList", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.filterListText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterListEditor(g)
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("services", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.filterListText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterListEditor(g)
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.filterListText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterListEditor(g)
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.filterListText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterListEditor(g)
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("filter", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.filterText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterEditor(g)
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.KeyCtrlC, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.filterText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterEditor(g)
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -6294,7 +6352,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 50
+	width, height := 108, 49
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -6323,7 +6381,6 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "\n    \033[32mTab\033[0m - switch to next window.")
 	fmt.Fprintln(helpView, "    \033[32mShift+Tab\033[0m - return to previous window.")
 	fmt.Fprintln(helpView, "    \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
-	fmt.Fprintln(helpView, "    \033[32mEsc\033[0m - clear text in the current filter window or close help.")
 	fmt.Fprintln(helpView, "    \033[32mEnter\033[0m - load a log from the list window or return to the previous window from the filter window.")
 	fmt.Fprintln(helpView, "    \033[32m<Left/h/[>\033[0m and \033[32m<Right/l/]>\033[0m - switch between journal lists in the selected window.")
 	fmt.Fprintln(helpView, "    \033[32m<Up/PgUp/k>\033[0m and \033[32m<Down/PgDown/j>\033[0m - move up and down through all journal lists and log output,")
@@ -6343,7 +6400,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32mCtrl+U\033[0m - disable streaming of new events (log is loaded once without automatic update).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - update the current log output manually.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+C/Esc\033[0m - exit.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+C/Esc\033[0m - clear input text in the filter window or exit.")
 	fmt.Fprintln(helpView, "\n    Supported formats for filtering by timestamp:")
 	fmt.Fprintln(helpView, "\n    "+app.wordColor("00:00"))
 	fmt.Fprintln(helpView, "    "+app.wordColor("00:00:00"))
