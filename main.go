@@ -42,8 +42,9 @@ type Logfile struct {
 }
 
 type DockerContainers struct {
-	name string
-	id   string
+	name      string
+	id        string
+	namespace string
 }
 
 // Структура для парсинга логов из docker cli
@@ -2871,12 +2872,12 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		if app.sshMode {
 			cmd = exec.Command("ssh", append(app.sshOptions,
 				containerizationSystem, "get", "pods", "-A",
-				"-o", "'jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{\"\\n\"}{end}'",
+				"-o", "'jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}'",
 			)...)
 		} else {
 			cmd = exec.Command(
 				containerizationSystem, "get", "pods", "-A", // -A/--all-namespaces
-				"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{\"\\n\"}{end}",
+				"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}",
 			)
 		}
 	} else {
@@ -2942,15 +2943,26 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		if idName != "" && !serviceMap[idName] {
 			serviceMap[idName] = true
 			containerStatus := parts[2]
-			if containerStatus == "running" || containerStatus == "Running" {
+			switch {
+			case strings.ToLower(containerStatus) == "running":
 				containerStatus = "\033[32m" + containerStatus + "\033[0m"
-			} else {
+			case strings.ToLower(containerStatus) == "succeeded":
+				containerStatus = "\033[33m" + containerStatus + "\033[0m"
+			default:
 				containerStatus = "\033[31m" + containerStatus + "\033[0m"
 			}
 			containerName := parts[1] + " (" + containerStatus + ")"
+			// Фиксируем название namespace для k8s
+			var namespace string
+			if containerizationSystem != "kubectl" || parts[3] == "" {
+				namespace = ""
+			} else {
+				namespace = parts[3]
+			}
 			app.dockerContainers = append(app.dockerContainers, DockerContainers{
-				name: containerName,
-				id:   parts[0],
+				name:      containerName,
+				id:        parts[0],
+				namespace: namespace,
 			})
 		}
 	}
@@ -3071,11 +3083,14 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		containerizationSystem = app.lastContainerizationSystem
 	}
 	var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	// Извлекаем id контейнера и namespace для подов k8s
 	var containerId string
+	var namespace string
 	for _, dockerContainer := range app.dockerContainers {
 		dockerContainerName := ansiEscape.ReplaceAllString(dockerContainer.name, "")
 		if dockerContainerName == containerName {
 			containerId = dockerContainer.id
+			namespace = dockerContainer.namespace
 		}
 	}
 	// Сохраняем id контейнера для автообновления при смене окна
@@ -3211,24 +3226,25 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	}
 	// Читаем лог через docker cli (если файл не найден или к нему нет доступа) или podman/kubectl
 	if !readFileContainer || containerizationSystem == "podman" || containerizationSystem == "kubectl" {
-		// Извлекаем имя без статуса для k8s в containerId
+		// Извлекаем имя без статуса в containerId для k8s
 		if containerizationSystem == "kubectl" {
 			parts := strings.Split(containerName, " (")
 			containerId = parts[0]
 		}
 		var cmd *exec.Cmd
-		// Формируем команду с нужными ключами
 		if containerizationSystem == "kubectl" {
+			// Формируем команду kubectl с нужными ключами
 			if app.sshMode {
 				cmd = exec.Command("ssh", append(app.sshOptions,
-					containerizationSystem, "logs", "--timestamps=true", "--tail", app.logViewCount, containerId,
+					containerizationSystem, "logs", "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
 				)...)
 			} else {
 				cmd = exec.Command(
-					containerizationSystem, "logs", "--timestamps=true", "--tail", app.logViewCount, containerId,
+					containerizationSystem, "logs", "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
 				)
 			}
 		} else {
+			// docker/podman cli
 			sinceFilterTextNotSpace := reSpace.ReplaceAllString(app.sinceFilterText, "T")
 			untilFilterTextNotSpace := reSpace.ReplaceAllString(app.untilFilterText, "T")
 			if app.sshMode {
