@@ -182,21 +182,22 @@ func showHelp() {
 	fmt.Println("If you have problems with the application, please open issue: https://github.com/Lifailon/lazyjournal/issues")
 	fmt.Println("")
 	fmt.Println("  Flags:")
-	fmt.Println("    lazyjournal                            Run interface")
-	fmt.Println("    lazyjournal --help, -h                 Show help")
-	fmt.Println("    lazyjournal --version, -v              Show version")
-	fmt.Println("    lazyjournal --audit, -a                Show audit information")
-	fmt.Println("    lazyjournal --tail, -t                 Change the number of log lines to output (default: 50000, range: 200-200000)")
-	fmt.Println("    lazyjournal --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
-	fmt.Println("    lazyjournal --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)")
-	fmt.Println("    lazyjournal --disable-color, -d        Disable output coloring")
-	fmt.Println("    lazyjournal --disable-mouse, -m        Disable mouse control support")
-	fmt.Println("    lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs")
-	fmt.Println("    lazyjournal --only-stream, -p          Force reading of docker container logs in stream mode (by default from the file system)")
-	fmt.Println("    lazyjournal --command-color, -c        ANSI coloring in command line mode")
-	fmt.Println("    lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
-	fmt.Println("    lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
-	fmt.Println("    lazyjournal --ssh, -s                  Connect to remote host (format: username@hostname and standard options separated by space in quotes)")
+	fmt.Println("    --help, -h                 Show help")
+	fmt.Println("    --version, -v              Show version")
+	fmt.Println("    --audit, -a                Show audit information")
+	fmt.Println("    --tail, -t                 Change the number of log lines to output (default: 50000, range: 200-200000)")
+	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
+	fmt.Println("    --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)")
+	fmt.Println("    --disable-color, -d        Disable output coloring")
+	fmt.Println("    --disable-mouse, -m        Disable mouse control support")
+	fmt.Println("    --disable-timestamp, -p    Disable timestamp for docker logs")
+	fmt.Println("    --only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)")
+	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
+	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
+	fmt.Println("    --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
+	fmt.Println("    --ssh, -s                  Connect to remote host (use standard ssh options, separated by spaces in quotes)")
+	fmt.Println("                               Example: lazyjournal --ssh \"lifailon@192.168.3.101 -p 22\"")
+	fmt.Println()
 }
 
 func (app *App) showAudit() {
@@ -459,7 +460,7 @@ var (
 )
 
 // Определяем название удаленной системы
-func getOS(sshOptions []string) (string, error) {
+func remoteGetOS(sshOptions []string) (string, error) {
 	cmd := exec.Command("ssh", append(sshOptions, "uname", "-s")...)
 	output, err := cmd.Output()
 	if err != nil {
@@ -490,7 +491,7 @@ func runGoCui(mock bool) {
 		debugLoadTime:                "0s",
 		debugColorTime:               "0s",
 		selectUnits:                  "services",  // "UNIT" || "USER_UNIT" || "kernel" || "audit"
-		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для MacOS) + /root/ || "descriptor"
+		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для macOS) + /root/ || "descriptor"
 		selectContainerizationSystem: "docker",    // "podman" || "kubernetes"
 		selectFilterMode:             "default",   // "fuzzy" || "regex" || "timestamp"
 		timestampFilterView:          false,
@@ -530,8 +531,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
-	disableScroll := flag.Bool("disable-autoupdate", false, "Disable streaming of new events (log is loaded once without automatic update) (like tail)")
-	flag.BoolVar(disableScroll, "e", false, "Disable streaming of new events (log is loaded once without automatic update) (like tail)")
+	disableScroll := flag.Bool("disable-autoupdate", false, "Disable streaming of new events (log is loaded once without automatic update)")
+	flag.BoolVar(disableScroll, "e", false, "Disable streaming of new events (log is loaded once without automatic update)")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
 	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse control support")
@@ -540,14 +541,14 @@ func runGoCui(mock bool) {
 	flag.BoolVar(disableTimeStamp, "p", false, "Disable timestamp for docker logs")
 	dockerStreamFlag := flag.Bool("only-stream", false, "Force reading of docker container logs in stream mode (by default from the file system)")
 	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of docker container logs in stream mode (by default from the file system)")
-	commandColor := flag.Bool("command-color", false, "Coloring in command line mode")
-	flag.BoolVar(commandColor, "c", false, "Coloring in command line mode")
+	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
+	flag.BoolVar(commandColor, "c", false, "ANSI coloring in command line mode")
 	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
 	flag.StringVar(commandFuzzy, "f", "", "Filtering using fuzzy search in command line mode")
 	commandRegex := flag.String("command-regex", "", "Filtering using regular expression (regexp) in command line mode")
 	flag.StringVar(commandRegex, "r", "", "Filtering using regular expression (regexp) in command line mode")
-	sshModeFlag := flag.String("ssh", "", "Connect to remote host (format: username@hostname and standard options separated by space in quotes)")
-	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (format: username@hostname and standard options separated by space in quotes)")
+	sshModeFlag := flag.String("ssh", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
+	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
 
 	// Обработка аргументов
 	flag.Parse()
@@ -690,7 +691,7 @@ func runGoCui(mock bool) {
 		app.sshMode = true
 		options := strings.Split(*sshModeFlag, " ")
 		app.sshOptions = append(app.sshOptions, options...)
-		getOS, err := getOS(app.sshOptions)
+		getOS, err := remoteGetOS(app.sshOptions)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -1795,7 +1796,7 @@ func (app *App) loadFiles(logPath string) {
 		}
 	case "/var/log/":
 		var cmd *exec.Cmd
-		// Загрузка системных журналов для MacOS
+		// Загрузка системных журналов для macOS
 		if app.getOS == "darwin" {
 			args := []string{
 				logPath, "/Library/Logs",
@@ -1881,7 +1882,7 @@ func (app *App) loadFiles(logPath string) {
 			// Информация о текущих пользователях, их сеансах и входах в систему
 			"/var/run/utmp\n",
 			"/run/utmp\n",
-			// MacOS/BSD/RHEL
+			// macOS/BSD/RHEL
 			"/var/log/secure\n",
 			"/var/log/messages\n",
 			"/var/log/daemon\n",
@@ -1944,7 +1945,7 @@ func (app *App) loadFiles(logPath string) {
 			}
 		}
 	default:
-		// Домашние каталоги пользователей: /home/ для Linux и /Users/ для MacOS
+		// Домашние каталоги пользователей: /home/ для Linux и /Users/ для macOS
 		if app.getOS == "darwin" {
 			logPath = "/Users/"
 		}
@@ -1953,24 +1954,20 @@ func (app *App) loadFiles(logPath string) {
 		args := []string{
 			logPath,
 			"-type", "d",
-			"(",
 			"-name", "Library", "-o",
 			"-name", "Pictures", "-o",
 			"-name", "Movies", "-o",
 			"-name", "Music", "-o",
 			"-name", ".Trash", "-o",
 			"-name", ".cache",
-			")",
 			"-prune", "-o",
 			"-type", "f",
-			"(",
 			"-name", "*.log", "-o",
 			"-name", "*.asl", "-o",
 			"-name", "*.pcap", "-o",
 			"-name", "*.pcap.gz", "-o",
 			"-name", "*.pcapng", "-o",
 			"-name", "*.pcapng.gz",
-			")",
 		}
 		if app.sshMode {
 			sshArgs := app.sshOptions
@@ -2494,7 +2491,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					return
 				}
 				app.currentLogLines = strings.Split(string(output), "\n")
-			// Читаем архивные логи в формате pcap/pcapng (MacOS)
+			// Читаем архивные логи в формате pcap/pcapng (macOS)
 			case strings.HasSuffix(logFullPath, "pcap.gz") || strings.HasSuffix(logFullPath, "pcapng.gz"):
 				var unpacker string = "gzip"
 				// Создаем временный файл
@@ -5608,6 +5605,13 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.SetKeybinding("services", 'h', gocui.ModNone, app.setUnitListLeft); err != nil {
 			return err
 		}
+		// ]/[
+		if err := app.gui.SetKeybinding("services", ']', gocui.ModNone, app.setUnitListRight); err != nil {
+			return err
+		}
+		if err := app.gui.SetKeybinding("services", '[', gocui.ModNone, app.setUnitListLeft); err != nil {
+			return err
+		}
 	}
 	// Переключение выбора журналов для File System
 	if app.keybindingsEnabled {
@@ -5624,6 +5628,12 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.SetKeybinding("varLogs", 'h', gocui.ModNone, app.setLogFilesListLeft); err != nil {
 			return err
 		}
+		if err := app.gui.SetKeybinding("varLogs", ']', gocui.ModNone, app.setLogFilesListRight); err != nil {
+			return err
+		}
+		if err := app.gui.SetKeybinding("varLogs", '[', gocui.ModNone, app.setLogFilesListLeft); err != nil {
+			return err
+		}
 	} else {
 		// Удаление привязок
 		if err := app.gui.DeleteKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone); err != nil {
@@ -5638,6 +5648,12 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.DeleteKeybinding("varLogs", 'h', gocui.ModNone); err != nil {
 			return err
 		}
+		if err := app.gui.DeleteKeybinding("varLogs", ']', gocui.ModNone); err != nil {
+			return err
+		}
+		if err := app.gui.DeleteKeybinding("varLogs", '[', gocui.ModNone); err != nil {
+			return err
+		}
 	}
 	// Переключение выбора журналов для Containerization System
 	if err := app.gui.SetKeybinding("docker", gocui.KeyArrowRight, gocui.ModNone, app.setContainersListRight); err != nil {
@@ -5650,6 +5666,12 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	if err := app.gui.SetKeybinding("docker", 'h', gocui.ModNone, app.setContainersListLeft); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", ']', gocui.ModNone, app.setContainersListRight); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", '[', gocui.ModNone, app.setContainersListLeft); err != nil {
 		return err
 	}
 	// Переключение между режимами фильтрации через Up/Down для выбранного окна (filter)
@@ -6203,41 +6225,65 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Очистка поля ввода для фильтрации списков
+	// Очистка поля ввода для фильтрации списков или выход на Esc (#23)
 	if err := app.gui.SetKeybinding("filterList", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.clearFilterListEditor(g)
-		return nil
+		if app.filterListText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterListEditor(g)
+			return nil
+		}
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("services", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.clearFilterListEditor(g)
-		return nil
+		if app.filterListText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterListEditor(g)
+			return nil
+		}
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("varLogs", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.clearFilterListEditor(g)
-		return nil
+		if app.filterListText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterListEditor(g)
+			return nil
+		}
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("docker", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.clearFilterListEditor(g)
-		return nil
+		if app.filterListText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterListEditor(g)
+			return nil
+		}
 	}); err != nil {
 		return err
 	}
-	// Очистка поля ввода для фильтрации вывода логов
+	// Очистка поля ввода для фильтрации вывода логов или выход на Esc (#23)
 	if err := app.gui.SetKeybinding("filter", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.clearFilterEditor(g)
-		return nil
+		if app.filterText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterEditor(g)
+			return nil
+		}
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("logs", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.clearFilterEditor(g)
-		return nil
+		if app.filterText == "" {
+			return quit(g, v)
+		} else {
+			app.clearFilterEditor(g)
+			return nil
+		}
 	}); err != nil {
 		return err
 	}
@@ -6279,7 +6325,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
 	fmt.Fprintln(helpView, "    \033[32mEsc\033[0m - clear text in the current filter window or close help.")
 	fmt.Fprintln(helpView, "    \033[32mEnter\033[0m - load a log from the list window or return to the previous window from the filter window.")
-	fmt.Fprintln(helpView, "    \033[32m<Left/h>\033[0m and \033[32m<Right/l>\033[0m - switch between journal lists in the selected window.")
+	fmt.Fprintln(helpView, "    \033[32m<Left/h/[>\033[0m and \033[32m<Right/l/]>\033[0m - switch between journal lists in the selected window.")
 	fmt.Fprintln(helpView, "    \033[32m<Up/PgUp/k>\033[0m and \033[32m<Down/PgDown/j>\033[0m - move up and down through all journal lists and log output,")
 	fmt.Fprintln(helpView, "    as well as changing the filtering mode in the filter window.")
 	fmt.Fprintln(helpView, "    \033[32m<Shift/Alt>+<Up/Down>\033[0m - quickly move up and down through all journal lists and log output")
@@ -6289,15 +6335,15 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32mCtrl+E\033[0m or \033[32mEnd\033[0m - go to the end of the log.")
 	fmt.Fprintln(helpView, "    \033[32mAlt+<Left/Right>\033[0m - change the number of log lines to output (default: 50000, range: 200-200000).")
 	fmt.Fprintln(helpView, "    \033[32mShift+<Left/Right>\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+D\033[0m - change read mode for docker logs (streams only or json from file system).")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - change streams display mode for docker logs (all, stdout or stderr only).")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+D\033[0m - change read mode for docker logs (stream only or json from file system).")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+S\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+T\033[0m - enable or disable built-in timestamp and stream type for docker logs.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+W\033[0m - enable or disable ANSI coloring for output.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+N\033[0m - enable or disable coloring via tailspin.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+U\033[0m - disable streaming of new events (log is loaded once without automatic update).")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+Q\033[0m - update the current log output manually.")
 	fmt.Fprintln(helpView, "    \033[32mCtrl+R\033[0m - update all log lists.")
-	fmt.Fprintln(helpView, "    \033[32mCtrl+C\033[0m - exit.")
+	fmt.Fprintln(helpView, "    \033[32mCtrl+C/Esc\033[0m - exit.")
 	fmt.Fprintln(helpView, "\n    Supported formats for filtering by timestamp:")
 	fmt.Fprintln(helpView, "\n    "+app.wordColor("00:00"))
 	fmt.Fprintln(helpView, "    "+app.wordColor("00:00:00"))
