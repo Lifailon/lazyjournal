@@ -26,9 +26,25 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
+	"gopkg.in/yaml.v3"
 )
 
 var programVersion string = "0.7.9"
+
+// Основная структура конфигурации
+type Config struct {
+	Hotkeys Hotkeys `yaml:"Hotkeys"`
+}
+
+// Структура горячих клавиш для конфигурации (#23)
+type Hotkeys struct {
+	Up    string `yaml:"up"`
+	Down  string `yaml:"down"`
+	Left  string `yaml:"left"`
+	Right string `yaml:"right"`
+}
+
+var config Config
 
 // Структура хранения информации о журналах
 type Journal struct {
@@ -526,6 +542,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(help, "h", false, "Show help")
 	version := flag.Bool("version", false, "Show version")
 	flag.BoolVar(version, "v", false, "Show version")
+	configFlag := flag.Bool("config", false, "Show configuration")
+	flag.BoolVar(configFlag, "g", false, "Show configuration")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
 	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
@@ -560,6 +578,37 @@ func runGoCui(mock bool) {
 
 	if *version {
 		fmt.Println(programVersion)
+		os.Exit(0)
+	}
+
+	// Получаем путь к конфигурации
+	homePath, _ := os.UserHomeDir()
+	configPath := filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
+
+	// Читаем файл
+	data, erro := os.ReadFile(configPath)
+	if erro != nil {
+		data, erro = os.ReadFile("config.yml")
+		if erro != nil {
+			fmt.Println("Configuration file not found")
+			os.Exit(1)
+		}
+	}
+
+	// Парсим YAML
+	erro = yaml.Unmarshal(data, &config)
+	if erro != nil {
+		fmt.Printf("Error yaml syntax in config file\n%s\n", erro)
+		os.Exit(1)
+	}
+
+	if *configFlag {
+		fmt.Println("Hotkeys:")
+		fmt.Printf("  Up:    %s\n", config.Hotkeys.Up)
+		fmt.Printf("  Down:  %s\n", config.Hotkeys.Down)
+		fmt.Printf("  Left:  %s\n", config.Hotkeys.Left)
+		fmt.Printf("  Right: %s\n", config.Hotkeys.Right)
+
 		os.Exit(0)
 	}
 
@@ -5252,6 +5301,52 @@ func (app *App) updateDelimiter(newUpdate bool) {
 
 // ---------------------------------------- Key Binding ----------------------------------------
 
+// Карта для сопостовления сочетаний клавиш со значениями из конфигурации
+var keyMap = map[string]gocui.Key{
+	"ctrl+a": gocui.KeyCtrlA,
+	"ctrl+b": gocui.KeyCtrlB,
+	"ctrl+c": gocui.KeyCtrlC,
+	"ctrl+d": gocui.KeyCtrlD,
+	"ctrl+e": gocui.KeyCtrlE,
+	"ctrl+f": gocui.KeyCtrlF,
+	"ctrl+g": gocui.KeyCtrlG,
+	"ctrl+h": gocui.KeyCtrlH,
+	"ctrl+i": gocui.KeyCtrlI,
+	"ctrl+j": gocui.KeyCtrlJ,
+	"ctrl+k": gocui.KeyCtrlK,
+	"ctrl+l": gocui.KeyCtrlL,
+	"ctrl+m": gocui.KeyCtrlM,
+	"ctrl+n": gocui.KeyCtrlN,
+	"ctrl+o": gocui.KeyCtrlO,
+	"ctrl+p": gocui.KeyCtrlP,
+	"ctrl+q": gocui.KeyCtrlQ,
+	"ctrl+r": gocui.KeyCtrlR,
+	"ctrl+s": gocui.KeyCtrlS,
+	"ctrl+t": gocui.KeyCtrlT,
+	"ctrl+u": gocui.KeyCtrlU,
+	"ctrl+v": gocui.KeyCtrlV,
+	"ctrl+w": gocui.KeyCtrlW,
+	"ctrl+x": gocui.KeyCtrlX,
+	"ctrl+y": gocui.KeyCtrlY,
+	"ctrl+z": gocui.KeyCtrlZ,
+}
+
+// Функция для опредиления клавиш из конфигурации
+func getHotkey(configKey, defaultKey string) any {
+	// Если это одна буква, конвертируем string в rune и извлекаем значение
+	if len(configKey) == 1 {
+		return []rune(configKey)[0]
+	} else {
+		// Если это сочетание клавиш, ищем в карте или присваиваем значение по умолчанию (которое передано в функцию)
+		key, exists := keyMap[strings.ToLower(configKey)]
+		if exists {
+			return key
+		} else {
+			return keyMap[defaultKey]
+		}
+	}
+}
+
 // Функция для биндинга клавиш
 func (app *App) setupKeybindings() error {
 	// Tab для переключения между окнами
@@ -5480,18 +5575,19 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// k (1)
-	if err := app.gui.SetKeybinding("services", 'k', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	// Custom up from config (default: k)
+	customKeyUp := getHotkey(config.Hotkeys.Up, "k")
+	if err := app.gui.SetKeybinding("services", customKeyUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", 'k', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customKeyUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevFileName(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", 'k', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customKeyUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevDockerContainer(v, 1)
 	}); err != nil {
 		return err
@@ -6405,7 +6501,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "    \033[32mShift+Tab\033[0m - return to previous window.")
 	fmt.Fprintln(helpView, "    \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
 	fmt.Fprintln(helpView, "    \033[32mEnter\033[0m - load a log from the list window or return to the previous window from the filter window.")
-	fmt.Fprintln(helpView, "    \033[32m<Left/h/[>\033[0m and \033[32m<Right/l/]>\033[0m - switch between journal lists in the selected window.")
+	fmt.Fprintln(helpView, "    \033[32m<Left/[/h>\033[0m and \033[32m<Right/]/l>\033[0m - switch between journal lists in the selected window.")
 	fmt.Fprintln(helpView, "    \033[32m<Up/PgUp/k>\033[0m and \033[32m<Down/PgDown/j>\033[0m - move up and down through all journal lists and log output,")
 	fmt.Fprintln(helpView, "    as well as changing the filtering mode in the filter window.")
 	fmt.Fprintln(helpView, "    \033[32m<Shift/Alt>+<Up/Down>\033[0m - quickly move up and down through all journal lists and log output")
