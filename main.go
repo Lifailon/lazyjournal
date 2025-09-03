@@ -31,17 +31,21 @@ import (
 
 var programVersion string = "0.7.9"
 
-// Основная структура конфигурации
+// Структура конфигурации
 type Config struct {
 	Hotkeys Hotkeys `yaml:"Hotkeys"`
 }
 
 // Структура горячих клавиш для конфигурации (#23)
 type Hotkeys struct {
-	Up    string `yaml:"up"`
-	Down  string `yaml:"down"`
-	Left  string `yaml:"left"`
-	Right string `yaml:"right"`
+	Up            string `yaml:"up"`
+	QuickUp       string `yaml:"quickUp"`
+	VeryQuickUp   string `yaml:"veryQuickUp"`
+	Down          string `yaml:"down"`
+	QuickDown     string `yaml:"quickDown"`
+	VeryQuickDown string `yaml:"veryQuickDown"`
+	Left          string `yaml:"left"`
+	Right         string `yaml:"right"`
 }
 
 var config Config
@@ -70,7 +74,7 @@ type dockerLogLines struct {
 	content   string
 }
 
-// Структура основного приложения (графический интерфейс и данные журналов)
+// Основная структура приложения (графический интерфейс и данные журналов)
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
 
@@ -202,6 +206,7 @@ func showHelp() {
 	fmt.Println("    --help, -h                 Show help")
 	fmt.Println("    --version, -v              Show version")
 	fmt.Println("    --audit, -a                Show audit information")
+	fmt.Println("    --config, -g               Show configuration with value check")
 	fmt.Println("    --tail, -t                 Change the number of log lines to output (default: 50000, range: 200-200000)")
 	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
 	fmt.Println("    --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)")
@@ -542,10 +547,10 @@ func runGoCui(mock bool) {
 	flag.BoolVar(help, "h", false, "Show help")
 	version := flag.Bool("version", false, "Show version")
 	flag.BoolVar(version, "v", false, "Show version")
-	configFlag := flag.Bool("config", false, "Show configuration")
-	flag.BoolVar(configFlag, "g", false, "Show configuration")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
+	configFlag := flag.Bool("config", false, "Show configuration with value check")
+	flag.BoolVar(configFlag, "g", false, "Show configuration with value check")
 	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
 	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
@@ -569,6 +574,27 @@ func runGoCui(mock bool) {
 	sshModeFlag := flag.String("ssh", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
 	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
 
+	// Получаем путь к конфигурации
+	homePath, _ := os.UserHomeDir()
+	configPath := filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
+
+	// Читаем файл конфигурации
+	configData, configError := os.ReadFile(configPath)
+	if configError != nil {
+		configData, configError = os.ReadFile("config.yml")
+		if configError != nil {
+			fmt.Println("Configuration file not found")
+			os.Exit(1)
+		}
+	}
+
+	// Парсим yaml конфигурации
+	configError = yaml.Unmarshal(configData, &config)
+	if configError != nil {
+		fmt.Printf("Error yaml syntax in config file\n%s\n", configError)
+		os.Exit(1)
+	}
+
 	// Обработка аргументов
 	flag.Parse()
 	if *help {
@@ -581,39 +607,27 @@ func runGoCui(mock bool) {
 		os.Exit(0)
 	}
 
-	// Получаем путь к конфигурации
-	homePath, _ := os.UserHomeDir()
-	configPath := filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
-
-	// Читаем файл
-	data, erro := os.ReadFile(configPath)
-	if erro != nil {
-		data, erro = os.ReadFile("config.yml")
-		if erro != nil {
-			fmt.Println("Configuration file not found")
-			os.Exit(1)
-		}
-	}
-
-	// Парсим YAML
-	erro = yaml.Unmarshal(data, &config)
-	if erro != nil {
-		fmt.Printf("Error yaml syntax in config file\n%s\n", erro)
-		os.Exit(1)
-	}
-
-	if *configFlag {
-		fmt.Println("Hotkeys:")
-		fmt.Printf("  Up:    %s\n", config.Hotkeys.Up)
-		fmt.Printf("  Down:  %s\n", config.Hotkeys.Down)
-		fmt.Printf("  Left:  %s\n", config.Hotkeys.Left)
-		fmt.Printf("  Right: %s\n", config.Hotkeys.Right)
-
+	if *audit {
+		app.showAudit()
 		os.Exit(0)
 	}
 
-	if *audit {
-		app.showAudit()
+	if *configFlag {
+		fmt.Println("path:", configPath)
+		fmt.Println("---")
+		// Выводим содержимое конфигурации
+		// fmt.Println(string(configData))
+		// Выводим полученные значения из конфигурации с проверкой на пустые значения (форматированный вывод без комментариев)
+		fmt.Println("hotkeys:")
+		fmt.Printf("  up:            %s\n", config.Hotkeys.Up)
+		fmt.Printf("  quickUp:       %s\n", config.Hotkeys.QuickUp)
+		fmt.Printf("  veryQuickUp:   %s\n", config.Hotkeys.VeryQuickUp)
+		fmt.Printf("  down:          %s\n", config.Hotkeys.Down)
+		fmt.Printf("  quickDown:     %s\n", config.Hotkeys.QuickDown)
+		fmt.Printf("  veryQuickDown: %s\n", config.Hotkeys.VeryQuickDown)
+		fmt.Printf("  left:          %s\n", config.Hotkeys.Left)
+		fmt.Printf("  right:         %s\n", config.Hotkeys.Right)
+		fmt.Println()
 		os.Exit(0)
 	}
 
@@ -5329,6 +5343,10 @@ var keyMap = map[string]gocui.Key{
 	"ctrl+x": gocui.KeyCtrlX,
 	"ctrl+y": gocui.KeyCtrlY,
 	"ctrl+z": gocui.KeyCtrlZ,
+	"esc":    gocui.KeyEsc,
+	"escape": gocui.KeyEsc,
+	"enter":  gocui.KeyEnter,
+	"space":  gocui.KeySpace,
 }
 
 // Функция для опредиления клавиш из конфигурации
@@ -5342,7 +5360,11 @@ func getHotkey(configKey, defaultKey string) any {
 		if exists {
 			return key
 		} else {
-			return keyMap[defaultKey]
+			if len(defaultKey) == 1 {
+				return []rune(defaultKey)[0]
+			} else {
+				return keyMap[defaultKey]
+			}
 		}
 	}
 }
@@ -5413,24 +5435,26 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// j (#23) в стиле Vim и для поддержки быстрого пролистывания в macOS
-	if err := app.gui.SetKeybinding("services", 'j', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	// Custom down from config
+	// Default: j (1)
+	customDown := getHotkey(config.Hotkeys.Down, "j")
+	if err := app.gui.SetKeybinding("services", customDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextService(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", 'j', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextFileName(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", 'j', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextDockerContainer(v, 1)
 	}); err != nil {
 		return err
 	}
 	// Быстрое пролистывание вниз через 10 записей
-	// Shift+Down
+	// Shift+Down (10)
 	if err := app.gui.SetKeybinding("services", gocui.KeyArrowDown, gocui.ModShift, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextService(v, 10)
 	}); err != nil {
@@ -5462,18 +5486,20 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Shift+j (10)
-	if err := app.gui.SetKeybinding("services", 'J', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	// Custom down from config
+	// Default: shift+j (10)
+	customQuickDown := getHotkey(config.Hotkeys.QuickDown, "J")
+	if err := app.gui.SetKeybinding("services", customQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextService(v, 10)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", 'J', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextFileName(v, 10)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", 'J', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextDockerContainer(v, 10)
 	}); err != nil {
 		return err
@@ -5510,34 +5536,20 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Alt+j (100) + support in macOS
-	if err := app.gui.SetKeybinding("services", 'j', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+	// Custom down from config
+	// Default: ctrl+j (100) для поддержки в macOS
+	customVeryQuickDown := getHotkey(config.Hotkeys.VeryQuickDown, "ctrl+j")
+	if err := app.gui.SetKeybinding("services", customVeryQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextService(v, 100)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", 'j', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customVeryQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextFileName(v, 100)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", 'j', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
-		return app.nextDockerContainer(v, 100)
-	}); err != nil {
-		return err
-	}
-	// Ctrl+j (100) для поддержки в macOS
-	if err := app.gui.SetKeybinding("services", gocui.KeyCtrlJ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.nextService(v, 100)
-	}); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("varLogs", gocui.KeyCtrlJ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.nextFileName(v, 100)
-	}); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("docker", gocui.KeyCtrlJ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customVeryQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextDockerContainer(v, 100)
 	}); err != nil {
 		return err
@@ -5575,19 +5587,20 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Custom up from config (default: k)
-	customKeyUp := getHotkey(config.Hotkeys.Up, "k")
-	if err := app.gui.SetKeybinding("services", customKeyUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	// Custom up from config
+	// Default: k (1)
+	customUp := getHotkey(config.Hotkeys.Up, "k")
+	if err := app.gui.SetKeybinding("services", customUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", customKeyUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevFileName(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customKeyUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevDockerContainer(v, 1)
 	}); err != nil {
 		return err
@@ -5624,18 +5637,20 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Shift+k
-	if err := app.gui.SetKeybinding("services", 'K', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	// Custom up from config
+	// Default: shift+k (10)
+	customQuickUp := getHotkey(config.Hotkeys.QuickUp, "K")
+	if err := app.gui.SetKeybinding("services", customQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 10)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", 'K', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevFileName(v, 10)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", 'K', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevDockerContainer(v, 10)
 	}); err != nil {
 		return err
@@ -5672,34 +5687,20 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Alt+k (100)
-	if err := app.gui.SetKeybinding("services", 'k', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+	// Custom up from config
+	// Default: ctrl+k (100) для поддержки в macOS
+	customVeryQuickUp := getHotkey(config.Hotkeys.VeryQuickUp, "ctrl+k")
+	if err := app.gui.SetKeybinding("services", customVeryQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 100)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", 'k', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customVeryQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevFileName(v, 100)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", 'k', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
-		return app.prevDockerContainer(v, 100)
-	}); err != nil {
-		return err
-	}
-	// Ctrl+k (100)
-	if err := app.gui.SetKeybinding("services", gocui.KeyCtrlK, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.prevService(v, 100)
-	}); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("varLogs", gocui.KeyCtrlK, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.prevFileName(v, 100)
-	}); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("docker", gocui.KeyCtrlK, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customVeryQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevDockerContainer(v, 100)
 	}); err != nil {
 		return err
@@ -5866,7 +5867,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("logs", 'j', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("logs", customDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollDownLogs(1)
 	}); err != nil {
 		return err
@@ -5882,12 +5883,12 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("logs", 'J', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("logs", customQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollDownLogs(10)
 	}); err != nil {
 		return err
 	}
-	// Alt + Down/PgDown/j (500)
+	// Alt + Down/PgDown and Ctrl+j (500)
 	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowDown, gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollDownLogs(500)
 	}); err != nil {
@@ -5898,17 +5899,12 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("logs", 'j', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("logs", customVeryQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollDownLogs(500)
 	}); err != nil {
 		return err
 	}
-	// Ctrl + j (500)
-	if err := app.gui.SetKeybinding("logs", gocui.KeyCtrlJ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.scrollDownLogs(500)
-	}); err != nil {
-		return err
-	}
+	// Пролистывание вывода журнала через 1/10/500 записей вверх
 	// Up/PgUp/k (1)
 	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollUpLogs(1)
@@ -5920,7 +5916,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("logs", 'k', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("logs", customUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollUpLogs(1)
 	}); err != nil {
 		return err
@@ -5936,12 +5932,12 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("logs", 'K', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("logs", customQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollUpLogs(10)
 	}); err != nil {
 		return err
 	}
-	// Alt + Up/PgUp/k (500)
+	// Alt + Up/PgUp and Ctrl+k (500)
 	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowUp, gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollUpLogs(500)
 	}); err != nil {
@@ -5952,13 +5948,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("logs", 'k', gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
-		return app.scrollUpLogs(500)
-	}); err != nil {
-		return err
-	}
-	// Ctrl + k
-	if err := app.gui.SetKeybinding("logs", gocui.KeyCtrlK, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("logs", customVeryQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollUpLogs(500)
 	}); err != nil {
 		return err
