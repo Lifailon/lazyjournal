@@ -38,14 +38,20 @@ type Config struct {
 
 // Структура горячих клавиш для конфигурации (#23)
 type Hotkeys struct {
-	Up            string `yaml:"up"`
-	QuickUp       string `yaml:"quickUp"`
-	VeryQuickUp   string `yaml:"veryQuickUp"`
-	Down          string `yaml:"down"`
-	QuickDown     string `yaml:"quickDown"`
-	VeryQuickDown string `yaml:"veryQuickDown"`
-	Left          string `yaml:"left"`
-	Right         string `yaml:"right"`
+	Down              string `yaml:"down"`
+	QuickDown         string `yaml:"quickDown"`
+	VeryQuickDown     string `yaml:"veryQuickDown"`
+	Up                string `yaml:"up"`
+	QuickUp           string `yaml:"quickUp"`
+	VeryQuickUp       string `yaml:"veryQuickUp"`
+	Left              string `yaml:"left"`
+	Right             string `yaml:"right"`
+	SwitchWindow      string `yaml:"switchWindow"`
+	BackSwitchWindows string `yaml:"backSwitchWindows"`
+	LoadJournal       string `yaml:"loadJournal"`
+	GoToEnd           string `yaml:"goToEnd"`
+	GoToTop           string `yaml:"goToTop"`
+	GoToFilter        string `yaml:"goToFilter"`
 }
 
 var config Config
@@ -222,6 +228,7 @@ func showHelp() {
 	fmt.Println()
 }
 
+// #18
 func (app *App) showAudit() {
 	var auditText []string
 	app.testMode = true
@@ -619,14 +626,20 @@ func runGoCui(mock bool) {
 		// fmt.Println(string(configData))
 		// Выводим полученные значения из конфигурации с проверкой на пустые значения (форматированный вывод без комментариев)
 		fmt.Println("hotkeys:")
-		fmt.Printf("  up:            %s\n", config.Hotkeys.Up)
-		fmt.Printf("  quickUp:       %s\n", config.Hotkeys.QuickUp)
-		fmt.Printf("  veryQuickUp:   %s\n", config.Hotkeys.VeryQuickUp)
-		fmt.Printf("  down:          %s\n", config.Hotkeys.Down)
-		fmt.Printf("  quickDown:     %s\n", config.Hotkeys.QuickDown)
-		fmt.Printf("  veryQuickDown: %s\n", config.Hotkeys.VeryQuickDown)
-		fmt.Printf("  left:          %s\n", config.Hotkeys.Left)
-		fmt.Printf("  right:         %s\n", config.Hotkeys.Right)
+		fmt.Printf("  down:              %s\n", config.Hotkeys.Down)
+		fmt.Printf("  quickDown:         %s\n", config.Hotkeys.QuickDown)
+		fmt.Printf("  veryQuickDown:     %s\n", config.Hotkeys.VeryQuickDown)
+		fmt.Printf("  up:                %s\n", config.Hotkeys.Up)
+		fmt.Printf("  quickUp:           %s\n", config.Hotkeys.QuickUp)
+		fmt.Printf("  veryQuickUp:       %s\n", config.Hotkeys.VeryQuickUp)
+		fmt.Printf("  left:              %s\n", config.Hotkeys.Left)
+		fmt.Printf("  right:             %s\n", config.Hotkeys.Right)
+		fmt.Printf("  switchWindow:      %s\n", config.Hotkeys.SwitchWindow)
+		fmt.Printf("  backSwitchWindows: %s\n", config.Hotkeys.BackSwitchWindows)
+		fmt.Printf("  loadJournal:       %s\n", config.Hotkeys.LoadJournal)
+		fmt.Printf("  goToEnd:           %s\n", config.Hotkeys.GoToEnd)
+		fmt.Printf("  goToTop:           %s\n", config.Hotkeys.GoToTop)
+		fmt.Printf("  goToFilter:        %s\n", config.Hotkeys.GoToFilter)
 		fmt.Println()
 		os.Exit(0)
 	}
@@ -5343,27 +5356,37 @@ var keyMap = map[string]gocui.Key{
 	"ctrl+x": gocui.KeyCtrlX,
 	"ctrl+y": gocui.KeyCtrlY,
 	"ctrl+z": gocui.KeyCtrlZ,
-	"esc":    gocui.KeyEsc,
-	"escape": gocui.KeyEsc,
-	"enter":  gocui.KeyEnter,
-	"space":  gocui.KeySpace,
+
+	"tab":       gocui.KeyTab,
+	"shift+tab": gocui.KeyBacktab,
+	"enter":     gocui.KeyEnter,
+	"space":     gocui.KeySpace,
+	"esc":       gocui.KeyEsc,
 }
 
 // Функция для опредиления клавиш из конфигурации
 func getHotkey(configKey, defaultKey string) any {
+	// Опускаем регистр для всех вхождений (букв и сочетаний)
+	inputKey := strings.ToLower(configKey)
 	// Если это одна буква, конвертируем string в rune и извлекаем значение
-	if len(configKey) == 1 {
-		return []rune(configKey)[0]
+	if len(inputKey) == 1 {
+		return []rune(inputKey)[0]
 	} else {
-		// Если это сочетание клавиш, ищем в карте или присваиваем значение по умолчанию (которое передано в функцию)
-		key, exists := keyMap[strings.ToLower(configKey)]
-		if exists {
-			return key
+		// Если сочетание клавиш содержит shift, извлекаем последнюю букву в верхнем регистре
+		if strings.HasPrefix(inputKey, "shift+") && inputKey != "shift+tab" {
+			inputKey = strings.ToTitle(configKey)
+			return []rune(inputKey)[len(inputKey)-1]
 		} else {
-			if len(defaultKey) == 1 {
-				return []rune(defaultKey)[0]
+			// Ищем сочетание клавиш в карте или возвращяем значение по умолчанию (которое передается во втором параметре)
+			key, exists := keyMap[inputKey]
+			if exists {
+				return key
 			} else {
-				return keyMap[defaultKey]
+				if len(defaultKey) == 1 {
+					return []rune(defaultKey)[0]
+				} else {
+					return keyMap[defaultKey]
+				}
 			}
 		}
 	}
@@ -5371,37 +5394,7 @@ func getHotkey(configKey, defaultKey string) any {
 
 // Функция для биндинга клавиш
 func (app *App) setupKeybindings() error {
-	// Tab для переключения между окнами
-	if err := app.gui.SetKeybinding("", gocui.KeyTab, gocui.ModNone, app.nextView); err != nil {
-		return err
-	}
-	// Shift+Tab для переключения между окнами в обратном порядке
-	if err := app.gui.SetKeybinding("", gocui.KeyBacktab, gocui.ModNone, app.backView); err != nil {
-		return err
-	}
-	// Enter для выбора службы и загрузки журналов
-	if err := app.gui.SetKeybinding("services", gocui.KeyEnter, gocui.ModNone, app.selectService); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("varLogs", gocui.KeyEnter, gocui.ModNone, app.selectFile); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("docker", gocui.KeyEnter, gocui.ModNone, app.selectDocker); err != nil {
-		return err
-	}
-	// Enter для загрузки журнала из фильтра по времени
-	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.updateLogOutput(true)
-		return nil
-	}); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("untilFilter", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.updateLogOutput(true)
-		return nil
-	}); err != nil {
-		return err
-	}
+	// ↓↓↓
 	// Перемещение вниз к следующей службе (функция nextService), файлу (nextFileName) или контейнеру (nextDockerContainer)
 	// Down (1)
 	if err := app.gui.SetKeybinding("services", gocui.KeyArrowDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
@@ -5419,7 +5412,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// PgDown (#10)
+	// PgDown (1) #10
 	if err := app.gui.SetKeybinding("services", gocui.KeyPgdn, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextService(v, 1)
 	}); err != nil {
@@ -5537,7 +5530,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	// Custom down from config
-	// Default: ctrl+j (100) для поддержки в macOS
+	// Default: ctrl+j (100)
 	customVeryQuickDown := getHotkey(config.Hotkeys.VeryQuickDown, "ctrl+j")
 	if err := app.gui.SetKeybinding("services", customVeryQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextService(v, 100)
@@ -5554,6 +5547,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+
+	// ↑↑↑
 	// Пролистывание вверх
 	// Up (1)
 	if err := app.gui.SetKeybinding("services", gocui.KeyArrowUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
@@ -5571,7 +5566,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// PgUp (1)
+	// PgUp (1) #10
 	if err := app.gui.SetKeybinding("services", gocui.KeyPgup, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 1)
 	}); err != nil {
@@ -5688,7 +5683,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	// Custom up from config
-	// Default: ctrl+k (100) для поддержки в macOS
+	// Default: ctrl+k (100)
 	customVeryQuickUp := getHotkey(config.Hotkeys.VeryQuickUp, "ctrl+k")
 	if err := app.gui.SetKeybinding("services", customVeryQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 100)
@@ -5705,92 +5700,99 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Переключение выбора журналов для systemd/journald и отключаем для Windows
+
+	// ← →
+	// Custom left and right from config
+	customLeft := getHotkey(config.Hotkeys.Left, "h")
+	customRight := getHotkey(config.Hotkeys.Right, "l")
+	// Переключение выбора журналов для systemd/journald (отключено для Windows)
 	if app.getOS != "windows" {
-		// Right/Left
-		if err := app.gui.SetKeybinding("services", gocui.KeyArrowRight, gocui.ModNone, app.setUnitListRight); err != nil {
-			return err
-		}
+		// Left/Right
 		if err := app.gui.SetKeybinding("services", gocui.KeyArrowLeft, gocui.ModNone, app.setUnitListLeft); err != nil {
 			return err
 		}
-		// l/h
-		if err := app.gui.SetKeybinding("services", 'l', gocui.ModNone, app.setUnitListRight); err != nil {
+		if err := app.gui.SetKeybinding("services", gocui.KeyArrowRight, gocui.ModNone, app.setUnitListRight); err != nil {
 			return err
 		}
-		if err := app.gui.SetKeybinding("services", 'h', gocui.ModNone, app.setUnitListLeft); err != nil {
+		// [/]
+		if err := app.gui.SetKeybinding("services", '[', gocui.ModNone, app.setUnitListLeft); err != nil {
 			return err
 		}
-		// ]/[
 		if err := app.gui.SetKeybinding("services", ']', gocui.ModNone, app.setUnitListRight); err != nil {
 			return err
 		}
-		if err := app.gui.SetKeybinding("services", '[', gocui.ModNone, app.setUnitListLeft); err != nil {
+		// Default: h/l (100)
+		if err := app.gui.SetKeybinding("services", customLeft, gocui.ModNone, app.setUnitListLeft); err != nil {
+			return err
+		}
+		if err := app.gui.SetKeybinding("services", customRight, gocui.ModNone, app.setUnitListRight); err != nil {
 			return err
 		}
 	}
 	// Переключение выбора журналов для File System
 	if app.keybindingsEnabled {
 		// Установка привязок
-		if err := app.gui.SetKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone, app.setLogFilesListRight); err != nil {
-			return err
-		}
 		if err := app.gui.SetKeybinding("varLogs", gocui.KeyArrowLeft, gocui.ModNone, app.setLogFilesListLeft); err != nil {
 			return err
 		}
-		if err := app.gui.SetKeybinding("varLogs", 'l', gocui.ModNone, app.setLogFilesListRight); err != nil {
-			return err
-		}
-		if err := app.gui.SetKeybinding("varLogs", 'h', gocui.ModNone, app.setLogFilesListLeft); err != nil {
-			return err
-		}
-		if err := app.gui.SetKeybinding("varLogs", ']', gocui.ModNone, app.setLogFilesListRight); err != nil {
+		if err := app.gui.SetKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone, app.setLogFilesListRight); err != nil {
 			return err
 		}
 		if err := app.gui.SetKeybinding("varLogs", '[', gocui.ModNone, app.setLogFilesListLeft); err != nil {
 			return err
 		}
-	} else {
-		// Удаление привязок
-		if err := app.gui.DeleteKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone); err != nil {
+		if err := app.gui.SetKeybinding("varLogs", ']', gocui.ModNone, app.setLogFilesListRight); err != nil {
 			return err
 		}
+		if err := app.gui.SetKeybinding("varLogs", customLeft, gocui.ModNone, app.setLogFilesListLeft); err != nil {
+			return err
+		}
+		if err := app.gui.SetKeybinding("varLogs", customRight, gocui.ModNone, app.setLogFilesListRight); err != nil {
+			return err
+		}
+	} else {
+		// Удаление привязок
 		if err := app.gui.DeleteKeybinding("varLogs", gocui.KeyArrowLeft, gocui.ModNone); err != nil {
 			return err
 		}
-		if err := app.gui.DeleteKeybinding("varLogs", 'l', gocui.ModNone); err != nil {
-			return err
-		}
-		if err := app.gui.DeleteKeybinding("varLogs", 'h', gocui.ModNone); err != nil {
-			return err
-		}
-		if err := app.gui.DeleteKeybinding("varLogs", ']', gocui.ModNone); err != nil {
+		if err := app.gui.DeleteKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone); err != nil {
 			return err
 		}
 		if err := app.gui.DeleteKeybinding("varLogs", '[', gocui.ModNone); err != nil {
 			return err
 		}
+		if err := app.gui.DeleteKeybinding("varLogs", ']', gocui.ModNone); err != nil {
+			return err
+		}
+		if err := app.gui.DeleteKeybinding("varLogs", customLeft, gocui.ModNone); err != nil {
+			return err
+		}
+		if err := app.gui.DeleteKeybinding("varLogs", customRight, gocui.ModNone); err != nil {
+			return err
+		}
 	}
 	// Переключение выбора журналов для Containerization System
-	if err := app.gui.SetKeybinding("docker", gocui.KeyArrowRight, gocui.ModNone, app.setContainersListRight); err != nil {
-		return err
-	}
 	if err := app.gui.SetKeybinding("docker", gocui.KeyArrowLeft, gocui.ModNone, app.setContainersListLeft); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", 'l', gocui.ModNone, app.setContainersListRight); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("docker", 'h', gocui.ModNone, app.setContainersListLeft); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("docker", ']', gocui.ModNone, app.setContainersListRight); err != nil {
+	if err := app.gui.SetKeybinding("docker", gocui.KeyArrowRight, gocui.ModNone, app.setContainersListRight); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("docker", '[', gocui.ModNone, app.setContainersListLeft); err != nil {
 		return err
 	}
-	// Переключение между режимами фильтрации через Up/Down для выбранного окна (filter)
+	if err := app.gui.SetKeybinding("docker", ']', gocui.ModNone, app.setContainersListRight); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", customLeft, gocui.ModNone, app.setContainersListLeft); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", customRight, gocui.ModNone, app.setContainersListRight); err != nil {
+		return err
+	}
+
+	// Filter
+	// Переключение между режимами фильтрации через Up/Down для выбранного окна
 	if err := app.gui.SetKeybinding("filter", gocui.KeyArrowUp, gocui.ModNone, app.setFilterModeRight); err != nil {
 		return err
 	}
@@ -5855,6 +5857,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+
+	// Logs ↓↓↓
 	// Пролистывание вывода журнала через 1/10/500 записей вниз
 	// Down/PgDown/j (1)
 	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
@@ -5904,6 +5908,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+
+	// Logs ↑↑↑
 	// Пролистывание вывода журнала через 1/10/500 записей вверх
 	// Up/PgUp/k (1)
 	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
@@ -5953,8 +5959,46 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Перемещение к концу журнала (Ctrl+E or End)
-	if err := app.gui.SetKeybinding("", gocui.KeyCtrlE, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+
+	// Tab для переключения между окнами
+	customTab := getHotkey(config.Hotkeys.SwitchWindow, "tab")
+	if err := app.gui.SetKeybinding("", customTab, gocui.ModNone, app.nextView); err != nil {
+		return err
+	}
+	// Shift+Tab (Back Tab) для переключения между окнами в обратном порядке
+	customBackTab := getHotkey(config.Hotkeys.BackSwitchWindows, "shift+tab")
+	if err := app.gui.SetKeybinding("", customBackTab, gocui.ModNone, app.backView); err != nil {
+		return err
+	}
+
+	// Enter для выбора службы и загрузки журналов
+	customEnter := getHotkey(config.Hotkeys.LoadJournal, "enter")
+	if err := app.gui.SetKeybinding("services", customEnter, gocui.ModNone, app.selectService); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", customEnter, gocui.ModNone, app.selectFile); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", customEnter, gocui.ModNone, app.selectDocker); err != nil {
+		return err
+	}
+	// Enter для загрузки журнала из фильтра по времени
+	if err := app.gui.SetKeybinding("sinceFilter", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.updateLogOutput(true)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("untilFilter", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.updateLogOutput(true)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	// End/Ctrl+E
+	// Перемещение к концу журнала
+	if err := app.gui.SetKeybinding("", gocui.KeyEnd, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		// Сбрасываем автоскролл
 		if !app.disableAutoScroll {
 			app.autoScroll = true
@@ -5971,7 +6015,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("", gocui.KeyEnd, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customEnd := getHotkey(config.Hotkeys.GoToEnd, "ctrl+e")
+	if err := app.gui.SetKeybinding("", customEnd, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if !app.disableAutoScroll {
 			app.autoScroll = true
 		} else {
@@ -5987,19 +6032,23 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Перемещение к началу журнала (Ctrl+A or Home)
-	if err := app.gui.SetKeybinding("", gocui.KeyCtrlA, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.pageUpLogs()
-		return nil
-	}); err != nil {
-		return err
-	}
+
+	// Home/Ctrl+A
+	// Перемещение к началу журнала
 	if err := app.gui.SetKeybinding("", gocui.KeyHome, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		app.pageUpLogs()
 		return nil
 	}); err != nil {
 		return err
 	}
+	customHome := getHotkey(config.Hotkeys.GoToTop, "ctrl+a")
+	if err := app.gui.SetKeybinding("", customHome, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.pageUpLogs()
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	// Ручное обновление текущего вывода журнала (Ctrl+Q) актуально в режиме выключенного автоматического обновления
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlQ, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		app.updateLogOutput(false)
@@ -6007,6 +6056,61 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+
+	// slash (/)
+	// Переключение фокуса на окно фильтрации списков журналов
+	customSlash := getHotkey(config.Hotkeys.GoToFilter, "/")
+	if err := app.gui.SetKeybinding("services", customSlash, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.lastCurrentView = "services"
+		app.backCurrentView = true
+		return app.setSelectView(app.gui, "filterList")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("varLogs", customSlash, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.lastCurrentView = "varLogs"
+		app.backCurrentView = true
+		return app.setSelectView(app.gui, "filterList")
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("docker", customSlash, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.lastCurrentView = "docker"
+		app.backCurrentView = true
+		return app.setSelectView(app.gui, "filterList")
+	}); err != nil {
+		return err
+	}
+	// В окне вывода журнала переключаемся на фильтр журнала
+	if err := app.gui.SetKeybinding("logs", customSlash, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.lastCurrentView = "logs"
+		app.backCurrentView = true
+		return app.setSelectView(app.gui, "filter")
+	}); err != nil {
+		return err
+	}
+	// Возврат к последнему окну до использования слэша с использование Enter из окна фильтрации
+	if err := app.gui.SetKeybinding("filterList", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.backCurrentView {
+			app.backCurrentView = false
+			return app.setSelectView(app.gui, app.lastCurrentView)
+		} else {
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("filter", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.backCurrentView {
+			app.backCurrentView = false
+			return app.setSelectView(app.gui, app.lastCurrentView)
+		} else {
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
+
 	// Обновить все текущие списки журналов вручную (Ctrl+R)
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlR, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.getOS != "windows" {
@@ -6277,56 +6381,6 @@ func (app *App) setupKeybindings() error {
 		vLog.Subtitle = fmt.Sprintf("[tail: %s lines | auto-update: %t (%d sec) | docker: %s (%s) | color: %t]", app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.dockerStreamLogsStr, app.dockerStreamMode, app.colorMode)
 		app.updateLogOutput(false)
 		return nil
-	}); err != nil {
-		return err
-	}
-	// Изменяем фокус окна на фильтрацию с помощью слэша (slash)
-	if err := app.gui.SetKeybinding("services", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.lastCurrentView = "services"
-		app.backCurrentView = true
-		return app.setSelectView(app.gui, "filterList")
-	}); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("varLogs", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.lastCurrentView = "varLogs"
-		app.backCurrentView = true
-		return app.setSelectView(app.gui, "filterList")
-	}); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("docker", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.lastCurrentView = "docker"
-		app.backCurrentView = true
-		return app.setSelectView(app.gui, "filterList")
-	}); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("logs", '/', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		app.lastCurrentView = "logs"
-		app.backCurrentView = true
-		return app.setSelectView(app.gui, "filter")
-	}); err != nil {
-		return err
-	}
-	// Возврат к последнему окну до использования слэша с использование Enter из окна фильтрации
-	if err := app.gui.SetKeybinding("filterList", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if app.backCurrentView {
-			app.backCurrentView = false
-			return app.setSelectView(app.gui, app.lastCurrentView)
-		} else {
-			return nil
-		}
-	}); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("filter", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if app.backCurrentView {
-			app.backCurrentView = false
-			return app.setSelectView(app.gui, app.lastCurrentView)
-		} else {
-			return nil
-		}
 	}); err != nil {
 		return err
 	}
