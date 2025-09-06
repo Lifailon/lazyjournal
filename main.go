@@ -36,7 +36,7 @@ type Config struct {
 	Hotkeys Hotkeys `yaml:"Hotkeys"`
 }
 
-// Структура горячих клавиш для конфигурации (#23)
+// Структура доступных сочетаний клавиш для переопределения
 type Hotkeys struct {
 	Help                 string `yaml:"help"`
 	Up                   string `yaml:"up"`
@@ -69,8 +69,6 @@ type Hotkeys struct {
 	TimestampShow        string `yaml:"timestampShow"`
 	Exit                 string `yaml:"exit"`
 }
-
-var config Config
 
 // Структура хранения информации о журналах
 type Journal struct {
@@ -244,7 +242,7 @@ func showHelp() {
 	fmt.Println()
 }
 
-// #18
+// Audit (#18)
 func (app *App) showAudit() {
 	var auditText []string
 	app.testMode = true
@@ -482,6 +480,35 @@ func (app *App) showAudit() {
 	}
 }
 
+var config Config
+
+// Read configuration (#23)
+func (config *Config) getConfig() (string, error) {
+	// Читаем файл конфигурации
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	configPath := filepath.Join(currentDir, "config.yml")
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		homePath, _ := os.UserHomeDir()
+		configPath = filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
+		configData, err = os.ReadFile(configPath)
+		if err != nil {
+			return configPath, fmt.Errorf("configuration file not found")
+		}
+	}
+
+	// Парсим yaml конфигурации
+	err = yaml.Unmarshal(configData, &config)
+	if err != nil {
+		return configPath, fmt.Errorf("error yaml syntax in config file\n%s", err)
+	}
+
+	return configPath, err
+}
+
 // Предварительная компиляция регулярных выражений для покраски вывода и их доступности в тестах
 var (
 	// Исключаем все до http:// (включительно) в начале строки
@@ -597,29 +624,9 @@ func runGoCui(mock bool) {
 	sshModeFlag := flag.String("ssh", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
 	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
 
-	// Получаем путь к конфигурации
-	homePath, _ := os.UserHomeDir()
-	configPath := filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
-
-	// Читаем файл конфигурации
-	configData, configError := os.ReadFile(configPath)
-	if configError != nil {
-		configData, configError = os.ReadFile("config.yml")
-		if configError != nil {
-			fmt.Println("Configuration file not found")
-			os.Exit(1)
-		}
-	}
-
-	// Парсим yaml конфигурации
-	configError = yaml.Unmarshal(configData, &config)
-	if configError != nil {
-		fmt.Printf("Error yaml syntax in config file\n%s\n", configError)
-		os.Exit(1)
-	}
-
 	// Обработка аргументов
 	flag.Parse()
+
 	if *help {
 		showHelp()
 		os.Exit(0)
@@ -635,12 +642,22 @@ func runGoCui(mock bool) {
 		os.Exit(0)
 	}
 
+	// Читаем конфигурацию (извлекаем путь и ошибки)
+	configPath, configError := config.getConfig()
+
 	if *configFlag {
 		fmt.Println("path:", configPath)
 		fmt.Println("---")
+
+		// Проверяем конфигурацию на ошибки
+		if configError != nil {
+			fmt.Println(configError)
+			os.Exit(1)
+		}
+
 		// Выводим содержимое конфигурации
 		// fmt.Println(string(configData))
-		// Выводим полученные значения из конфигурации с проверкой на пустые значения (форматированный вывод без комментариев)
+		// Выводим полученные значения из конфигурации (форматированный вывод) с проверкой на пустые значения
 		fmt.Println("hotkeys:")
 		fmt.Printf("  help:                  %s\n", config.Hotkeys.Help)
 		fmt.Printf("  up:                    %s\n", config.Hotkeys.Up)
