@@ -70,7 +70,7 @@
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
-      "args": ["-s", "192.168.3.105"]
+      "args": ["-s", "192.168.3.101"]
     },
     {
       "name": "sudo ssh mode",
@@ -79,7 +79,7 @@
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
-      "args": ["-s", "192.168.3.105 sudo"]
+      "args": ["-s", "192.168.3.101 sudo"]
     },
   ]
 }
