@@ -4,34 +4,43 @@
 # ctrl+<a-z>
 # <tab/shift+tab/enter/space/backspace/delete/escape>
 
-Hotkeys:
-  help: "f1"
-  up: "k"
-  quickUp: "shift+k"
-  veryQuickUp: "ctrl+k"
-  switchFilterMode: "ctrl+k"
-  down: "j"
-  quickDown: "shift+j"
-  veryQuickDown: "ctrl+j"
-  backSwitchFilterMode: "ctrl+j"
-  left: "h"
-  right: "l"
-  switchWindow: "tab"
-  backSwitchWindows: "shift+tab"
-  loadJournal: "enter"
-  goToFilter: "/"
-  goToEnd: "ctrl+e"
-  goToTop: "ctrl+a"
-  tailModeMore: "ctrl+x"
-  tailModeLess: "ctrl+z"
-  updateIntervalMore: "ctrl+p"
-  updateIntervalLess: "ctrl+o"
-  autoUpdateJournal: "ctrl+u"
-  updateJournal: "ctrl+r"
-  updateLists: "ctrl+q"
-  colorDisable: "ctrl+w"
-  tailspinEnable: "ctrl+n"
-  switchDockerMode: "ctrl+d"
-  switchStreamMode: "ctrl+s"
-  timestampShow: "ctrl+t"
-  exit: "ctrl+c"
+hotkeys:
+  help: f1
+  up: k
+  quickUp: shift+k
+  veryQuickUp: ctrl+k
+  switchFilterMode: ctrl+k
+  down: j
+  quickDown: shift+j
+  veryQuickDown: ctrl+j
+  backSwitchFilterMode: ctrl+j
+  left: h
+  right: l
+  switchWindow: tab
+  backSwitchWindows: shift+tab
+  loadJournal: enter
+  goToFilter: /
+  goToEnd: ctrl+e
+  goToTop: ctrl+a
+  tailModeMore: ctrl+x
+  tailModeLess: ctrl+z
+  updateIntervalMore: ctrl+p
+  updateIntervalLess: ctrl+o
+  autoUpdateJournal: ctrl+u
+  updateJournal: ctrl+r
+  updateLists: ctrl+q
+  colorDisable: ctrl+w
+  tailspinEnable: ctrl+n
+  switchDockerMode: ctrl+d
+  switchStreamMode: ctrl+s
+  timestampShow: ctrl+t
+  exit: ctrl+c
+
+settings:
+  tailMode: 50000
+  updateInterval: 5
+  disableAutoUpdate: false
+  disableColor: false
+  disableMouse: false
+  disableTimestamp: false
+  onlyStream: false
