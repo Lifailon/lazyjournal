@@ -33,10 +33,11 @@ var programVersion string = "0.7.9"
 
 // Структура конфигурации
 type Config struct {
-	Hotkeys Hotkeys `yaml:"Hotkeys"`
+	Hotkeys  Hotkeys  `yaml:"hotkeys"`
+	Settings Settings `yaml:"settings"`
 }
 
-// Структура доступных сочетаний клавиш для переопределения
+// Структура доступных сочетаний клавиш для переопределения (#23)
 type Hotkeys struct {
 	Help                 string `yaml:"help"`
 	Up                   string `yaml:"up"`
@@ -68,6 +69,17 @@ type Hotkeys struct {
 	SwitchStreamMode     string `yaml:"switchStreamMode"`
 	TimestampShow        string `yaml:"timestampShow"`
 	Exit                 string `yaml:"exit"`
+}
+
+// Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
+type Settings struct {
+	TailMode         string `yaml:"tailMode"`
+	UpdateInterval   string `yaml:"updateInterval"`
+	DisableColor     string `yaml:"disableColor"`
+	DisableMouse     string `yaml:"disableMouse"`
+	DisableTimestamp string `yaml:"disableTimestamp"`
+	OnlyStream       string `yaml:"onlyStream"`
+	SshOptions       string `yaml:"sshOptions"`
 }
 
 // Структура хранения информации о журналах
@@ -227,8 +239,8 @@ func showHelp() {
 	fmt.Println("    --version, -v              Show version")
 	fmt.Println("    --audit, -a                Show audit information")
 	fmt.Println("    --config, -g               Show configuration with value check")
-	fmt.Println("    --tail, -t                 Change the number of log lines to output (default: 50000, range: 200-200000)")
-	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)")
+	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 50000)")
+	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	fmt.Println("    --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)")
 	fmt.Println("    --disable-color, -d        Disable output coloring")
 	fmt.Println("    --disable-mouse, -m        Disable mouse control support")
@@ -480,9 +492,10 @@ func (app *App) showAudit() {
 	}
 }
 
+// Объявляем конфигурацию
 var config Config
 
-// Read configuration (#23)
+// Читаем конфигурацию
 func (config *Config) getConfig() (string, error) {
 	// Читаем файл конфигурации
 	currentDir, err := os.Getwd()
@@ -601,10 +614,10 @@ func runGoCui(mock bool) {
 	flag.BoolVar(audit, "a", false, "Show audit information")
 	configFlag := flag.Bool("config", false, "Show configuration with value check")
 	flag.BoolVar(configFlag, "g", false, "Show configuration with value check")
-	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
-	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (default: 50000, range: 200-200000)")
-	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
-	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (default: 5, range: 2-10)")
+	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
+	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
+	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
+	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	disableScroll := flag.Bool("disable-autoupdate", false, "Disable streaming of new events (log is loaded once without automatic update)")
 	flag.BoolVar(disableScroll, "e", false, "Disable streaming of new events (log is loaded once without automatic update)")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
@@ -689,6 +702,16 @@ func runGoCui(mock bool) {
 		fmt.Printf("  switchStreamMode:      %s\n", config.Hotkeys.SwitchStreamMode)
 		fmt.Printf("  timestampShow:         %s\n", config.Hotkeys.TimestampShow)
 		fmt.Printf("  exit:                  %s\n", config.Hotkeys.Exit)
+
+		fmt.Println("settings:")
+		fmt.Printf("  tailMode:              %s\n", config.Settings.TailMode)
+		fmt.Printf("  updateInterval:        %s\n", config.Settings.UpdateInterval)
+		fmt.Printf("  disableColor:          %s\n", config.Settings.DisableColor)
+		fmt.Printf("  disableMouse:          %s\n", config.Settings.DisableMouse)
+		fmt.Printf("  disableTimestamp:      %s\n", config.Settings.DisableTimestamp)
+		fmt.Printf("  onlyStream:            %s\n", config.Settings.OnlyStream)
+		fmt.Printf("  sshOptions:            %s\n", config.Settings.SshOptions)
+
 		fmt.Println()
 		os.Exit(0)
 	}
