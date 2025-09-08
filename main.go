@@ -542,6 +542,8 @@ var (
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
 	// Замена пробелов на T для фильтрации по дате+время
 	reSpace = regexp.MustCompile(`\s+`)
+	// Проверка формата времени (короткий формат)
+	filterTimeRegex = regexp.MustCompile(`^[+-]\d+[smhd]$`)
 )
 
 // Определяем название удаленной системы
@@ -3748,8 +3750,8 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 		// Пропускаем только цифры (0-9)
 		case ch >= '0' && ch <= '9':
 			v.EditWrite(ch)
-		// Пропускаем "-" для даты и ":" для времени
-		case ch == '-' || ch == ':':
+		// Пропускаем ":" для времени, "-" для даты, а также [+-] и [smh] для сокращенного формата
+		case ch == ':' || ch == '-' || ch == '+' || ch == 's' || ch == 'm' || ch == 'h' || ch == 'd':
 			v.EditWrite(ch)
 		// Пропускаем пробел (работает в journalctl для разделения времени, но необходимо обновить в docker logs на T)
 		case key == gocui.KeySpace:
@@ -3807,9 +3809,13 @@ func (app *App) timestampCheckFormat(input string) bool {
 		"2006-01-02 15:04",    // 2025-04-14 00:00
 		"2006-01-02 15:04:05", // 2025-04-14 00:00:00
 	}
-	for _, layout := range formats {
-		if _, err := time.Parse(layout, input); err == nil {
-			return true
+	if filterTimeRegex.MatchString(input) {
+		return true
+	} else {
+		for _, layout := range formats {
+			if _, err := time.Parse(layout, input); err == nil {
+				return true
+			}
 		}
 	}
 	return false
@@ -6538,6 +6544,33 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+	// Очистка поля ввода для фильтрации по времени
+	if err := app.gui.SetKeybinding("sinceFilter", customExit, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.sinceFilterText == "" {
+			return quit(g, v)
+		} else {
+			v.Clear()
+			app.sinceFilterText = strings.TrimSpace(v.Buffer())
+			v.FrameColor = gocui.ColorGreen
+			app.sinceTimestampFilterMode = false
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("untilFilter", customExit, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if app.untilFilterText == "" {
+			return quit(g, v)
+		} else {
+			v.Clear()
+			app.untilFilterText = strings.TrimSpace(v.Buffer())
+			v.FrameColor = gocui.ColorGreen
+			app.untilTimestampFilterMode = false
+			return nil
+		}
+	}); err != nil {
+		return err
+	}
 
 	// Mouse control
 	// Привязка клика мыши для выбора элемента в списке журналов и изменения фокуса на окно
@@ -6665,7 +6698,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 49
+	width, height := 108, 54
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -6720,6 +6753,9 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "      "+app.wordColor("2025-04-14"))
 	fmt.Fprintln(helpView, "      "+app.wordColor("2025-04-14 00:00"))
 	fmt.Fprintln(helpView, "      "+app.wordColor("2025-04-14 00:00:00"))
+	fmt.Fprintln(helpView, "\n    Examples of short format:")
+	fmt.Fprintln(helpView, "\n      Since \033[35m-\033[34m48h\033[0m until \033[35m-\033[34m24h\033[0m for container logs from journald (logs for the previous day).")
+	fmt.Fprintln(helpView, "      Since \033[35m+\033[34m1h\033[0m until \033[35m+\033[34m30m\033[0m for system journals from docker or podman.")
 	fmt.Fprintln(helpView, "\n    Source code: "+app.wordColor("https://github.com/Lifailon/lazyjournal"))
 }
 
