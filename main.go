@@ -3338,9 +3338,16 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		}
 		output, err := cmd.Output()
 		// Если ошибка чтения, значит нет доступа и переходим к чтению из потока
-		if err != nil {
+		if err != nil && app.dockerStreamLogsStr == "json" {
 			readFileContainer = false
 			app.dockerStreamLogsStr = "stream"
+			app.dockerStreamLogs = true
+			go func() {
+				text := "Access denied to json logs (use root)"
+				app.showInterfaceInfo(g, true, text)
+				time.Sleep(3 * time.Second)
+				app.closeInfo(g)
+			}()
 		} else {
 			readFileContainer = true
 			app.dockerStreamLogsStr = "json"
@@ -6383,12 +6390,20 @@ func (app *App) setupKeybindings() error {
 		if app.tailSpinMode {
 			app.tailSpinMode = false
 		} else {
-			// Проверяем, что tailspin установлен в системе
+			// Проверяем, что tailspin или tspin установлен в системе
 			tsCommands := []string{"tailspin", "tspin"}
 			for _, ts := range tsCommands {
 				cmd := exec.Command(ts, "--version")
 				_, err := cmd.Output()
-				if err == nil {
+				// Если не установлен, выводим интерфейс ошибки на 3 секунды
+				if err != nil {
+					go func() {
+						text := "tailspin/tspin not found in environment"
+						app.showInterfaceInfo(g, true, text)
+						time.Sleep(3 * time.Second)
+						app.closeInfo(g)
+					}()
+				} else {
 					app.tailSpinMode = true
 					app.tailSpinBinName = ts
 				}
@@ -6645,6 +6660,7 @@ func (app *App) setupKeybindings() error {
 	return nil
 }
 
+// Интерфейс справки
 func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
@@ -6709,6 +6725,38 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 
 func (app *App) closeHelp(g *gocui.Gui) {
 	if err := g.DeleteView("help"); err != nil {
+		return
+	}
+}
+
+// Интерфейс ошибки
+func (app *App) showInterfaceInfo(g *gocui.Gui, errInfo bool, text string) {
+	maxX, maxY := g.Size()
+	width, height := 50, 3
+	x0 := (maxX - width) - 5
+	y0 := (maxY - height) - 2
+	x1 := x0 + width
+	y1 := y0 + height
+	helpView, err := g.SetView("info", x0, y0, x1, y1, 0)
+	if err != nil && !errors.Is(err, gocui.ErrUnknownView) {
+		return
+	}
+	if errInfo {
+		helpView.Title = " Error "
+		helpView.FrameColor = gocui.ColorRed
+		helpView.TitleColor = gocui.ColorRed
+	} else {
+		helpView.Title = " Info "
+		helpView.FrameColor = gocui.ColorGreen
+		helpView.TitleColor = gocui.ColorGreen
+	}
+	helpView.Wrap = true
+	helpView.Clear()
+	fmt.Fprintln(helpView, text)
+}
+
+func (app *App) closeInfo(g *gocui.Gui) {
+	if err := g.DeleteView("info"); err != nil {
 		return
 	}
 }
