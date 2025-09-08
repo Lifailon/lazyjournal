@@ -73,13 +73,13 @@ type Hotkeys struct {
 
 // Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
 type Settings struct {
-	TailMode         string `yaml:"tailMode"`
-	UpdateInterval   string `yaml:"updateInterval"`
-	DisableColor     string `yaml:"disableColor"`
-	DisableMouse     string `yaml:"disableMouse"`
-	DisableTimestamp string `yaml:"disableTimestamp"`
-	OnlyStream       string `yaml:"onlyStream"`
-	SshOptions       string `yaml:"sshOptions"`
+	TailMode          string `yaml:"tailMode"`
+	UpdateInterval    string `yaml:"updateInterval"`
+	DisableAutoUpdate string `yaml:"disableAutoUpdate"`
+	DisableColor      string `yaml:"disableColor"`
+	DisableMouse      string `yaml:"disableMouse"`
+	DisableTimestamp  string `yaml:"disableTimestamp"`
+	OnlyStream        string `yaml:"onlyStream"`
 }
 
 // Структура хранения информации о журналах
@@ -707,27 +707,89 @@ func runGoCui(mock bool) {
 		fmt.Printf("  tailMode:              %s\n", config.Settings.TailMode)
 		fmt.Printf("  updateInterval:        %s\n", config.Settings.UpdateInterval)
 		fmt.Printf("  disableColor:          %s\n", config.Settings.DisableColor)
+		fmt.Printf("  disableAutoUpdate:     %s\n", config.Settings.DisableAutoUpdate)
 		fmt.Printf("  disableMouse:          %s\n", config.Settings.DisableMouse)
 		fmt.Printf("  disableTimestamp:      %s\n", config.Settings.DisableTimestamp)
 		fmt.Printf("  onlyStream:            %s\n", config.Settings.OnlyStream)
-		fmt.Printf("  sshOptions:            %s\n", config.Settings.SshOptions)
 
 		fmt.Println()
 		os.Exit(0)
 	}
 
-	if *tailFlag == "200" || *tailFlag == "500" || *tailFlag == "1000" || *tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" || *tailFlag == "30000" || *tailFlag == "50000" || *tailFlag == "100000" || *tailFlag == "150000" || *tailFlag == "200000" {
+	// Проверяем и извлекаем значения настроек для флагов из конфигурации
+
+	if config.Settings.TailMode != "" {
+		tailFlag = &config.Settings.TailMode
+	}
+
+	if config.Settings.UpdateInterval != "" {
+		updateIntervalInt, err := strconv.Atoi(config.Settings.UpdateInterval)
+		if err == nil {
+			updateFlag = &updateIntervalInt
+		}
+	}
+
+	if config.Settings.DisableAutoUpdate != "" {
+		if strings.ToLower(config.Settings.DisableAutoUpdate) == "true" {
+			trueFlag := true
+			disableScroll = &trueFlag
+		}
+	}
+
+	if config.Settings.DisableColor != "" {
+		if strings.ToLower(config.Settings.DisableColor) == "true" {
+			trueFlag := true
+			disableColor = &trueFlag
+		}
+	}
+
+	if config.Settings.DisableMouse != "" {
+		if strings.ToLower(config.Settings.DisableMouse) == "true" {
+			trueFlag := true
+			disableMouse = &trueFlag
+		}
+	}
+
+	if config.Settings.DisableTimestamp != "" {
+		if strings.ToLower(config.Settings.DisableTimestamp) == "true" {
+			trueFlag := true
+			disableTimeStamp = &trueFlag
+		}
+	}
+
+	if config.Settings.OnlyStream != "" {
+		if strings.ToLower(config.Settings.OnlyStream) == "true" {
+			trueFlag := true
+			dockerStreamFlag = &trueFlag
+		}
+	}
+
+	// Обработка остальных флагов с учетом полученных данных из конфигурации
+
+	if *tailFlag == "200" || *tailFlag == "500" || *tailFlag == "1000" ||
+		*tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" ||
+		*tailFlag == "30000" || *tailFlag == "50000" || *tailFlag == "100000" ||
+		*tailFlag == "150000" || *tailFlag == "200000" {
 		app.logViewCount = *tailFlag
 	} else {
-		fmt.Println("Available values: 200, 500, 1000, 5000, 10000, 20000, 30000 50000, 100000, 150000, 200000 (default: 50000 lines)")
-		os.Exit(1)
+		// Если ошибка в конфигурации, задаем значение по умолчанию
+		if config.Settings.TailMode != "" {
+			app.logViewCount = "50000"
+		} else {
+			fmt.Println("Available values: 200, 500, 1000, 5000, 10000, 20000, 30000 50000, 100000, 150000, 200000 (default: 50000 lines)")
+			os.Exit(1)
+		}
 	}
 
 	if *updateFlag >= 2 && *updateFlag <= 10 {
 		app.logUpdateSeconds = *updateFlag
 	} else {
-		fmt.Println("Valid range: 2-10 (default: 5 seconds)")
-		os.Exit(1)
+		if config.Settings.UpdateInterval != "" {
+			app.logUpdateSeconds = 5
+		} else {
+			fmt.Println("Valid range: 2-10 (default: 5 seconds)")
+			os.Exit(1)
+		}
 	}
 
 	if *disableScroll {
@@ -735,12 +797,12 @@ func runGoCui(mock bool) {
 		app.autoScroll = false
 	}
 
-	if *disableMouse {
-		app.mouseSupport = false
-	}
-
 	if *disableColor {
 		app.colorMode = false
+	}
+
+	if *disableMouse {
+		app.mouseSupport = false
 	}
 
 	if *disableTimeStamp {
