@@ -70,7 +70,7 @@
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
-      "args": ["-s", "192.168.3.101"]
+      "args": ["-s", "lifailon@192.168.3.101 -p 2121"]
     },
     {
       "name": "sudo ssh mode",
@@ -79,7 +79,7 @@
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
-      "args": ["-s", "192.168.3.101 sudo"]
+      "args": ["-s", "lifailon@192.168.3.101 -p 2121 sudo"]
     },
   ]
 }
