@@ -9,6 +9,10 @@ networks:
     hosts:
       - root@192.168.3.102:22
       - root@192.168.3.103:22
+  rpi:
+    hosts:
+      - lifailon@192.168.3.105:2121
+      - lifailon@192.168.3.106:2121
 
 commands:
   install:
@@ -26,32 +30,26 @@ commands:
         fi
       fi
 
-  clone:
-    desc: Clone repository
-    run: |
-      rm -rf lazyjournal
-      git clone $GIT_URL
-
   creat:
     desc: Creat directory for upload files
     run: |
-      rm -rf lazyjournal
-      mkdir lazyjournal
+      rm -rf git/lazyjournal
+      mkdir -p git/lazyjournal
 
   copy:
     desc: Upload all files to remote hosts
     upload:
       - src: \*
-        dst: lazyjournal
+        dst: git/lazyjournal
 
   ls:
     desc: Check directory
-    run: ls -lh lazyjournal
+    run: ls -lh git/lazyjournal
 
   prep:
     desc: Install dependencies and code preparation
     run: |
-      cd lazyjournal
+      cd git/lazyjournal
       go fmt ./...
       go vet ./...
       go get ./...
@@ -62,20 +60,20 @@ commands:
   test:
     desc: Run unit tests
     run: |
-      cd lazyjournal
+      cd git/lazyjournal
       go test -v -cover --run "TestUnixFiles|TestColor|TestFilter|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface"
 
   docker:
     desc: Run docker containers test
     run: |
-      cd lazyjournal
+      cd git/lazyjournal
       go test -v -cover --run "TestDockerContainer"
 
   remove:
     desc: Remove files on remote hosts
     run: |
-      rm -rf lazyjournal
-      ls -l lazyjournal 2> /dev/null || echo "lazyjournal removed"
+      rm -rf git/lazyjournal
+      ls -l git/lazyjournal 2> /dev/null || echo "lazyjournal removed"
 
   bin:
     desc: Install binary from GitHub
@@ -92,6 +90,7 @@ commands:
       lazyjournal -v
       mkdir -p /opt
       echo test > /opt/test.log
+      lazyjournal -g
       lazyjournal -a
       rm /opt/test.log
       curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -c
@@ -101,7 +100,7 @@ commands:
   tmux:
     desc: Check run interface from release
     run: |
-      if [ "$(uname -s)" = "FreeBSD" ]; then 
+      if [ "$(uname -s)" = "FreeBSD" ]; then
         . /root/.shrc
       elif [ "$(uname -s)" = "OpenBSD" ]; then
         . /root/.kshrc
