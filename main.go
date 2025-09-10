@@ -2303,8 +2303,8 @@ func (app *App) loadFiles(logPath string) {
 		}
 		// Получаем дату изменения
 		modTime := fileInfo.ModTime()
-		// Форматирование даты в формат DD.MM.YYYY
-		formattedDate := modTime.Format("02.01.2006")
+		// Форматирование даты в формат DD.MM.YYYY HH:MM
+		formattedDate := modTime.Format("02.01.2006 15:04")
 		// Проверяем, что полного пути до файла еще нет в списке
 		if logName != "" && !serviceMap[logFullPath] {
 			// Добавляем путь в массив для проверки уникальных путей
@@ -2347,7 +2347,7 @@ func (app *App) loadFiles(logPath string) {
 	// Сортируем по дате
 	sort.Slice(app.logfiles, func(i, j int) bool {
 		// Извлечение дат из имени
-		layout := "02.01.2006"
+		layout := "02.01.2006 15:04"
 		dateI, _ := time.Parse(layout, extractDate(app.logfiles[i].name))
 		dateJ, _ := time.Parse(layout, extractDate(app.logfiles[j].name))
 		// return dateI.Before(dateJ)
@@ -2465,8 +2465,8 @@ func (app *App) loadWinFiles(logPath string) {
 		}
 		// Получаем дату изменения
 		modTime := fileInfo.ModTime()
-		// Форматирование даты в формат DD.MM.YYYY
-		formattedDate := modTime.Format("02.01.2006")
+		// Форматирование даты в формат DD.MM.YYYY HH:MM
+		formattedDate := modTime.Format("02.01.2006 15:04")
 		// Проверяем, что полного пути до файла еще нет в списке
 		if logName != "" && !serviceMap[logFullPath] {
 			// Добавляем путь в массив для проверки уникальных путей
@@ -2480,7 +2480,7 @@ func (app *App) loadWinFiles(logPath string) {
 	}
 	// Сортируем по дате
 	sort.Slice(app.logfiles, func(i, j int) bool {
-		layout := "02.01.2006"
+		layout := "02.01.2006 15:04"
 		dateI, _ := time.Parse(layout, extractDate(app.logfiles[i].name))
 		dateJ, _ := time.Parse(layout, extractDate(app.logfiles[j].name))
 		return dateI.After(dateJ)
@@ -2491,9 +2491,9 @@ func (app *App) loadWinFiles(logPath string) {
 	}
 }
 
-// Функция для извлечения первой втречающейся даты в формате DD.MM.YYYY
+// Функция для извлечения первой втречающейся даты в формате DD.MM.YYYY HH:MM
 func extractDate(name string) string {
-	re := regexp.MustCompile(`\d{2}\.\d{2}\.\d{4}`)
+	re := regexp.MustCompile(`\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2}`)
 	return re.FindString(name)
 }
 
@@ -3390,7 +3390,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 				var formattedLines []string
 				// Обрабатываем вывод в формате JSON построчно
-				for i, line := range lines {
+				for _, line := range lines {
 					// JSON-структура для парсинга
 					var jsonData map[string]interface{}
 					err := json.Unmarshal([]byte(line), &jsonData)
@@ -3435,9 +3435,6 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					}
 					formattedLines = append(formattedLines, formattedLine)
 					// Если это последняя строка в выводе, добавляем перенос строки
-					if i == len(lines)-1 {
-						formattedLines = append(formattedLines, "\n")
-					}
 				}
 				app.currentLogLines = formattedLines
 			}
@@ -3973,8 +3970,11 @@ func (app *App) applyFilter(color bool) {
 				}
 			}
 		}
-		// Если последняя строка не содержит пустую строку, то добавляем ее
+		// Если последняя строка не содержит пустую строку, то добавляем две пустые строки или одну по умолчанию
 		if len(app.filteredLogLines) > 0 && app.filteredLogLines[len(app.filteredLogLines)-1] != "" {
+			app.filteredLogLines = append(app.filteredLogLines, "")
+			app.filteredLogLines = append(app.filteredLogLines, "")
+		} else {
 			app.filteredLogLines = append(app.filteredLogLines, "")
 		}
 		// Отключаем покраску в режиме colorMode
