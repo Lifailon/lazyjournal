@@ -17,7 +17,7 @@ lint-install:
 	go install github.com/go-critic/go-critic/cmd/gocritic@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
 
-lint-check: prep lint-install
+lint-check: lint-install
 	golangci-lint run ./main.go
 	gocritic check -enableAll ./main.go
 	gosec -severity=high ./...
@@ -92,9 +92,25 @@ run: build-local
 
 BINPATH := $(HOME)/.local/bin
 
-install: build-local
+install-pre-built: build-local
 	@mkdir -p $(BINPATH)
 	@mv ./lazyjournal $(BINPATH)/lazyjournal
 
+LAST_COMMIT_HASH := $(shell git ls-remote https://github.com/lifailon/lazyjournal HEAD | awk '{print $$1}')
+
+install-last-commit:
+	@GOBIN=$(BINPATH) go install github.com/Lifailon/lazyjournal@$(LAST_COMMIT_HASH)
+
 uninstall:
 	rm -f $(shell which lazyjournal)
+
+SSH_OPTIONS := lifailon@192.168.3.101 -p 2121
+
+copy:
+	@tar czf - . | ssh $(SSH_OPTIONS) "mkdir -p git/lazyjournal && cd git/lazyjournal && tar xzf -"
+
+run-remote: copy
+	@ssh lifailon@192.168.3.101 -p 2121 -t "cd git/lazyjournal && /usr/local/go/bin/go run main.go"
+
+test-remote: copy
+	@ssh lifailon@192.168.3.101 -p 2121 "cd git/lazyjournal && /usr/local/go/bin/go test -v -cover ./..."

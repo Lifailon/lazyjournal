@@ -90,9 +90,9 @@ commands:
       lazyjournal -v
       mkdir -p /opt
       echo test > /opt/test.log
-      lazyjournal -g
       lazyjournal -a
       rm /opt/test.log
+      lazyjournal -g
       curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -c
       curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -f "success"
       curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -r "http|127"
@@ -105,11 +105,13 @@ commands:
       elif [ "$(uname -s)" = "OpenBSD" ]; then
         . /root/.kshrc
       fi
-      tmux new-session -d -s test-session "lazyjournal"
+      tmux new-session -d -s test-session lazyjournal
+      sleep 1
+      tmux capture-pane -p
+      tmux send-keys -t test-session "$(echo -e 'syslog\t\r')"
       sleep 2
       tmux capture-pane -p
-      tmux send-keys -t test-session "$(echo -e '\t\t')"
-      tmux send-keys -t test-session "$(echo -e '\r')"
+      tmux send-keys -t test-session "$(echo -e '\t\t\trsyslogd')"
       sleep 2
       tmux capture-pane -p
       tmux kill-session -t test-session
