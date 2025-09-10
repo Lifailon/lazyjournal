@@ -237,8 +237,8 @@ func showHelp() {
 	fmt.Println("  Flags:")
 	fmt.Println("    --help, -h                 Show help")
 	fmt.Println("    --version, -v              Show version")
+	fmt.Println("    --config, -g               Show configuration of hotkeys and settings (check values)")
 	fmt.Println("    --audit, -a                Show audit information")
-	fmt.Println("    --config, -g               Show configuration with value check")
 	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 50000)")
 	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	fmt.Println("    --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)")
@@ -254,7 +254,68 @@ func showHelp() {
 	fmt.Println()
 }
 
-// Audit (#18)
+// Confi (#23)
+func showConfig() {
+	// Читаем конфигурацию (извлекаем путь и ошибки)
+	configPath, configError := config.getConfig()
+
+	fmt.Println("path:", configPath)
+	fmt.Println("---")
+
+	// Проверяем конфигурацию на ошибки
+	if configError != nil {
+		fmt.Println(configError)
+		os.Exit(1)
+	}
+
+	// Выводим содержимое конфигурации
+	// fmt.Println(string(configData))
+	// Выводим полученные значения из конфигурации (форматированный вывод) с проверкой на пустые значения
+	fmt.Println("hotkeys:")
+	fmt.Printf("  help:                  %s\n", config.Hotkeys.Help)
+	fmt.Printf("  up:                    %s\n", config.Hotkeys.Up)
+	fmt.Printf("  quickUp:               %s\n", config.Hotkeys.QuickUp)
+	fmt.Printf("  veryQuickUp:           %s\n", config.Hotkeys.VeryQuickUp)
+	fmt.Printf("  switchFilterMode:      %s\n", config.Hotkeys.SwitchFilterMode)
+	fmt.Printf("  down:                  %s\n", config.Hotkeys.Down)
+	fmt.Printf("  quickDown:             %s\n", config.Hotkeys.QuickDown)
+	fmt.Printf("  veryQuickDown:         %s\n", config.Hotkeys.VeryQuickDown)
+	fmt.Printf("  backSwitchFilterMode:  %s\n", config.Hotkeys.BackSwitchFilterMode)
+	fmt.Printf("  left:                  %s\n", config.Hotkeys.Left)
+	fmt.Printf("  right:                 %s\n", config.Hotkeys.Right)
+	fmt.Printf("  switchWindow:          %s\n", config.Hotkeys.SwitchWindow)
+	fmt.Printf("  backSwitchWindows:     %s\n", config.Hotkeys.BackSwitchWindows)
+	fmt.Printf("  loadJournal:           %s\n", config.Hotkeys.LoadJournal)
+	fmt.Printf("  goToFilter:            %s\n", config.Hotkeys.GoToFilter)
+	fmt.Printf("  goToEnd:               %s\n", config.Hotkeys.GoToEnd)
+	fmt.Printf("  goToTop:               %s\n", config.Hotkeys.GoToTop)
+	fmt.Printf("  tailModeMore:          %s\n", config.Hotkeys.TailModeMore)
+	fmt.Printf("  tailModeLess:          %s\n", config.Hotkeys.TailModeLess)
+	fmt.Printf("  updateIntervalMore:    %s\n", config.Hotkeys.UpdateIntervalMore)
+	fmt.Printf("  updateIntervalLess:    %s\n", config.Hotkeys.UpdateIntervalLess)
+	fmt.Printf("  autoUpdateJournal:     %s\n", config.Hotkeys.AutoUpdateJournal)
+	fmt.Printf("  updateJournal:         %s\n", config.Hotkeys.UpdateJournal)
+	fmt.Printf("  updateLists:           %s\n", config.Hotkeys.UpdateLists)
+	fmt.Printf("  colorDisable:          %s\n", config.Hotkeys.ColorDisable)
+	fmt.Printf("  tailspinEnable:        %s\n", config.Hotkeys.TailspinEnable)
+	fmt.Printf("  switchDockerMode:      %s\n", config.Hotkeys.SwitchDockerMode)
+	fmt.Printf("  switchStreamMode:      %s\n", config.Hotkeys.SwitchStreamMode)
+	fmt.Printf("  timestampShow:         %s\n", config.Hotkeys.TimestampShow)
+	fmt.Printf("  exit:                  %s\n", config.Hotkeys.Exit)
+
+	fmt.Println("settings:")
+	fmt.Printf("  tailMode:              %s\n", config.Settings.TailMode)
+	fmt.Printf("  updateInterval:        %s\n", config.Settings.UpdateInterval)
+	fmt.Printf("  disableColor:          %s\n", config.Settings.DisableColor)
+	fmt.Printf("  disableAutoUpdate:     %s\n", config.Settings.DisableAutoUpdate)
+	fmt.Printf("  disableMouse:          %s\n", config.Settings.DisableMouse)
+	fmt.Printf("  disableTimestamp:      %s\n", config.Settings.DisableTimestamp)
+	fmt.Printf("  onlyStream:            %s\n", config.Settings.OnlyStream)
+
+	fmt.Println()
+}
+
+// Audit (#18) for homebrew
 func (app *App) showAudit() {
 	var auditText []string
 	app.testMode = true
@@ -612,10 +673,10 @@ func runGoCui(mock bool) {
 	flag.BoolVar(help, "h", false, "Show help")
 	version := flag.Bool("version", false, "Show version")
 	flag.BoolVar(version, "v", false, "Show version")
+	configFlag := flag.Bool("config", false, "Show configuration of hotkeys and settings (check values)")
+	flag.BoolVar(configFlag, "g", false, "Show configuration of hotkeys and settings (check values)")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
-	configFlag := flag.Bool("config", false, "Show configuration with value check")
-	flag.BoolVar(configFlag, "g", false, "Show configuration with value check")
 	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
 	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
@@ -652,69 +713,13 @@ func runGoCui(mock bool) {
 		os.Exit(0)
 	}
 
-	if *audit {
-		app.showAudit()
+	if *configFlag {
+		showConfig()
 		os.Exit(0)
 	}
 
-	// Читаем конфигурацию (извлекаем путь и ошибки)
-	configPath, configError := config.getConfig()
-
-	if *configFlag {
-		fmt.Println("path:", configPath)
-		fmt.Println("---")
-
-		// Проверяем конфигурацию на ошибки
-		if configError != nil {
-			fmt.Println(configError)
-			os.Exit(1)
-		}
-
-		// Выводим содержимое конфигурации
-		// fmt.Println(string(configData))
-		// Выводим полученные значения из конфигурации (форматированный вывод) с проверкой на пустые значения
-		fmt.Println("hotkeys:")
-		fmt.Printf("  help:                  %s\n", config.Hotkeys.Help)
-		fmt.Printf("  up:                    %s\n", config.Hotkeys.Up)
-		fmt.Printf("  quickUp:               %s\n", config.Hotkeys.QuickUp)
-		fmt.Printf("  veryQuickUp:           %s\n", config.Hotkeys.VeryQuickUp)
-		fmt.Printf("  switchFilterMode:      %s\n", config.Hotkeys.SwitchFilterMode)
-		fmt.Printf("  down:                  %s\n", config.Hotkeys.Down)
-		fmt.Printf("  quickDown:             %s\n", config.Hotkeys.QuickDown)
-		fmt.Printf("  veryQuickDown:         %s\n", config.Hotkeys.VeryQuickDown)
-		fmt.Printf("  backSwitchFilterMode:  %s\n", config.Hotkeys.BackSwitchFilterMode)
-		fmt.Printf("  left:                  %s\n", config.Hotkeys.Left)
-		fmt.Printf("  right:                 %s\n", config.Hotkeys.Right)
-		fmt.Printf("  switchWindow:          %s\n", config.Hotkeys.SwitchWindow)
-		fmt.Printf("  backSwitchWindows:     %s\n", config.Hotkeys.BackSwitchWindows)
-		fmt.Printf("  loadJournal:           %s\n", config.Hotkeys.LoadJournal)
-		fmt.Printf("  goToFilter:            %s\n", config.Hotkeys.GoToFilter)
-		fmt.Printf("  goToEnd:               %s\n", config.Hotkeys.GoToEnd)
-		fmt.Printf("  goToTop:               %s\n", config.Hotkeys.GoToTop)
-		fmt.Printf("  tailModeMore:          %s\n", config.Hotkeys.TailModeMore)
-		fmt.Printf("  tailModeLess:          %s\n", config.Hotkeys.TailModeLess)
-		fmt.Printf("  updateIntervalMore     %s\n", config.Hotkeys.UpdateIntervalMore)
-		fmt.Printf("  updateIntervalLess     %s\n", config.Hotkeys.UpdateIntervalLess)
-		fmt.Printf("  autoUpdateJournal:     %s\n", config.Hotkeys.AutoUpdateJournal)
-		fmt.Printf("  updateJournal:         %s\n", config.Hotkeys.UpdateJournal)
-		fmt.Printf("  updateLists:           %s\n", config.Hotkeys.UpdateLists)
-		fmt.Printf("  colorDisable:          %s\n", config.Hotkeys.ColorDisable)
-		fmt.Printf("  tailspinEnable:        %s\n", config.Hotkeys.TailspinEnable)
-		fmt.Printf("  switchDockerMode:      %s\n", config.Hotkeys.SwitchDockerMode)
-		fmt.Printf("  switchStreamMode:      %s\n", config.Hotkeys.SwitchStreamMode)
-		fmt.Printf("  timestampShow:         %s\n", config.Hotkeys.TimestampShow)
-		fmt.Printf("  exit:                  %s\n", config.Hotkeys.Exit)
-
-		fmt.Println("settings:")
-		fmt.Printf("  tailMode:              %s\n", config.Settings.TailMode)
-		fmt.Printf("  updateInterval:        %s\n", config.Settings.UpdateInterval)
-		fmt.Printf("  disableColor:          %s\n", config.Settings.DisableColor)
-		fmt.Printf("  disableAutoUpdate:     %s\n", config.Settings.DisableAutoUpdate)
-		fmt.Printf("  disableMouse:          %s\n", config.Settings.DisableMouse)
-		fmt.Printf("  disableTimestamp:      %s\n", config.Settings.DisableTimestamp)
-		fmt.Printf("  onlyStream:            %s\n", config.Settings.OnlyStream)
-
-		fmt.Println()
+	if *audit {
+		app.showAudit()
 		os.Exit(0)
 	}
 
@@ -3279,7 +3284,9 @@ func (app *App) selectDocker(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	app.loadDockerLogs(strings.TrimSpace(line), true)
+	go func() {
+		app.loadDockerLogs(strings.TrimSpace(line), true)
+	}()
 	app.lastWindow = "docker"
 	app.lastSelected = strings.TrimSpace(line)
 	return nil
@@ -3344,12 +3351,14 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			readFileContainer = false
 			app.dockerStreamLogsStr = "stream"
 			app.dockerStreamLogs = true
-			go func() {
-				text := "Access denied to json logs (use root)"
-				app.showInterfaceInfo(g, true, text)
-				time.Sleep(3 * time.Second)
-				app.closeInfo(g)
-			}()
+			if !app.testMode {
+				go func() {
+					text := "Access denied to json logs (use root)"
+					app.showInterfaceInfo(g, true, text)
+					time.Sleep(3 * time.Second)
+					app.closeInfo(g)
+				}()
+			}
 		} else {
 			readFileContainer = true
 			app.dockerStreamLogsStr = "json"
@@ -5334,7 +5343,9 @@ func (app *App) updateLogOutput(newUpdate bool) {
 		case "varLogs":
 			app.loadFileLogs(app.lastSelected, newUpdate)
 		case "docker":
-			app.loadDockerLogs(app.lastSelected, newUpdate)
+			go func() {
+				app.loadDockerLogs(app.lastSelected, newUpdate)
+			}()
 		}
 		return nil
 	})
@@ -5369,7 +5380,9 @@ func (app *App) updateLogBackground(secondsChan chan int, newUpdate bool) {
 					case "varLogs":
 						app.loadFileLogs(app.lastSelected, newUpdate)
 					case "docker":
-						app.loadDockerLogs(app.lastSelected, newUpdate)
+						go func() {
+							app.loadDockerLogs(app.lastSelected, newUpdate)
+						}()
 					}
 					return nil
 				})
@@ -6403,12 +6416,14 @@ func (app *App) setupKeybindings() error {
 				_, err := cmd.Output()
 				// Если не установлен, выводим интерфейс ошибки на 3 секунды
 				if err != nil {
-					go func() {
-						text := "tailspin/tspin not found in environment"
-						app.showInterfaceInfo(g, true, text)
-						time.Sleep(3 * time.Second)
-						app.closeInfo(g)
-					}()
+					if !app.testMode {
+						go func() {
+							text := "tailspin/tspin not found in environment"
+							app.showInterfaceInfo(g, true, text)
+							time.Sleep(3 * time.Second)
+							app.closeInfo(g)
+						}()
+					}
 				} else {
 					app.tailSpinMode = true
 					app.tailSpinBinName = ts

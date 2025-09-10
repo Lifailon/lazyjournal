@@ -579,6 +579,7 @@ func TestFilter(t *testing.T) {
 func TestFlags(t *testing.T) {
 	app := &App{}
 	showHelp()
+	showConfig()
 	app.showAudit()
 }
 
