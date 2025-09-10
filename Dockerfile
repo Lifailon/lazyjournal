@@ -1,13 +1,19 @@
 # Build source code and download dependencies
 FROM golang:1.23-alpine3.20 AS build
-RUN apk add -U -q --progress --no-cache git curl
+
+WORKDIR /lazyjournal
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# Build for different architectures
+ARG TARGETOS TARGETARCH
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o /bin/lazyjournal
+
+RUN apk add -U -q --progress --no-cache curl
 RUN curl -fsSL https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 -o /bin/ttyd
-# RUN curl -fsSL https://github.com/containers/podman/releases/latest/download/podman-remote-static-linux_amd64.tar.gz | tar xz -C /bin
+# RUN curl -fsSL https://github.com/containers/podman/releases/latest/download/podman-remote-static-linux_amd64.tar.gz | tar xz -C /
 # RUN latest=$(curl -sL https://dl.k8s.io/release/stable.txt) && \
 #     curl -fsSL https://cdn.dl.k8s.io/release/$latest/bin/linux/amd64/kubectl -o /bin/kubectl
-RUN git clone https://github.com/Lifailon/lazyjournal /lazyjournal
-WORKDIR /lazyjournal
-RUN go build -o /bin/lazyjournal
 
 # Build docker cli
 FROM golang:1.23-alpine3.20 AS docker-build
@@ -29,11 +35,15 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=docker-build /go/src/github.com/docker/cli/build/docker /bin/docker
-# COPY --from=build /bin/bin/podman-remote-static-linux_amd64 /bin/podman
-# COPY --from=build /bin/kubectl /bin/kubectl
 COPY --from=build /bin/lazyjournal /bin/lazyjournal
 COPY --from=build /bin/ttyd /bin/ttyd
-RUN chmod +x /bin/ttyd
+# COPY --from=build /bin/podman-remote-static-linux_amd64 /bin/podman
+# COPY --from=build /bin/kubectl /bin/kubectl
+COPY --from=docker-build /go/src/github.com/docker/cli/build/docker /bin/docker
+RUN chmod +x /bin/lazyjournal /bin/ttyd /bin/docker
+# RUN chmod +x /bin/podman /bin/kubectl
 
-ENTRYPOINT ["sh", "-c", "if [ \"$TTYD\" = \"true\" ]; then exec ttyd -W -p $PORT $( [ -n \"$USERNAME\" ] && [ -n \"$PASSWORD\" ] && echo \"-c $USERNAME:$PASSWORD\" ) lazyjournal; else exec lazyjournal; fi"]
+WORKDIR /bin
+COPY config.yml entrypoint.sh ./
+
+ENTRYPOINT ["entrypoint.sh"]
