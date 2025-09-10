@@ -44,3 +44,4 @@ settings:
   disableMouse: false
   disableTimestamp: false
   onlyStream: false
+  disableFastMode: false

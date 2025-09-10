@@ -80,6 +80,7 @@ type Settings struct {
 	DisableMouse      string `yaml:"disableMouse"`
 	DisableTimestamp  string `yaml:"disableTimestamp"`
 	OnlyStream        string `yaml:"onlyStream"`
+	DisableFastMode   string `yaml:"disableFastMode"`
 }
 
 // Структура хранения информации о журналах
@@ -110,17 +111,17 @@ type dockerLogLines struct {
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
 
-	sshMode    bool     // использовать вызов команд (exec.Command) через ssh
-	sshOptions []string // опции для ssh подключения
-
-	testMode            bool   // исключаем вызовы к gocui при тестирование функций
-	tailSpinMode        bool   // режим покраски через tailspin
-	tailSpinBinName     string // название исполняемого файла (tailspin/tspin)
-	colorMode           bool   // отключение/включение покраски ключевых слов
-	mouseSupport        bool   // отключение/включение поддержки мыши
-	dockerStreamLogs    bool   // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
-	dockerStreamLogsStr string // отображаемый режим чтения журнала Docker (в зависимости от прав доступа и флага)
-	dockerStreamMode    string // переменная для хранения режима чтения потоков (all, stdout или stderr)
+	sshMode             bool     // использовать вызов команд (exec.Command) через ssh
+	sshOptions          []string // опции для ssh подключения
+	fastMode            bool     // загрузка журналов в горутине (beta mode)
+	testMode            bool     // исключаем вызовы к gocui при тестирование функций
+	tailSpinMode        bool     // режим покраски через tailspin
+	tailSpinBinName     string   // название исполняемого файла (tailspin/tspin)
+	colorMode           bool     // отключение/включение покраски ключевых слов
+	mouseSupport        bool     // отключение/включение поддержки мыши
+	dockerStreamLogs    bool     // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
+	dockerStreamLogsStr string   // отображаемый режим чтения журнала Docker (в зависимости от прав доступа и флага)
+	dockerStreamMode    string   // переменная для хранения режима чтения потоков (all, stdout или stderr)
 
 	getOS         string   // название ОС
 	getArch       string   // архитектура процессора
@@ -257,14 +258,14 @@ func showHelp() {
 // Confi (#23)
 func showConfig() {
 	// Читаем конфигурацию (извлекаем путь и ошибки)
-	configPath, configError := config.getConfig()
+	configPath, err := config.getConfig()
 
 	fmt.Println("path:", configPath)
 	fmt.Println("---")
 
 	// Проверяем конфигурацию на ошибки
-	if configError != nil {
-		fmt.Println(configError)
+	if err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
@@ -311,6 +312,7 @@ func showConfig() {
 	fmt.Printf("  disableMouse:          %s\n", config.Settings.DisableMouse)
 	fmt.Printf("  disableTimestamp:      %s\n", config.Settings.DisableTimestamp)
 	fmt.Printf("  onlyStream:            %s\n", config.Settings.OnlyStream)
+	fmt.Printf("  disableFastMode:       %s\n", config.Settings.DisableFastMode)
 
 	fmt.Println()
 }
@@ -624,6 +626,7 @@ func runGoCui(mock bool) {
 	// Инициализация значений по умолчанию + компиляция регулярных выражений для покраски
 	app := &App{
 		sshMode:                      false,
+		fastMode:                     true,
 		testMode:                     false,
 		tailSpinMode:                 false,
 		colorMode:                    true,
@@ -725,6 +728,8 @@ func runGoCui(mock bool) {
 
 	// Проверяем и извлекаем значения настроек для флагов из конфигурации
 
+	config.getConfig()
+
 	if config.Settings.TailMode != "" {
 		tailFlag = &config.Settings.TailMode
 	}
@@ -768,6 +773,12 @@ func runGoCui(mock bool) {
 		if strings.ToLower(config.Settings.OnlyStream) == "true" {
 			trueFlag := true
 			dockerStreamFlag = &trueFlag
+		}
+	}
+
+	if config.Settings.DisableFastMode != "" {
+		if strings.ToLower(config.Settings.DisableFastMode) == "true" {
+			app.fastMode = false
 		}
 	}
 
@@ -1657,7 +1668,13 @@ func (app *App) selectService(g *gocui.Gui, v *gocui.View) error {
 		return err
 	}
 	// Загружаем журналы выбранной службы, обрезая пробелы в названии
-	app.loadJournalLogs(strings.TrimSpace(line), true)
+	if app.fastMode {
+		go func() {
+			app.loadJournalLogs(strings.TrimSpace(line), true)
+		}()
+	} else {
+		app.loadJournalLogs(strings.TrimSpace(line), true)
+	}
 	// Включаем загрузку журнала (только при ручном выборе для Windows)
 	app.updateFile = true
 	// Фиксируем для ручного или автоматического обновления вывода журнала
@@ -2594,7 +2611,13 @@ func (app *App) selectFile(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	app.loadFileLogs(strings.TrimSpace(line), true)
+	if app.fastMode {
+		go func() {
+			app.loadFileLogs(strings.TrimSpace(line), true)
+		}()
+	} else {
+		app.loadFileLogs(strings.TrimSpace(line), true)
+	}
 	app.lastWindow = "varLogs"
 	app.lastSelected = strings.TrimSpace(line)
 	return nil
@@ -3284,9 +3307,13 @@ func (app *App) selectDocker(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	go func() {
+	if app.fastMode {
+		go func() {
+			app.loadDockerLogs(strings.TrimSpace(line), true)
+		}()
+	} else {
 		app.loadDockerLogs(strings.TrimSpace(line), true)
-	}()
+	}
 	app.lastWindow = "docker"
 	app.lastSelected = strings.TrimSpace(line)
 	return nil
@@ -5339,13 +5366,29 @@ func (app *App) updateLogOutput(newUpdate bool) {
 		}
 		switch app.lastWindow {
 		case "services":
-			app.loadJournalLogs(app.lastSelected, newUpdate)
+			if app.fastMode {
+				go func() {
+					app.loadJournalLogs(app.lastSelected, newUpdate)
+				}()
+			} else {
+				app.loadJournalLogs(app.lastSelected, newUpdate)
+			}
 		case "varLogs":
-			app.loadFileLogs(app.lastSelected, newUpdate)
+			if app.fastMode {
+				go func() {
+					app.loadFileLogs(app.lastSelected, newUpdate)
+				}()
+			} else {
+				app.loadFileLogs(app.lastSelected, newUpdate)
+			}
 		case "docker":
-			go func() {
+			if app.fastMode {
+				go func() {
+					app.loadDockerLogs(app.lastSelected, newUpdate)
+				}()
+			} else {
 				app.loadDockerLogs(app.lastSelected, newUpdate)
-			}()
+			}
 		}
 		return nil
 	})
@@ -5376,13 +5419,29 @@ func (app *App) updateLogBackground(secondsChan chan int, newUpdate bool) {
 				app.gui.Update(func(g *gocui.Gui) error {
 					switch app.lastWindow {
 					case "services":
-						app.loadJournalLogs(app.lastSelected, newUpdate)
+						if app.fastMode {
+							go func() {
+								app.loadJournalLogs(app.lastSelected, newUpdate)
+							}()
+						} else {
+							app.loadJournalLogs(app.lastSelected, newUpdate)
+						}
 					case "varLogs":
-						app.loadFileLogs(app.lastSelected, newUpdate)
+						if app.fastMode {
+							go func() {
+								app.loadFileLogs(app.lastSelected, newUpdate)
+							}()
+						} else {
+							app.loadFileLogs(app.lastSelected, newUpdate)
+						}
 					case "docker":
-						go func() {
+						if app.fastMode {
+							go func() {
+								app.loadDockerLogs(app.lastSelected, newUpdate)
+							}()
+						} else {
 							app.loadDockerLogs(app.lastSelected, newUpdate)
-						}()
+						}
 					}
 					return nil
 				})
