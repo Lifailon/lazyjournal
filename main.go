@@ -730,46 +730,46 @@ func runGoCui(mock bool) {
 
 	config.getConfig()
 
-	if config.Settings.TailMode != "" {
+	if config.Settings.TailMode != "" && *tailFlag == "50000" {
 		tailFlag = &config.Settings.TailMode
 	}
 
-	if config.Settings.UpdateInterval != "" {
+	if config.Settings.UpdateInterval != "" && *updateFlag == 5 {
 		updateIntervalInt, err := strconv.Atoi(config.Settings.UpdateInterval)
 		if err == nil {
 			updateFlag = &updateIntervalInt
 		}
 	}
 
-	if config.Settings.DisableAutoUpdate != "" {
+	if config.Settings.DisableAutoUpdate != "" && !*disableScroll {
 		if strings.ToLower(config.Settings.DisableAutoUpdate) == "true" {
 			trueFlag := true
 			disableScroll = &trueFlag
 		}
 	}
 
-	if config.Settings.DisableColor != "" {
+	if config.Settings.DisableColor != "" && !*disableColor {
 		if strings.ToLower(config.Settings.DisableColor) == "true" {
 			trueFlag := true
 			disableColor = &trueFlag
 		}
 	}
 
-	if config.Settings.DisableMouse != "" {
+	if config.Settings.DisableMouse != "" && !*disableMouse {
 		if strings.ToLower(config.Settings.DisableMouse) == "true" {
 			trueFlag := true
 			disableMouse = &trueFlag
 		}
 	}
 
-	if config.Settings.DisableTimestamp != "" {
+	if config.Settings.DisableTimestamp != "" && !*disableTimeStamp {
 		if strings.ToLower(config.Settings.DisableTimestamp) == "true" {
 			trueFlag := true
 			disableTimeStamp = &trueFlag
 		}
 	}
 
-	if config.Settings.OnlyStream != "" {
+	if config.Settings.OnlyStream != "" && !*dockerStreamFlag {
 		if strings.ToLower(config.Settings.OnlyStream) == "true" {
 			trueFlag := true
 			dockerStreamFlag = &trueFlag
@@ -791,9 +791,10 @@ func runGoCui(mock bool) {
 		app.logViewCount = *tailFlag
 	} else {
 		// Если ошибка в конфигурации, задаем значение по умолчанию
-		if config.Settings.TailMode != "" {
+		if config.Settings.TailMode != "" && *tailFlag == "" {
 			app.logViewCount = "50000"
 		} else {
+			// Если ошибка в флаге, возвращяем ошибку
 			fmt.Println("Available values: 200, 500, 1000, 5000, 10000, 20000, 30000 50000, 100000, 150000, 200000 (default: 50000 lines)")
 			os.Exit(1)
 		}
@@ -802,7 +803,7 @@ func runGoCui(mock bool) {
 	if *updateFlag >= 2 && *updateFlag <= 10 {
 		app.logUpdateSeconds = *updateFlag
 	} else {
-		if config.Settings.UpdateInterval != "" {
+		if config.Settings.UpdateInterval != "" && *updateFlag == 0 {
 			app.logUpdateSeconds = 5
 		} else {
 			fmt.Println("Valid range: 2-10 (default: 5 seconds)")
