@@ -560,7 +560,7 @@ var config Config
 
 // Читаем конфигурацию
 func (config *Config) getConfig() (string, error) {
-	// Читаем файл конфигурации
+	// Читаем файл конфигурации из текущего каталога
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -568,20 +568,28 @@ func (config *Config) getConfig() (string, error) {
 	configPath := filepath.Join(currentDir, "config.yml")
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
-		homePath, _ := os.UserHomeDir()
-		configPath = filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
+		// Из каталога с исполняемым файлом
+		execDir, err := os.Executable()
+		if err != nil {
+			return "", err
+		}
+		configPath = filepath.Join(execDir, "config.yml")
 		configData, err = os.ReadFile(configPath)
 		if err != nil {
-			return configPath, fmt.Errorf("configuration file not found")
+			// Из каталога ~/.config/lazyjournal/
+			homePath, _ := os.UserHomeDir()
+			configPath = filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
+			configData, err = os.ReadFile(configPath)
+			if err != nil {
+				return configPath, fmt.Errorf("configuration file not found")
+			}
 		}
 	}
-
 	// Парсим yaml конфигурации
 	err = yaml.Unmarshal(configData, &config)
 	if err != nil {
 		return configPath, fmt.Errorf("error yaml syntax in config file\n%s", err)
 	}
-
 	return configPath, err
 }
 
