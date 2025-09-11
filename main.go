@@ -29,7 +29,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var programVersion string = "0.7.9"
+var programVersion string = "0.8.0"
 
 // Структура конфигурации
 type Config struct {
