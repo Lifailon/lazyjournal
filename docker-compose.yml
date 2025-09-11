@@ -1,6 +1,9 @@
 services:
   lazyjournal:
     image: lifailon/lazyjournal:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: lazyjournal
     restart: unless-stopped
     # Grant read permissions (:ro) from the host system
@@ -19,16 +22,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Read docker logs from filesystem
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      # Custom configuration (optional)
+      - ./config.yml:/bin/config.yml:ro
     privileged: true
     # Remove if not using Web mode
-    environment:
-      - PORT=${PORT}
-      - USERNAME=${USERNAME}
-      - PASSWORD=${PASSWORD}
     ports:
       - "${PORT}:${PORT}"
     env_file:
       - .env
     # Remove if not using TUI mode
-    stdin_open: true
     tty: true
+    stdin_open: true
