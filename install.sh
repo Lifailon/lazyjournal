@@ -13,7 +13,8 @@ case $ARCH in
         ;;
 esac
 
-echo -e "Current system: \033[32m$OS\033[0m (architecture: \033[32m$ARCH\033[0m)"
+echo -e "System: \033[32m$OS\033[0m"
+echo -e "Architecture: \033[32m$ARCH\033[0m"
 
 case "$SHELL" in
     */bash) shellRc="$HOME/.bashrc" ;; # Debian/RHEL
@@ -26,13 +27,18 @@ case "$SHELL" in
         ;;
 esac
 
+binPath=$HOME/.local/bin/lazyjourna
+configPath=$HOME/.config/lazyjournal/config.yml
+
+mkdir -p $binPath
+mkdir -p $configPath
 touch $shellRc
-mkdir -p $HOME/.local/bin
 
 grep -F 'export PATH=$PATH:$HOME/.local/bin' $shellRc > /dev/null || { 
     echo 'export PATH=$PATH:$HOME/.local/bin' >> $shellRc
     source "$shellRc" 2> /dev/null || . "$shellRc"
-    echo -e "Added environment variable \033[34m$HOME/.local/bin\033[0m in \033[34m$shellRc\033[0m"
+    echo -e "Added environment variable \033[34m$HOME/.local/bin\033[0m in \033[34m$shellRc\033[0m profile"
+    echo -e "To launch the interface from anywhere, re-login to the current session or run the command: \033[32m. $shellRc\033[0m"
 }
 
 GITHUB_LATEST_VERSION=$(curl -L -sS -H 'Accept: application/json' https://github.com/Lifailon/lazyjournal/releases/latest | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
@@ -41,12 +47,12 @@ if [ -z "$GITHUB_LATEST_VERSION" ]; then
     exit 1
 else
     BIN_URL="https://github.com/Lifailon/lazyjournal/releases/download/$GITHUB_LATEST_VERSION/lazyjournal-$GITHUB_LATEST_VERSION-$OS-$ARCH"
-    curl -L -sS "$BIN_URL" -o $HOME/.local/bin/lazyjournal
-    chmod +x $HOME/.local/bin/lazyjournal
+    curl -L -sS "$BIN_URL" -o $binPath
+    chmod +x $binPath
     if [ $OS = "darwin" ]; then
-        xattr -d com.apple.quarantine $HOME/.local/bin/lazyjournal
+        xattr -d com.apple.quarantine $binPath
     fi
-    echo -e "✔  Installation completed \033[32msuccessfully\033[0m in \033[34m$HOME/.local/bin/lazyjournal\033[0m (version: $GITHUB_LATEST_VERSION)"
-    echo -e "To launch the interface from anywhere, \033[32mre-login\033[0m to the current session or run the command: \033[32m. $shellRc\033[0m"
+    curl -L -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/config.yml -o $configPath
+    echo -e "✔  Installation completed \033[32msuccessfully\033[0m in \033[34m$binPath\033[0m (version: \033[32m$GITHUB_LATEST_VERSION\033[0m) and configuration in \033[34m$configPath\033[0m"
     exit 0
 fi
