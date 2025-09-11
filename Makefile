@@ -12,6 +12,11 @@ clean:
 update: prep
 	go get -u ./...
 
+run: prep
+	@go run main.go
+
+# Linters
+
 lint-install:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install github.com/go-critic/go-critic/cmd/gocritic@latest
@@ -22,15 +27,19 @@ lint-check: lint-install
 	gocritic check -enableAll ./main.go
 	gosec -severity=high ./...
 
+# Tests
+
 test-list:
 	@go test -list . ./...
-	@echo "\nTo run the selected test: \033[32mmake test n=TestMain\033[0m\n"
+	@echo "\nTo run the selected test: \033[32mmake test n=TestMain*\033[0m\n"
 
 test: prep
 	go test -v -cover --run $(n) ./...
 
 test-all: prep
 	go test -v -cover ./...
+
+# Build
 
 VERSION := $(shell go run main.go -v)
 
@@ -83,34 +92,39 @@ else ifeq ($(ARCH),aarch64)
 	ARCH := arm64
 endif
 
-build-local:
+build:
 	@CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -o lazyjournal
 
-run: build-local
+run-bin: build
 	@./lazyjournal
 	@rm ./lazyjournal
 
-BINPATH := $(HOME)/.local/bin
+# Install
 
-install-pre-built: build-local
-	@mkdir -p $(BINPATH)
-	@mv ./lazyjournal $(BINPATH)/lazyjournal
+BIN_PATH := $(HOME)/.local/bin
+
+install-pre-built: build
+	@mkdir -p $(BIN_PATH)
+	@mv ./lazyjournal $(BIN_PATH)/lazyjournal
 
 LAST_COMMIT_HASH := $(shell git ls-remote https://github.com/lifailon/lazyjournal HEAD | awk '{print $$1}')
 
 install-last-commit:
-	@GOBIN=$(BINPATH) go install github.com/Lifailon/lazyjournal@$(LAST_COMMIT_HASH)
+	@GOBIN=$(BIN_PATH) go install github.com/Lifailon/lazyjournal@$(LAST_COMMIT_HASH)
 
 uninstall:
 	rm -f $(shell which lazyjournal)
 
+# Remote
+
 SSH_OPTIONS := lifailon@192.168.3.101 -p 2121
+GO_PATH := /usr/local/go/bin/go
 
 copy:
 	@tar czf - . | ssh $(SSH_OPTIONS) "mkdir -p git/lazyjournal && cd git/lazyjournal && tar xzf -"
 
 run-remote: copy
-	@ssh lifailon@192.168.3.101 -p 2121 -t "cd git/lazyjournal && /usr/local/go/bin/go run main.go"
+	@ssh $(SSH_OPTIONS) -t "cd git/lazyjournal && $(GO_PATH) run main.go"
 
 test-remote: copy
-	@ssh lifailon@192.168.3.101 -p 2121 "cd git/lazyjournal && /usr/local/go/bin/go test -v -cover ./..."
+	@ssh $(SSH_OPTIONS) "cd git/lazyjournal && $(GO_PATH) test -v -cover ./..."
