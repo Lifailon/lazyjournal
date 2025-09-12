@@ -27,14 +27,14 @@ case "$SHELL" in
         ;;
 esac
 
-binPath=$HOME/.local/bin/lazyjourna
+binPath=$HOME/.local/bin/lazyjournal
 configPath=$HOME/.config/lazyjournal/config.yml
 
-mkdir -p $binPath
-mkdir -p $configPath
+mkdir -p $(dirname "$binPath")
+mkdir -p $(dirname "$configPath")
 touch $shellRc
 
-grep -F 'export PATH=$PATH:$HOME/.local/bin' $shellRc > /dev/null || { 
+grep -F 'export PATH=$PATH:$HOME/.local/bin' $shellRc > /dev/null || {
     echo 'export PATH=$PATH:$HOME/.local/bin' >> $shellRc
     source "$shellRc" 2> /dev/null || . "$shellRc"
     echo -e "Added environment variable \033[34m$HOME/.local/bin\033[0m in \033[34m$shellRc\033[0m profile"
@@ -47,12 +47,12 @@ if [ -z "$GITHUB_LATEST_VERSION" ]; then
     exit 1
 else
     BIN_URL="https://github.com/Lifailon/lazyjournal/releases/download/$GITHUB_LATEST_VERSION/lazyjournal-$GITHUB_LATEST_VERSION-$OS-$ARCH"
-    curl -L -sS "$BIN_URL" -o $binPath
-    chmod +x $binPath
+    curl -L -sS "$BIN_URL" -o "$binPath"
+    chmod +x "$binPath"
     if [ $OS = "darwin" ]; then
-        xattr -d com.apple.quarantine $binPath
+        xattr -d com.apple.quarantine "$binPath"
     fi
-    curl -L -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/config.yml -o $configPath
+    curl -L -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/config.yml -o "$configPath"
     echo -e "✔  Installation completed \033[32msuccessfully\033[0m in \033[34m$binPath\033[0m (version: \033[32m$GITHUB_LATEST_VERSION\033[0m) and configuration in \033[34m$configPath\033[0m"
     exit 0
 fi
