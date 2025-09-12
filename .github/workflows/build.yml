@@ -33,13 +33,13 @@ on:
         default: false
         type: boolean
 
-run-name: ${{ github.event.inputs.Distro }} [#${{ github.run_number }}]
+run-name: CI #${{ github.run_number }} on ${{ github.event.inputs.Distro }}
 
 jobs:
   build:
     runs-on: ${{ github.event.inputs.Distro }}
 
-    name: Run on ${{ github.event.inputs.Distro }}
+    name: CI #${{ github.run_number }} on ${{ github.event.inputs.Distro }}
 
     steps:
       - name: Clone main repository
@@ -66,7 +66,7 @@ jobs:
           echo "## Build Information" >> $GITHUB_STEP_SUMMARY
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: $version" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build number**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Update dependencies
         if: ${{ github.event.inputs.Update == 'true' }}
@@ -125,10 +125,14 @@ jobs:
 
       - name: Unit testing (all functions and mock interface) in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
-        run: sudo env "PATH=$PATH" go test -v -cover
+        run: |
+          output=$(sudo env "PATH=$PATH" go test -v -cover)
+          echo "## Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "$output" | tail -n 2 | head -n 1 >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
 
+      # Docker test without root
       - name: Unit testing for docker without root in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: env "PATH=$PATH" go test -v -cover --run "TestDockerContainer"
@@ -151,7 +155,10 @@ jobs:
       # macOS
       - name: Unit testing (files, flags, cli and run main interface) in macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
-        run: sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface"
+        run: |
+          output=$(sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface")
+          echo "## Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "$output" | tail -n 2 | head -n 1 >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
 
@@ -171,7 +178,10 @@ jobs:
 
       - name: Unit testing (events, files, flags, cli, main and mock interface) in Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
-        run: go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface"
+        run: |
+          output=$(go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface")
+          echo "## Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "$output" | tail -n 2 | head -n 1 >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
 
@@ -246,12 +256,12 @@ jobs:
           oss=("linux" "darwin" "openbsd" "freebsd" "windows")
           for arch in "${architectures[@]}"; do
               for os in "${oss[@]}"; do
-                binName="bin/lazyjournal-$version-$os-$arch"
-                # Для Windows добавляем .exe
-                if [[ "$os" == "windows" ]]; then
-                    binName="$binName.exe"
-                fi
-                CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -o "$binName"
+                  binName="bin/lazyjournal-$version-$os-$arch"
+                  if [[ "$os" == "windows" ]]; then
+                      binName="$binName.exe"
+                  fi
+                  CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -o "$binName"
+              done 
           done
           ls -lh bin
           echo "ARTIFACT_NAME=lazyjournal-$version" >> $GITHUB_ENV
