@@ -7,14 +7,6 @@ on:
         description: 'Build and Push to Docker Hub'
         default: false
         type: boolean
-      Snap:
-        description: 'Build snap package'
-        default: false
-        type: boolean
-      Snapcraft:
-        description: 'Push to Snapcraft'
-        default: false
-        type: boolean
 
 jobs:
   build:
@@ -31,42 +23,21 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Build and push Docker image
+    - name: Install Docker Buildx
+      if: ${{ github.event.inputs.Docker == 'true' }}
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver: docker-container
+        install: true
+
+    - name: Build and push Docker images for Linux on amd64 and arm64
       if: ${{ github.event.inputs.Docker == 'true' }}
       run: |
-        docker build -t lifailon/lazyjournal:latest .
-        docker push lifailon/lazyjournal:latest
-
-    - name: Install Go
-      if: ${{ github.event.inputs.Docker != 'true' }}
-      uses: actions/setup-go@v5
-      with:
-        go-version: 1.23
-
-    - name: Install snapcraft and build snap package
-      if: ${{ github.event.inputs.Snap == 'true' || github.event.inputs.Snapcraft == 'true' }}
-      run: |
-        sudo apt update
-        sudo apt install -y snapd
-        snap version
-        sudo snap install snapcraft --classic
-        snapcraft version
-        version=$(go run main.go -v)
-        sed -i "s/0.7.7/$version/g" snapcraft.yaml
-        snapcraft --destructive-mode
-        sudo snap install *.snap --dangerous --classic
-        snap remove lazyjournal
-
-    - name: Login and push to Snapcraft
-      if: ${{ github.event.inputs.Snapcraft == 'true' }}
-      run: |
-        # snapcraft export-login --snaps lazyjournal snap-login.txt
-        export SNAPCRAFT_STORE_CREDENTIALS="${{ secrets.SNAPCRAFT_SECRET }}"
-        snapcraft push *.snap
-
-    - name: Upload snap package
-      if: ${{ github.event.inputs.Snap == 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: snap-package
-        path: lazyjournal*.snap
+        # docker build -t lifailon/lazyjournal:latest .
+        # docker push lifailon/lazyjournal:latest
+        docker buildx build \
+          --platform \
+          linux/amd64,linux/arm64 \
+          -t lifailon/lazyjournal \
+          --push .
+      continue-on-error: true
