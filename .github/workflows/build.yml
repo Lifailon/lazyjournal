@@ -33,13 +33,13 @@ on:
         default: false
         type: boolean
 
-run-name: CI #${{ github.run_number }} on ${{ github.event.inputs.Distro }}
+run-name: CI on ${{ github.event.inputs.Distro }} [#${{ github.run_number }}]
 
 jobs:
   build:
     runs-on: ${{ github.event.inputs.Distro }}
 
-    name: CI #${{ github.run_number }} on ${{ github.event.inputs.Distro }}
+    name: CI on ${{ github.event.inputs.Distro }} [#${{ github.run_number }}]
 
     steps:
       - name: Clone main repository
@@ -127,8 +127,8 @@ jobs:
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: |
           output=$(sudo env "PATH=$PATH" go test -v -cover)
-          echo "## Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "$output" | tail -n 2 | head -n 1 >> $GITHUB_STEP_SUMMARY
+          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "$output" | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
 
@@ -157,8 +157,8 @@ jobs:
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
         run: |
           output=$(sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface")
-          echo "## Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "$output" | tail -n 2 | head -n 1 >> $GITHUB_STEP_SUMMARY
+          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "$output" | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
 
@@ -180,8 +180,8 @@ jobs:
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
         run: |
           output=$(go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface")
-          echo "## Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "$output" | tail -n 2 | head -n 1 >> $GITHUB_STEP_SUMMARY
+          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "$output" | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
 
@@ -196,7 +196,7 @@ jobs:
         if: ${{ github.event.inputs.Release == 'true' }}
         run: |
           LAST_COMMIT_HASH=$(git ls-remote https://github.com/lifailon/lazyjournal HEAD | awk '{print $1}')
-          go install github.com/Lifailon/lazyjournal@$(LAST_COMMIT_HASH)
+          go install github.com/Lifailon/lazyjournal@$LAST_COMMIT_HASH
 
       - name: Check flags (cli mode)
         if: ${{ github.event.inputs.Release == 'true' }}
