@@ -6,7 +6,7 @@ on:
       Distro:
         description: 'Select runner image' # https://github.com/actions/runner-images
         required: true
-        default: 'ubuntu-20.04'
+        default: 'ubuntu-24.04'
         type: choice
         options:
           - 'ubuntu-24.04'
@@ -32,14 +32,18 @@ on:
         description: 'Build binary'
         default: false
         type: boolean
+      Docker:
+        description: 'Build image and Push to Docker Hub'
+        default: false
+        type: boolean
 
 run-name: CI on ${{ github.event.inputs.Distro }} [#${{ github.run_number }}]
 
 jobs:
-  build:
+  test:
     runs-on: ${{ github.event.inputs.Distro }}
 
-    name: CI on ${{ github.event.inputs.Distro }} [#${{ github.run_number }}]
+    name: Tests on ${{ github.event.inputs.Distro }}
 
     steps:
       - name: Clone main repository
@@ -59,10 +63,9 @@ jobs:
           go mod verify
           go build -v ./...
 
-      - name: Get version
+      - name: Get build information
         run: |
           version=$(go run main.go -v)
-          echo "VERSION=$version" >> $GITHUB_ENV
           echo "## 🚀 Build Information" >> $GITHUB_STEP_SUMMARY
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: $version" >> $GITHUB_STEP_SUMMARY
@@ -72,6 +75,7 @@ jobs:
           echo "- **Unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Release check**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build binary**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build docker image**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
         shell: bash
 
       - name: Update dependencies
@@ -253,55 +257,110 @@ jobs:
           tmux capture-pane -p
           tmux kill-session -t test-session
 
-      # Build
-      - name: Build binaries
-        if: ${{ github.event.inputs.Binary == 'true' }}
-        run: |
-          version=$VERSION
-          mkdir -p bin
-          architectures=("amd64" "arm64")
-          oss=("linux" "darwin" "openbsd" "freebsd" "windows")
-          for arch in "${architectures[@]}"; do
-              for os in "${oss[@]}"; do
-                  binName="bin/lazyjournal-$version-$os-$arch"
-                  if [[ "$os" == "windows" ]]; then
-                      binName="$binName.exe"
-                  fi
-                  CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -o "$binName"
-              done 
-          done
-          ls -lh bin
-          echo "ARTIFACT_NAME=lazyjournal-$version" >> $GITHUB_ENV
+  build:
+    runs-on: ubuntu-latest
 
-      - name: Build deb package
-        if: ${{ github.event.inputs.Binary == 'true' }}
-        run: |
-          version=$VERSION
-          rm -f lazyjournal
-          mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
-          architectures=("amd64" "arm64")
-          for arch in "${architectures[@]}"; do
-              rm -f lazyjournal/usr/local/bin/lazyjournal
-              cp bin/lazyjournal-$version-linux-$arch lazyjournal/usr/local/bin/lazyjournal
-              rm -f lazyjournal/DEBIAN/control
-              echo "Package: lazyjournal" > lazyjournal/DEBIAN/control
-              echo "Version: $version" >> lazyjournal/DEBIAN/control
-              echo "Architecture: $arch" >> lazyjournal/DEBIAN/control
-              echo "Maintainer: https://github.com/Lifailon" >> lazyjournal/DEBIAN/control
-              echo "Description: A TUI for reading logs from journald, auditd, file system, Docker and Podman containers, as well Kubernetes pods." >> lazyjournal/DEBIAN/control
-              dpkg-deb --build lazyjournal lazyjournal-$version-$arch.deb
-              dpkg-deb --contents lazyjournal-$version-$arch.deb
-              mv lazyjournal-$version-$arch.deb bin/lazyjournal-$version-$arch.deb
-          done
-          ls -lh bin/*.deb
-          sudo dpkg -i bin/lazyjournal-$version-amd64.deb
-          sudo dpkg -r lazyjournal
+    name: Build on ubuntu-latest
 
-      - name: Upload binaries
-        if: ${{ github.event.inputs.Binary == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: bin/
-        env:
-          ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+    steps:
+    - name: Clone repository
+      uses: actions/checkout@v4
+
+    - name: Clone main repository
+      uses: actions/checkout@v4
+
+    - name: Install Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.25
+
+    - name: Install dependencies
+      run: |
+        go fmt ./...
+        go vet ./...
+        go get ./...
+        go mod tidy
+        go mod verify
+        go build -v ./...
+
+    - name: Get version in env for build
+      run: |
+        version=$(go run main.go -v)
+        echo "VERSION=$version" >> $GITHUB_ENV
+
+    - name: Build binaries
+      if: ${{ github.event.inputs.Binary == 'true' }}
+      run: |
+        version=$VERSION        
+        mkdir -p bin
+        architectures=("amd64" "arm64")
+        oss=("linux" "darwin" "openbsd" "freebsd" "windows")
+        for arch in "${architectures[@]}"; do
+            for os in "${oss[@]}"; do
+                binName="bin/lazyjournal-$version-$os-$arch"
+                if [[ "$os" == "windows" ]]; then
+                    binName="$binName.exe"
+                fi
+                CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -o "$binName"
+            done 
+        done
+        ls -lh bin
+        echo "ARTIFACT_NAME=lazyjournal-$version" >> $GITHUB_ENV
+
+    - name: Build deb package
+      if: ${{ github.event.inputs.Binary == 'true' }}
+      run: |
+        rm -f lazyjournal
+        mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
+        architectures=("amd64" "arm64")
+        for arch in "${architectures[@]}"; do
+            rm -f lazyjournal/usr/local/bin/lazyjournal
+            cp bin/lazyjournal-$version-linux-$arch lazyjournal/usr/local/bin/lazyjournal
+            rm -f lazyjournal/DEBIAN/control
+            echo "Package: lazyjournal" > lazyjournal/DEBIAN/control
+            echo "Version: $version" >> lazyjournal/DEBIAN/control
+            echo "Architecture: $arch" >> lazyjournal/DEBIAN/control
+            echo "Maintainer: https://github.com/Lifailon" >> lazyjournal/DEBIAN/control
+            echo "Description: A TUI for reading logs from journald, auditd, file system, Docker and Podman containers, as well Kubernetes pods." >> lazyjournal/DEBIAN/control
+            dpkg-deb --build lazyjournal lazyjournal-$version-$arch.deb
+            dpkg-deb --contents lazyjournal-$version-$arch.deb
+            mv lazyjournal-$version-$arch.deb bin/lazyjournal-$version-$arch.deb
+        done
+        ls -lh bin/*.deb
+        sudo dpkg -i bin/lazyjournal-$version-amd64.deb
+        sudo dpkg -r lazyjournal
+
+    - name: Upload binaries
+      if: ${{ github.event.inputs.Binary == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.ARTIFACT_NAME }}
+        path: bin/
+      env:
+        ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+
+    - name: Login to Docker Hub
+      if: ${{ github.event.inputs.Docker == 'true' }}
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Install Docker Buildx
+      if: ${{ github.event.inputs.Docker == 'true' }}
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver: docker-container
+        install: true
+
+    - name: Build and push Docker images for Linux on amd64 and arm64
+      if: ${{ github.event.inputs.Docker == 'true' }}
+      run: |
+        # docker build -t lifailon/lazyjournal:latest .
+        # docker push lifailon/lazyjournal:latest
+        docker buildx build \
+          --platform \
+          linux/amd64,linux/arm64 \
+          -t lifailon/lazyjournal \
+          --push .
+      continue-on-error: true
