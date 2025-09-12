@@ -13,3 +13,4 @@ lazyjournal
 # Test reports
 *report.md
 *.out
+test.log

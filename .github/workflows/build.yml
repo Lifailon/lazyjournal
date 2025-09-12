@@ -136,9 +136,9 @@ jobs:
       - name: Unit testing (all functions and mock interface) in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: |
-          output=$(sudo env "PATH=$PATH" go test -v -cover | tee /dev/tty)
+          output=$(sudo env "PATH=$PATH" go test -v -cover | tee test.log)
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "$output" | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
+          cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 10
 
@@ -166,9 +166,9 @@ jobs:
       - name: Unit testing (files, flags, cli and run main interface) in macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
         run: |
-          output=$(sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" | tee /dev/tty)
+          output=$(sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" | tee test.log)
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "$output" | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
+          cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
 
@@ -189,9 +189,9 @@ jobs:
       - name: Unit testing (events, files, flags, cli, main and mock interface) in Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
         run: |
-          output=$(go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" | tee /dev/tty)
+          output=$(go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" | tee test.log)
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "$output" | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
+          cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         shell: bash
         continue-on-error: true
         timeout-minutes: 5
@@ -291,7 +291,7 @@ jobs:
     - name: Build binaries
       if: ${{ github.event.inputs.Binary == 'true' }}
       run: |
-        version=$VERSION        
+        version=$VERSION
         mkdir -p bin
         architectures=("amd64" "arm64")
         oss=("linux" "darwin" "openbsd" "freebsd" "windows")
@@ -310,6 +310,7 @@ jobs:
     - name: Build deb package
       if: ${{ github.event.inputs.Binary == 'true' }}
       run: |
+        version=$VERSION
         rm -f lazyjournal
         mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
         architectures=("amd64" "arm64")
