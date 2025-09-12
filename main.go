@@ -581,14 +581,14 @@ func (config *Config) getConfig() (string, error) {
 			configPath = filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
 			configData, err = os.ReadFile(configPath)
 			if err != nil {
-				return configPath, fmt.Errorf("configuration file not found")
+				return configPath, ErrConfigNotFound
 			}
 		}
 	}
 	// Парсим yaml конфигурации
 	err = yaml.Unmarshal(configData, &config)
 	if err != nil {
-		return configPath, fmt.Errorf("error yaml syntax in config file\n%s", err)
+		return configPath, fmt.Errorf("%w: %w", ErrYamlSyntax, err)
 	}
 	return configPath, err
 }
@@ -617,12 +617,20 @@ var (
 	filterTimeRegex = regexp.MustCompile(`^[+-]\d+[smhd]$`)
 )
 
+// Ошибки
+var (
+	ErrConfigNotFound = errors.New("configuration file not found")
+	ErrYamlSyntax     = errors.New("error yaml syntax in config file")
+	ErrSSHConnection  = errors.New("error connecting on SSH to")
+	ErrInvalidStat    = errors.New("invalid stat output")
+)
+
 // Определяем название удаленной системы
 func remoteGetOS(sshOptions []string) (string, error) {
 	cmd := exec.Command("ssh", append(sshOptions, "uname", "-s")...)
 	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("%s %s", "Error connecting to", sshOptions[0])
+		return "", fmt.Errorf("%w: %s", ErrSSHConnection, sshOptions[0])
 	} else {
 		return strings.ToLower(string(output)), nil
 	}
@@ -736,7 +744,10 @@ func runGoCui(mock bool) {
 
 	// Проверяем и извлекаем значения настроек для флагов из конфигурации
 
-	config.getConfig()
+	_, errConfig := config.getConfig()
+	if errConfig != nil {
+		fmt.Println(errConfig)
+	}
 
 	if config.Settings.TailMode != "" && *tailFlag == "50000" {
 		tailFlag = &config.Settings.TailMode
@@ -750,42 +761,42 @@ func runGoCui(mock bool) {
 	}
 
 	if config.Settings.DisableAutoUpdate != "" && !*disableScroll {
-		if strings.ToLower(config.Settings.DisableAutoUpdate) == "true" {
+		if strings.EqualFold(config.Settings.DisableAutoUpdate, "true") {
 			trueFlag := true
 			disableScroll = &trueFlag
 		}
 	}
 
 	if config.Settings.DisableColor != "" && !*disableColor {
-		if strings.ToLower(config.Settings.DisableColor) == "true" {
+		if strings.EqualFold(config.Settings.DisableColor, "true") {
 			trueFlag := true
 			disableColor = &trueFlag
 		}
 	}
 
 	if config.Settings.DisableMouse != "" && !*disableMouse {
-		if strings.ToLower(config.Settings.DisableMouse) == "true" {
+		if strings.EqualFold(config.Settings.DisableMouse, "true") {
 			trueFlag := true
 			disableMouse = &trueFlag
 		}
 	}
 
 	if config.Settings.DisableTimestamp != "" && !*disableTimeStamp {
-		if strings.ToLower(config.Settings.DisableTimestamp) == "true" {
+		if strings.EqualFold(config.Settings.DisableTimestamp, "true") {
 			trueFlag := true
 			disableTimeStamp = &trueFlag
 		}
 	}
 
 	if config.Settings.OnlyStream != "" && !*dockerStreamFlag {
-		if strings.ToLower(config.Settings.OnlyStream) == "true" {
+		if strings.EqualFold(config.Settings.OnlyStream, "true") {
 			trueFlag := true
 			dockerStreamFlag = &trueFlag
 		}
 	}
 
 	if config.Settings.DisableFastMode != "" {
-		if strings.ToLower(config.Settings.DisableFastMode) == "true" {
+		if strings.EqualFold(config.Settings.DisableFastMode, "true") {
 			app.fastMode = false
 		}
 	}
@@ -1907,7 +1918,7 @@ type fileInfo struct {
 func (fi *fileInfo) Name() string       { return fi.name }
 func (fi *fileInfo) Size() int64        { return fi.size }
 func (fi *fileInfo) ModTime() time.Time { return fi.modTime }
-func (fi *fileInfo) Mode() os.FileMode  { return 0644 }  // default rights
+func (fi *fileInfo) Mode() os.FileMode  { return 0o644 } // default rights
 func (fi *fileInfo) IsDir() bool        { return false } // only file
 func (fi *fileInfo) Sys() any           { return nil }
 
@@ -1927,7 +1938,7 @@ func (app *App) statFile(path string) (os.FileInfo, error) {
 		line := strings.TrimSpace(string(output))
 		parts := strings.Split(line, "|")
 		if len(parts) != 3 {
-			return nil, fmt.Errorf("invalid stat output: %s", line)
+			return nil, fmt.Errorf("%w: %s", ErrInvalidStat, line)
 		}
 		// Преобразуем размер и время в int
 		size, err := strconv.ParseInt(parts[1], 10, 64)
@@ -1956,7 +1967,9 @@ func (app *App) statFiles(paths []string) (map[string]os.FileInfo, error) {
 	if len(paths) == 0 {
 		return make(map[string]os.FileInfo), nil
 	}
-	args := append(app.sshOptions, "stat", "-L", "-c", "'%n|%s|%Y'")
+	args := make([]string, len(app.sshOptions))
+	copy(args, app.sshOptions)
+	args = append(args, "stat", "-L", "-c", "'%n|%s|%Y'")
 	args = append(args, paths...)
 	cmd := exec.Command("ssh", args...)
 	output, _ := cmd.Output()
@@ -1968,7 +1981,7 @@ func (app *App) statFiles(paths []string) (map[string]os.FileInfo, error) {
 		}
 		parts := strings.Split(line, "|")
 		if len(parts) != 3 {
-			return nil, fmt.Errorf("invalid stat output: %s", line)
+			return nil, fmt.Errorf("%w: %s", ErrInvalidStat, line)
 		}
 		size, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
@@ -3193,9 +3206,9 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			serviceMap[idName] = true
 			containerStatus := parts[2]
 			switch {
-			case strings.ToLower(containerStatus) == "running":
+			case strings.EqualFold(containerStatus, "running"):
 				containerStatus = "\033[32m" + containerStatus + "\033[0m"
-			case strings.ToLower(containerStatus) == "succeeded":
+			case strings.EqualFold(containerStatus, "succeeded"):
 				containerStatus = "\033[33m" + containerStatus + "\033[0m"
 			default:
 				containerStatus = "\033[31m" + containerStatus + "\033[0m"
@@ -4017,8 +4030,7 @@ func (app *App) applyFilter(color bool) {
 		}
 		// Если последняя строка не содержит пустую строку, то добавляем две пустые строки или одну по умолчанию
 		if len(app.filteredLogLines) > 0 && app.filteredLogLines[len(app.filteredLogLines)-1] != "" {
-			app.filteredLogLines = append(app.filteredLogLines, "")
-			app.filteredLogLines = append(app.filteredLogLines, "")
+			app.filteredLogLines = append(app.filteredLogLines, "", "")
 		} else {
 			app.filteredLogLines = append(app.filteredLogLines, "")
 		}
@@ -5601,7 +5613,7 @@ var keyMap = map[string]gocui.Key{
 	"enter":     gocui.KeyEnter,
 	"space":     gocui.KeySpace,
 	"backspace": gocui.KeyBackspace,
-	"delete ":   gocui.KeyDelete,
+	"delete":    gocui.KeyDelete,
 	"escape":    gocui.KeyEsc,
 }
 
@@ -5609,28 +5621,31 @@ var keyMap = map[string]gocui.Key{
 func getHotkey(configKey, defaultKey string) any {
 	// Опускаем регистр для всех вхождений (букв и сочетаний)
 	inputKey := strings.ToLower(configKey)
-	// Если это одна буква, конвертируем string в rune и извлекаем значение
+	// Если это одна буква, конвертируем string в rune (используя DecodeRuneInString) и извлекаем значение
 	if len(inputKey) == 1 {
-		return []rune(inputKey)[0]
+		if r, _ := utf8.DecodeRuneInString(inputKey); r != utf8.RuneError {
+			return r
+		}
 	} else {
 		// Если сочетание клавиш содержит shift, извлекаем последнюю букву в верхнем регистре
 		if strings.HasPrefix(inputKey, "shift+") && inputKey != "shift+tab" {
 			inputKey = strings.ToTitle(configKey)
 			return []rune(inputKey)[len(inputKey)-1]
 		} else {
-			// Ищем сочетание клавиш в карте или возвращяем значение по умолчанию (которое передается во втором параметре)
+			// Ищем сочетание клавиш в карте
 			key, exists := keyMap[inputKey]
 			if exists {
 				return key
-			} else {
-				if len(defaultKey) == 1 {
-					return []rune(defaultKey)[0]
-				} else {
-					return keyMap[defaultKey]
-				}
 			}
 		}
 	}
+	// Возвращяем значение по умолчанию (которое передается во втором параметре)
+	if len(defaultKey) == 1 {
+		if r, _ := utf8.DecodeRuneInString(defaultKey); r != utf8.RuneError {
+			return r
+		}
+	}
+	return keyMap[defaultKey]
 }
 
 // Функция для биндинга клавиш
