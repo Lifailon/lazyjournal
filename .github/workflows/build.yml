@@ -25,7 +25,7 @@ on:
         default: false
         type: boolean
       Release:
-        description: 'Release check (tmux)'
+        description: 'Release check'
         default: false
         type: boolean
       Binary:
@@ -63,10 +63,16 @@ jobs:
         run: |
           version=$(go run main.go -v)
           echo "VERSION=$version" >> $GITHUB_ENV
-          echo "## Build Information" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Build Information" >> $GITHUB_STEP_SUMMARY
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: $version" >> $GITHUB_STEP_SUMMARY
           echo "- **Build number**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Update dependencies**: #${{ github.event.inputs.Update }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Linter check**: #${{ github.event.inputs.Linter }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Unit testing**: #${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release check**: #${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build binary**: #${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
+        shell: bash
 
       - name: Update dependencies
         if: ${{ github.event.inputs.Update == 'true' }}
@@ -127,7 +133,7 @@ jobs:
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: |
           output=$(sudo env "PATH=$PATH" go test -v -cover)
-          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           echo "$output" | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
@@ -157,7 +163,7 @@ jobs:
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
         run: |
           output=$(sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface")
-          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           echo "$output" | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
@@ -180,7 +186,7 @@ jobs:
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
         run: |
           output=$(go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface")
-          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           echo "$output" | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
         timeout-minutes: 5
