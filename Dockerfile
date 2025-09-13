@@ -40,10 +40,10 @@ COPY --from=build /bin/ttyd /bin/ttyd
 # COPY --from=build /bin/podman-remote-static-linux_amd64 /bin/podman
 # COPY --from=build /bin/kubectl /bin/kubectl
 COPY --from=docker-build /go/src/github.com/docker/cli/build/docker /bin/docker
-RUN chmod +x /bin/lazyjournal /bin/ttyd /bin/docker
-# RUN chmod +x /bin/podman /bin/kubectl
 
-WORKDIR /bin
+WORKDIR /lazyjournal
 COPY config.yml entrypoint.sh ./
 
-ENTRYPOINT ["entrypoint.sh"]
+RUN chmod +x /bin/lazyjournal /bin/ttyd /bin/docker /lazyjournal/entrypoint.sh
+
+ENTRYPOINT ["/lazyjournal/entrypoint.sh"]
