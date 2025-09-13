@@ -1,14 +1,12 @@
-# Build source code and download dependencies
+# Build source code for different architectures
 FROM golang:1.23-alpine3.20 AS build
-
 WORKDIR /lazyjournal
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Build for different architectures
 ARG TARGETOS TARGETARCH
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o /bin/lazyjournal
-
+# Download ttyd
 RUN apk add -U -q --progress --no-cache curl
 RUN ARCH=$(case ${TARGETARCH} in \
     "amd64") echo "x86_64" ;; \
@@ -34,23 +32,19 @@ RUN rm build/docker && mv build/docker-${TARGETOS}-${TARGETARCH} build/docker
 
 # Final image - используем multi-arch базовый образ
 FROM debian:bookworm-slim
-
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends systemd \
     xz-utils bzip2 gzip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
 COPY --from=build /bin/lazyjournal /bin/lazyjournal
 COPY --from=build /bin/ttyd /bin/ttyd
 # COPY --from=build /bin/podman-remote-static-linux_amd64 /bin/podman
 # COPY --from=build /bin/kubectl /bin/kubectl
 COPY --from=docker-build /go/src/github.com/docker/cli/build/docker /bin/docker
-
 WORKDIR /lazyjournal
 COPY config.yml entrypoint.sh ./
-
 RUN chmod +x /bin/lazyjournal /bin/ttyd /bin/docker /lazyjournal/entrypoint.sh
 
 ENTRYPOINT ["/lazyjournal/entrypoint.sh"]

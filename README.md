@@ -4,7 +4,7 @@
 
 <p align="center">
     <a href="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml"><img title="Actions Build"src="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml/badge.svg"></a>
-    <a href="https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.html"><img title="Go coverage report"src="https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg"></a>
+    <a href="https://github.com/Lifailon/lazyjournal/wiki"><img title="Go coverage report"src="https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg"></a>
     <a href="https://goreportcard.com/report/github.com/Lifailon/lazyjournal"><img src="https://goreportcard.com/badge/github.com/Lifailon/lazyjournal" alt="Go Report"></a>
     <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
     <a href="https://github.com/Lifailon/lazyjournal/blob/rsa/LICENSE"><img title="License"src="https://img.shields.io/github/license/Lifailon/lazyjournal?logo=readme&color=white"></a>
@@ -50,8 +50,10 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
 - Search and analyze all logs from remote hosts in one interface using [rsyslog](https://www.rsyslog.com) configuration.
 - Docker and Swarm logs from the file system or stream, including build-in timestamps and filtering by stream.
 - Podman logs, without the need to run a background process (socket).
-- Kubernetes pods (you must first configure a connection to the cluster via `kubectl`).
+- Kubernetes pods logs (you must first configure a connection to the cluster via `kubectl`).
+- Logs of [k3s](https://github.com/k3s-io/k3s) pods and containers from the file system on any nodes (including workers).
 - Windows Event Logs via `PowerShell` and `wevtutil`, as well as application logs from Windows file system.
+- Access to logs on a remote system (no client installation required).
 
 ### Filtering
 
@@ -60,15 +62,20 @@ Supports 4 filtering modes:
 - **Default** - case sensitive exact search.
 - **Fuzzy** (like `fzf`) - custom inexact case-insensitive search (searches for all phrases separated by a space anywhere on a line).
 - **Regex** (like `grep`) - search with regular expression support, based on the built-in [regexp](https://pkg.go.dev/regexp) library, case-insensitive by default (in case a regular expression syntax error occurs, the input field will be highlighted in red).
-- **Timestamp** - filter `since` and/or `until` by date and time for `journald` and docker or podman logs in stream mode. This mode affects the loading of the log (thereby increasing performance) and can be used in conjunction with other filtering modes, so the current log should be reloaded by pressing `Enter` in the current input field.
+- **Timestamp** - filter `since` and/or `until` by date and time for `journald` and docker or podman logs (only in stream mode). This mode affects the loading of the log (thereby increasing performance) and can be used in conjunction with other filtering modes, so the current log should be reloaded by pressing `Enter` in the current input field.
 
-Supported formats for timestamp:
+Supported formats for filtering by timestamp:
 
 - `00:00`
 - `00:00:00`
 - `2025-04-14`
 - `2025-04-14 00:00`
 - `2025-04-14 00:00:00`
+
+Examples of short format:
+
+- Since `-48h` until `-24h` for container logs from journald (logs for the previous day).
+- Since `+1h` until `+30m` for system journals from docker or podman.
 
 ### Coloring
 
@@ -107,7 +114,7 @@ curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh 
 ```
 
 > [!NOTE]
-> This command will run a script that downloads the latest version of the executable binary from the GitHub repository to the home directory along with other executable files for the current user (default path `~/.local/bin/`) and grants permission to execute it.
+> This command will run a script that will download the latest executable binary (auto-detect OS and arch) from the GitHub repository to your home directory along with other executables (default path is `~/.local/bin/`) and configurations (`~/.config/lazyjournal/`) for the current user, and also grant execute permission.
 
 ### Debian-based
 
@@ -118,14 +125,6 @@ arch=$( [ "$(uname -m)" = "aarch64" ] && echo "arm64" || echo "amd64" )
 version=$(curl -L -sS -H 'Accept: application/json' https://github.com/Lifailon/lazyjournal/releases/latest | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
 curl -L -sS https://github.com/Lifailon/lazyjournal/releases/download/$version/lazyjournal-$version-$arch.deb -o /tmp/lazyjournal.deb
 sudo apt install /tmp/lazyjournal.deb # or sudo dpkg -i /tmp/lazyjournal.deb
-```
-
-### Eget
-
-You can use the universal way to install the latest version binaries from the GitHub repository using [eget](https://github.com/zyedidia/eget):
-
-```shell
-eget lifailon/lazyjournal --to ~/.local/bin
 ```
 
 ### Arch Linux
@@ -161,12 +160,11 @@ brew install lazyjournal
 
 ### Docker (Debian-based)
 
-To run the interface in a container, download [docker-compose](/docker-compose.yml) and use the image from [Docker Hub](https://hub.docker.com/r/lifailon/lazyjournal):
+Download the [compose](/docker-compose.yml) file and run the container using the image from [Docker Hub](https://hub.docker.com/r/lifailon/lazyjournal):
 
 ```shell
-mkdir lazyjournal && cd lazyjournal
-curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/docker-compose.yml -o docker-compose.yml
-curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/.env -o .env
+git clone https://github.com/Lifailon/lazyjournal
+cd lazyjournal
 docker-compose up -d
 docker exec -it lazyjournal lazyjournal
 ```
@@ -175,12 +173,13 @@ The image is based on Debian with `systemd` and docker cli pre-installed. The ne
 
 ### Web mode
 
-Supports running in the Web interface via [ttyd](https://github.com/tsl0922/ttyd). To do this, edit the variables in the `.env` file:
+Supports running in a container with a Web interface, using [ttyd](https://github.com/tsl0922/ttyd) to access logs via a browser. To do this, edit the variables in the `.env` file:
 
 ```shell
+# Enable Web mode
 TTYD=true
 PORT=5555
-# Credentials for accessing the Web interface (optional)
+# Credentials for accessing via Web browser (optional)
 USERNAME=admin
 PASSWORD=admin
 ```
@@ -217,33 +216,83 @@ go install github.com/Lifailon/lazyjournal@latest
 
 ## Usage
 
-You can run the interface from anywhere:
-
-```
-lazyjournal                            Run interface
-lazyjournal --help, -h                 Show help
-lazyjournal --version, -v              Show version
-lazyjournal --audit, -a                Show audit information
-lazyjournal --tail, -t                 Change the number of log lines to output (default: 50000, range: 200-200000)
-lazyjournal --update, -u               Change the auto refresh interval of the log output (default: 5, range: 2-10)
-lazyjournal --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)
-lazyjournal --disable-color, -d        Disable output coloring
-lazyjournal --disable-mouse, -m        Disable mouse control support
-lazyjournal --disable-timestamp, -s    Disable timestamp for docker logs
-lazyjournal --only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)
-lazyjournal --command-color, -c        ANSI coloring in command line mode
-lazyjournal --command-fuzzy, -f        Filtering using fuzzy search in command line mode
-lazyjournal --command-regex, -r        Filtering using regular expression (regexp) in command line mode
-```
+You can run the interface from anywhere: `lazyjournal`
 
 Access to all system logs and containers may require elevated privileges for the current user. For example, if a user does not have read permission to the directory `/var/lib/docker/containers`, he will not be able to access all archived logs from the moment the container is started, but only from the moment the containerization system is started, so the process of reading logs is different. However, reading in streaming mode is faster than parsing json logs from the file system.
 
-Information in the subtitle of the `Logs` window:
+Information in the subtitle of the `Logs` window (overridden by flags and hotkeys):
 
 - `tail` - maximum number of log lines to output (affects log loading performance).
 - `auto-update (interval)` - current mode of operation for automatic display of new events (disabled by manually scrolling the log output or using the `Ctrl+U` keyboard shortcut) and update interval (file logs are updated only when there are changes).
 - `docker` - displays the current mode for loading the container log (stream mode from the docker api or in json format from the file system) and stream display mode (all, stdout or stderr only).
 - `color` - displays the status (enabled or disabled) of the output coloring for the log.
+
+Hotkeys and settings values ​​can be overridden using the [config](/config.yml) file (see issue [#23](https://github.com/Lifailon/lazyjournal/issues/23) and [#27](https://github.com/Lifailon/lazyjournal/issues/27)), which can be in `~/.config/lazydocker/config.yml`, as well as next to the executable or in the current startup directory (has high priority).
+
+### Flags
+
+`lazyjournal -h`
+
+```
+--help, -h                 Show help
+--version, -v              Show version
+--config, -g               Show configuration of hotkeys and settings (check values)
+--audit, -a                Show audit information
+--tail, -t                 Change the number of log lines to output (range: 200-200000, default: 50000)
+--update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)
+--disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)
+--disable-color, -d        Disable output coloring
+--disable-mouse, -m        Disable mouse control support
+--disable-timestamp, -p    Disable timestamp for docker logs
+--only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)
+--command-color, -c        ANSI coloring in command line mode
+--command-fuzzy, -f        Filtering using fuzzy search in command line mode
+--command-regex, -r        Filtering using regular expression (regexp) in command line mode
+--ssh, -s                  Connect to remote host (use standard ssh options, separated by spaces in quotes)
+                           Example: lazyjournal --ssh "lifailon@192.168.3.101 -p 22"
+```
+
+### Hotkeys
+
+List of all used keys and hotkeys (default values):
+
+- `F1` - show help on hotkeys.
+- `Up`/`PgUp`/`k` and `Down`/`PgDown`/`j` - move up and down through all journal lists and log output,  as well as changing the filtering mode in the filter window.
+- `Shift`/`Alt`+`Up`/`Down` - quickly move up and down through all journal lists and log output every `10` or `100` lines (`500` for log output).
+- `Shift`/`Ctrl`+`k`/`j` - quickly move up and down (like Vim and alternative for macOS from config).
+- `Left`/`[`/`h` and `Right`/`]`/`l` - switch between journal lists in the selected window.
+- `Tab` - switch to next window.
+- `Shift+Tab` - return to previous window.
+- `Enter` - load a log from the list window or return to the previous window from the filter window.
+- `/` - go to the filter window from the current list window or logs window.
+- `End`/`Ctrl+E` - go to the end of the log.
+- `Home`/`Ctrl+A` - go to the top of the log.
+- `Ctrl`+`X`/`Z` - change the number of log lines to output (range: `200-200000`, default: `50000`).
+- `Ctrl`+`P`/`O` - change the auto refresh interval of the log output (range: `2-10`, default: `5`).
+- `Ctrl`+`U` - disable streaming of new events (log is loaded once without automatic update).
+- `Ctrl`+`R` - update the current log output manually (relevant in disable streaming mode).
+- `Ctrl`+`Q` - update all log lists.
+- `Ctrl`+`W` - enable or disable ANSI coloring for output.
+- `Ctrl`+`N` - enable or disable coloring via [tailspin](https://github.com/bensadeh/tailspin).
+- `Ctrl`+`D` - change read mode for docker logs (stream only or json from file system).
+- `Ctrl`+`S` - change stream display mode for docker logs (all, stdout or stderr only).
+- `Ctrl`+`T` - enable or disable built-in timestamp and stream type for docker logs.
+- `Ctrl`+`C` - clear input text in the filter window or exit.
+
+Mouse control is supported (but can also be disabled with the `-m` flag or configuration) for selecting window and the log from list, as well as lists and log scrolling. To copy text, use the `Alt+Shift` key combination while selecting.
+
+### Remote mode
+
+Access to logs on a remote machine is supported using standard ssh options, for example:
+
+```bash
+lazyjournal --ssh "lifailon@192.168.3.101 -p 22"
+# If sudo is supported without entering a password
+lazyjournal --ssh "lifailon@192.168.3.101 -p 22 sudo"
+```
+
+> [!IMPORTANT]
+> Remote access is only possible using an ssh key (**password access is not supported**, as each function request will require entering a password)
 
 ### Command-line mode
 
@@ -260,52 +309,15 @@ cat /var/log/syslog | lj -f "error"
 cat /var/log/syslog | lj -r "failed|fatal|crash"
 ```
 
-### Control
-
-Mouse control is supported for window selection, history, list scrolling and history. To copy text, use `Alt+Shift` when selecting.
-
-List of all used keyboard shortcuts:
-
-- `F1` or `?` - show help on hotkeys.
-- `Tab` - switch to next window.
-- `Shift+Tab` - return to previous window.
-- `/` - go to the filter window from the current list window or logs window.
-- `Esc` - clear text in the current filter window or close help.
-- `Enter` - load a log from the list window or return to the previous window from the filter window.
-- `<Left/h>` and `<Right/l>` - switch between journal lists in the selected window.
-- `<Up/PgUp/k>` and `<Down/PgDown/j>` - move up and down through all journal lists and log output, as well as changing the filtering mode in the filter window.
-- `<Shift/Alt>+<Up/Down>` - quickly move up and down through all journal lists and log output every `10` or `100` lines (`500` for log output).
-- `<Shift/Alt/Ctrl>+<k/j>` - quickly move up and down (like Vim and alternative for macOS).
-- `Ctrl+A` or `Home` - go to the top of the log.
-- `Ctrl+E` or `End` - go to the end of the log.
-- `Alt+Left/Right` - change the number of log lines to output (default: `50000`, range: `200-200000`).
-- `Shift+Left/Right` - change the auto refresh interval of the log output (default: `5`, range: `2-10`).
-- `Ctrl+D` - change read mode for docker logs (streams only or json from file system).
-- `Ctrl+S` - change streams display mode for docker logs (all, stdout or stderr only).
-- `Ctrl+T` - enable or disable built-in timestamp and stream type for docker logs.
-- `Ctrl+W` - enable or disable ANSI coloring for output.
-- `Ctrl+N` - enable or disable coloring via [tailspin](https://github.com/bensadeh/tailspin).
-- `Ctrl+U` - disable streaming of new events (log is loaded once without automatic update).
-- `Ctrl+Q` - update the current log output manually.
-- `Ctrl+R` - update all log lists.
-- `Ctrl+C` - exit.
-
 ## Build
 
-Clone the repository and run the project:
+Clone the repository and use Make to run or build the binary:
 
 ```shell
 git clone https://github.com/Lifailon/lazyjournal
 cd lazyjournal
-go run main.go
-```
-
-> [!IMPORTANT]
-> The master branch is used for development, so it may not be stable when running from source, and is intended for testing new features before release.
-
-Use `make` to build the binary for the current system and platform:
-
-```shell
+make run
+# or
 make build
 ```
 
@@ -322,12 +334,12 @@ make test-all
 ```
 
 > [!NOTE]
-> The test coverage report using CI Actions for Linux, macOS and Windows systems is available on the [Wiki](https://github.com/Lifailon/lazyjournal/wiki) page. Testing on BSD-based systems is done in a home environment.
+> The test coverage report using CI Actions for Linux, macOS and Windows systems is available on the [Wiki](https://github.com/Lifailon/lazyjournal/wiki) page.
 
 Check the source code on the base linters using [golangci-lint](https://github.com/golangci/golangci-lint) (including all [critic](https://github.com/go-critic/go-critic) and severity high in [security](https://github.com/securego/gosec)):
 
 ```shell
-make lint
+make lint-check
 ```
 
 ## Contributing
