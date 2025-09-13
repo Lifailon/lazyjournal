@@ -2,6 +2,11 @@ name: Merge Coverage
 
 on:
   workflow_dispatch:
+    inputs:
+      Debug:
+        description: 'Advanced report'
+        default: false
+        type: boolean
 
 jobs:
   Linux:
@@ -50,12 +55,14 @@ jobs:
       - name: Run all unit test in Linux
         run: sudo go test -v -cover -coverprofile linux-coverage.out
         continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: 10
 
-      - name: Create markdown report
+      - name: Create markdown report for Linux
         run: |
           mv test-report.md test-linux-report.md
-          cat test-linux-report.md >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ inputs.Debug }}" == "true" ]]; then
+              cat test-linux-report.md >> $GITHUB_STEP_SUMMARY
+          fi
         continue-on-error: true
 
       - name: Upload test summary report
@@ -138,10 +145,12 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
 
-      - name: Create markdown report
+      - name: Create markdown report for macOS
         run: |
           mv test-report.md test-macos-report.md
-          cat test-macos-report.md >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ inputs.Debug }}" == "true" ]]; then
+              cat test-macos-report.md >> $GITHUB_STEP_SUMMARY
+          fi
         continue-on-error: true
 
       - name: Upload test summary report
@@ -188,12 +197,16 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
 
-      - name: Create markdown report
+      - name: Create markdown report for Windows
         run: |
           Rename-Item -Path test-report.md -NewName test-windows-report.md
-          Get-Content test-windows-report.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+          if ($env:DEBUG -eq "true") {
+            Get-Content test-windows-report.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
+          }
         shell: pwsh
         continue-on-error: true
+        env:
+          DEBUG: ${{ inputs.Debug }}
 
       - name: Upload test summary report
         uses: actions/upload-artifact@v4
@@ -285,7 +298,7 @@ jobs:
           title="Line Function Coverage"
           separator="- - -"
           mdReport=$(echo -e "$title\n$separator\n$mdReport")
-          echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|"}'
+          echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|"}' >> $GITHUB_STEP_SUMMARY
 
       - name: Upload merge coverage report
         uses: actions/upload-artifact@v4
