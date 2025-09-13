@@ -14,7 +14,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23
+          go-version: 1.25
 
       - name: Install dependencies
         run: |
@@ -80,7 +80,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23
+          go-version: 1.25
 
       - name: Install dependencies
         run: |
@@ -122,7 +122,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23
+          go-version: 1.25
 
       - name: Install dependencies
         run: |
@@ -165,7 +165,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23
+          go-version: 1.25
 
       - name: Install dependencies
         run: |
@@ -217,7 +217,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23
+          go-version: 1.25
 
       - name: Download coverage report for Linux (with root)
         uses: actions/download-artifact@v4
@@ -243,17 +243,30 @@ jobs:
           name: windows-coverage
           path: .
 
-      - name: Check coverage report for Linux with root
-        run: go tool cover -func linux-coverage.out
+      - name: Check coverage report for all tests on Linux with root
+        run: |
+          out=$(go tool cover -func linux-coverage.out)
+          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
+          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "- Linux: $coverTotal" >> $GITHUB_STEP_SUMMARY
 
       - name: Check coverage report for Docker without root
-        run: go tool cover -func docker-coverage.out
+        run: |
+          out=$(go tool cover -func docker-coverage.out)
+          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "- Docker: $coverTotal" >> $GITHUB_STEP_SUMMARY
 
       - name: Check coverage report for macOS
-        run: go tool cover -func macos-coverage.out
+        run: |
+          out=$(go tool cover -func macos-coverage.out)
+          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "- macOS: $coverTotal" >> $GITHUB_STEP_SUMMARY
 
       - name: Check coverage report for Windows
-        run: go tool cover -func windows-coverage.out
+        run: |
+          out=$(go tool cover -func windows-coverage.out)
+          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "- Windows: $coverTotal" >> $GITHUB_STEP_SUMMARY
 
       - name: Install go coverage merge
         run: |
@@ -265,7 +278,14 @@ jobs:
       - name: Merge coverage reports
         run: |
           gocovmerge linux-coverage.out docker-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
-          go tool cover -func merge-coverage.out
+          out=$(go tool cover -func merge-coverage.out)
+          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "- Total: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          mdReport=$(echo "$out" | sed -E 's/^[^:]*://' | sed "s/://" | head -n -1)
+          title="Line Function Coverage"
+          separator="- - -"
+          mdReport=$(echo -e "$title\n$separator\n$mdReport")
+          echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|"}'
 
       - name: Upload merge coverage report
         uses: actions/upload-artifact@v4
