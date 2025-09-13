@@ -67,9 +67,9 @@ jobs:
         run: |
           version=$(go run main.go -v)
           echo "## 🚀 Build Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build number**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: $version" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build number**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Update dependencies**: ${{ github.event.inputs.Update }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Linter check**: ${{ github.event.inputs.Linter }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
@@ -136,7 +136,7 @@ jobs:
       - name: Unit testing (all functions and mock interface) in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: |
-          output=$(sudo env "PATH=$PATH" go test -v -cover | tee test.log)
+          sudo env "PATH=$PATH" go test -v -cover | tee test.log
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
@@ -166,7 +166,7 @@ jobs:
       - name: Unit testing (files, flags, cli and run main interface) in macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
         run: |
-          output=$(sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" | tee test.log)
+          sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" | tee test.log
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
@@ -189,7 +189,7 @@ jobs:
       - name: Unit testing (events, files, flags, cli, main and mock interface) in Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
         run: |
-          output=$(go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" | tee test.log)
+          go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" | tee test.log
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
         shell: bash
