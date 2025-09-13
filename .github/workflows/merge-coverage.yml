@@ -297,6 +297,7 @@ jobs:
           mdReport=$(echo "$out" | sed -E 's/^[^:]*://' | sed "s/://" | head -n -1)
           title="Line Function Coverage"
           separator="- - -"
+          echo "## 📚 Test Report" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo -e "$title\n$separator\n$mdReport")
           echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|"}' >> $GITHUB_STEP_SUMMARY
 
