@@ -53,7 +53,7 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
 - Kubernetes pods logs (you must first configure a connection to the cluster via `kubectl`).
 - Logs of [k3s](https://github.com/k3s-io/k3s) pods and containers from the file system on any nodes (including workers).
 - Windows Event Logs via `PowerShell` and `wevtutil`, as well as application logs from Windows file system.
-- Access to logs on a remote system (no client installation required).
+- Access to logs on a remote system.
 
 ### Filtering
 
@@ -283,7 +283,9 @@ Mouse control is supported (but can also be disabled with the `-m` flag or confi
 
 ### Remote mode
 
-Access to logs on a remote machine is supported using standard ssh options, for example:
+Supports access to logs on a remote system (no client installation required).
+
+Standard `ssh` options are used to configure the connection (passed as a single argument in quotes), for example:
 
 ```bash
 lazyjournal --ssh "lifailon@192.168.3.101 -p 22"
@@ -292,7 +294,7 @@ lazyjournal --ssh "lifailon@192.168.3.101 -p 22 sudo"
 ```
 
 > [!IMPORTANT]
-> Remote access is only possible using an ssh key (**password access is not supported**, as each function request will require entering a password)
+> Remote access is only possible using an ssh key (password access is **not supported**, as each function request will require entering a password).
 
 ### Command-line mode
 
