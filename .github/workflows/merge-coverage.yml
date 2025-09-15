@@ -4,7 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       Debug:
-        description: 'Advanced report'
+        description: 'Advanced summary report'
+        default: false
+        type: boolean
+      Wiki:
+        description: 'Publish on Wiki'
         default: false
         type: boolean
 
@@ -261,24 +265,27 @@ jobs:
           out=$(go tool cover -func linux-coverage.out)
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "Linux coverage: $coverTotal"
           echo "- Linux: $coverTotal" >> $GITHUB_STEP_SUMMARY
 
       - name: Check coverage report for Docker without root
         run: |
           out=$(go tool cover -func docker-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
-          echo "- Docker: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          echo "Docker coverage: $coverTotal"
 
       - name: Check coverage report for macOS
         run: |
           out=$(go tool cover -func macos-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "macOS coverage: $coverTotal"
           echo "- macOS: $coverTotal" >> $GITHUB_STEP_SUMMARY
 
       - name: Check coverage report for Windows
         run: |
           out=$(go tool cover -func windows-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "Windows coverage: $coverTotal"
           echo "- Windows: $coverTotal" >> $GITHUB_STEP_SUMMARY
 
       - name: Install go coverage merge
@@ -293,6 +300,7 @@ jobs:
           gocovmerge linux-coverage.out docker-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
           out=$(go tool cover -func merge-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "Total coverage: $coverTotal"
           echo "- Total: $coverTotal" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo "$out" | sed -E 's/.+\///' | sed "s/:/ /g" | head -n -1)
           title="File Line Function Coverage"
@@ -300,6 +308,7 @@ jobs:
           echo "## 📚 Test Report" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo -e "$title\n$separator\n$mdReport")
           echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
+          cat "$GITHUB_STEP_SUMMARY" > all-report.md
 
       - name: Upload merge coverage report
         uses: actions/upload-artifact@v4
@@ -334,14 +343,42 @@ jobs:
           name: windows-report
           path: .
 
-      - name: Merge test summary reports
+      - name: Merge all reports
         run: |
-          cat "test-linux-report.md" > test-summary-report.md
-          cat "test-macos-report.md" >> test-summary-report.md
-          cat "test-windows-report.md" >> test-summary-report.md
+          echo "# Linux" >> all-report.md
+          cat "test-linux-report.md" >> all-report.md
+          echo "# macOS" > all-report.md
+          cat "test-macos-report.md" >> all-report.md
+          echo "# Windows" > all-report.md
+          cat "test-windows-report.md" >> all-report.md
 
-      - name: Upload merge test summary report
+      - name: Upload final report
         uses: actions/upload-artifact@v4
         with:
-          name: test-summary-report
-          path: test-summary-report.md
+          name: all-report
+          path: all-report.md
+
+      - name: Clone Wiki
+        if: ${{ github.event.inputs.Wiki == 'true' }}
+        run: git clone https://github.com/Lifailon/lazyjournal wiki
+
+      - name: Update Wiki
+        if: ${{ github.event.inputs.Wiki == 'true' }}
+        run: |
+          cd wiki
+          echo -e '# Coverage report\n' > home.md
+          echo -e 'The test coverage report in `html` format using [go-coverage-report](https://github.com/marketplace/actions/go-coverage-report) is available [here](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.html).\n' >> home.md
+          echo -e 'During testing, the interface operation is checked in the disabled `tcell` mode, as well as the reading and coloring time of all available logs in Linux, macOS and Windows systems.\n' >> home.md
+          echo -e 'To combine test results from different systems [gosovmerge](https://github.com/wadey/gocovmerge) is used.\n' >> home.md
+          echo -e '# Coverage history\n' >> home.md
+          echo -e '![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage-chart.svg)\n' >> home.md
+          cat all-report.md >> home.md
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add home.md
+          if ! git diff --staged --quiet; then
+              git commit -m "update markdown report"
+              git push origin main
+          else
+              echo "No changes to commit"
+          fi
