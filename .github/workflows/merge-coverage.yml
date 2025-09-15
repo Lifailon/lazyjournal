@@ -8,11 +8,11 @@ on:
         default: false
         type: boolean
       Coverage:
-        description: 'Update coverage report'
+        description: 'Update html, svg and chart reports on Wiki'
         default: false
         type: boolean
       Wiki:
-        description: 'Publish report on Wiki'
+        description: 'Update final markdown report on Wiki'
         default: false
         type: boolean
 
@@ -370,7 +370,7 @@ jobs:
         if: ${{ github.event.inputs.Wiki == 'true' }}
         run: git clone https://github.com/Lifailon/lazyjournal wiki
 
-      - name: Update markdown report on Wiki
+      - name: Update final markdown report on Wiki
         if: ${{ github.event.inputs.Wiki == 'true' }}
         run: |
           echo -e '# Coverage report\n' > wiki/home.md
@@ -386,7 +386,6 @@ jobs:
           git add home.md
           if ! git diff --staged --quiet; then
               git commit -m "update markdown report"
-              git push origin main
               git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki main
           else
               echo "No changes to commit"
