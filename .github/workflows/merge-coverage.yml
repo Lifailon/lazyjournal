@@ -347,9 +347,9 @@ jobs:
         run: |
           echo "# Linux" >> all-report.md
           cat "test-linux-report.md" >> all-report.md
-          echo "# macOS" > all-report.md
+          echo "# macOS" >> all-report.md
           cat "test-macos-report.md" >> all-report.md
-          echo "# Windows" > all-report.md
+          echo "# Windows" >> all-report.md
           cat "test-windows-report.md" >> all-report.md
 
       - name: Upload final report
