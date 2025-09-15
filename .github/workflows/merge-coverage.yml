@@ -7,8 +7,12 @@ on:
         description: 'Advanced summary report'
         default: false
         type: boolean
+      Coverage:
+        description: 'Update coverage report'
+        default: false
+        type: boolean
       Wiki:
-        description: 'Publish on Wiki'
+        description: 'Publish report on Wiki'
         default: false
         type: boolean
 
@@ -319,7 +323,8 @@ jobs:
           name: merge-coverage
           path: merge-coverage.out
 
-      - name: Update merge coverage report in Wiki
+      - name: Update html, svg and chart reports on Wiki
+        if: ${{ github.event.inputs.Coverage == 'true' }}
         uses: ncruces/go-coverage-report@v0
         with:
           coverage-file: merge-coverage.out
@@ -365,7 +370,7 @@ jobs:
         if: ${{ github.event.inputs.Wiki == 'true' }}
         run: git clone https://github.com/Lifailon/lazyjournal wiki
 
-      - name: Update Wiki
+      - name: Update markdown report on Wiki
         if: ${{ github.event.inputs.Wiki == 'true' }}
         run: |
           echo -e '# Coverage report\n' > wiki/home.md
