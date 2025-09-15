@@ -389,13 +389,13 @@ jobs:
           echo -e '![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage-chart.svg)\n' >> wiki/home.md
           cat all-report.md >> wiki/home.md
           cd wiki
-          git pull
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
+          git switch master
           git add home.md
           if ! git diff --staged --quiet; then
               git commit -m "update markdown report"
-              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki master
+              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git master
           else
               echo "No changes to commit"
           fi
