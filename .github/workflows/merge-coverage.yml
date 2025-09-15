@@ -8,11 +8,19 @@ on:
         default: false
         type: boolean
       Coverage:
-        description: 'Update html, svg and chart reports on Wiki'
+        description: 'Update coverage report on Wiki'
         default: false
         type: boolean
-      Wiki:
-        description: 'Update final markdown report on Wiki'
+      HTML:
+        description: 'Update html report on Wiki'
+        default: false
+        type: boolean
+      SVG:
+        description: 'Update chart report on Wiki'
+        default: false
+        type: boolean
+      Markdown:
+        description: 'Update markdown report on Wiki'
         default: false
         type: boolean
 
@@ -323,13 +331,13 @@ jobs:
           name: merge-coverage
           path: merge-coverage.out
 
-      - name: Update html, svg and chart reports on Wiki
+      - name: Update reports on Wiki (html and svg optionals)
         if: ${{ github.event.inputs.Coverage == 'true' }}
         uses: ncruces/go-coverage-report@v0
         with:
           coverage-file: merge-coverage.out
-          report: true
-          chart: true
+          report: ${{ github.event.inputs.HTML == 'true' }}
+          chart: ${{ github.event.inputs.SVG == 'true' }}
           amend: true
         continue-on-error: true
 
@@ -367,11 +375,11 @@ jobs:
           path: all-report.md
 
       - name: Clone Wiki
-        if: ${{ github.event.inputs.Wiki == 'true' }}
+        if: ${{ github.event.inputs.Markdown == 'true' }}
         run: git clone https://github.com/Lifailon/lazyjournal wiki
 
-      - name: Update final markdown report on Wiki
-        if: ${{ github.event.inputs.Wiki == 'true' }}
+      - name: Update markdown report on Wiki
+        if: ${{ github.event.inputs.Markdown == 'true' }}
         run: |
           echo -e '# Coverage report\n' > wiki/home.md
           echo -e 'The test coverage report in `html` format using [go-coverage-report](https://github.com/marketplace/actions/go-coverage-report) is available [here](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.html).\n' >> wiki/home.md
@@ -381,12 +389,13 @@ jobs:
           echo -e '![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage-chart.svg)\n' >> wiki/home.md
           cat all-report.md >> wiki/home.md
           cd wiki
+          git pull
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
           git add home.md
           if ! git diff --staged --quiet; then
               git commit -m "update markdown report"
-              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki
+              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki master
           else
               echo "No changes to commit"
           fi
