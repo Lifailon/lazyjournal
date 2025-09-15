@@ -386,7 +386,7 @@ jobs:
           git add home.md
           if ! git diff --staged --quiet; then
               git commit -m "update markdown report"
-              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki main
+              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki
           else
               echo "No changes to commit"
           fi
