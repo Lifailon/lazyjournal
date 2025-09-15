@@ -12,6 +12,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: write
+
 jobs:
   Linux:
     runs-on: ubuntu-24.04
@@ -379,6 +382,7 @@ jobs:
           if ! git diff --staged --quiet; then
               git commit -m "update markdown report"
               git push origin main
+              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki main
           else
               echo "No changes to commit"
           fi
