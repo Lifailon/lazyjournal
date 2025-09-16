@@ -274,6 +274,7 @@ jobs:
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
           echo "Linux coverage: $coverTotal"
           echo "- Linux: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          cat "$GITHUB_STEP_SUMMARY" > all-report.md
 
       - name: Check coverage report for Docker without root
         run: |
@@ -287,6 +288,7 @@ jobs:
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
           echo "macOS coverage: $coverTotal"
           echo "- macOS: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Check coverage report for Windows
         run: |
@@ -294,6 +296,7 @@ jobs:
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
           echo "Windows coverage: $coverTotal"
           echo "- Windows: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Install go coverage merge
         run: |
@@ -315,7 +318,7 @@ jobs:
           echo "## 📚 Test Report" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo -e "$title\n$separator\n$mdReport")
           echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" > all-report.md
+          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Upload merge coverage report
         uses: actions/upload-artifact@v4
@@ -353,11 +356,11 @@ jobs:
 
       - name: Merge all reports
         run: |
-          echo "# Linux" >> all-report.md
+          echo "# 🐧 Linux" >> all-report.md
           cat "test-linux-report.md" >> all-report.md
-          echo "# macOS" >> all-report.md
+          echo "# 🍏 macOS" >> all-report.md
           cat "test-macos-report.md" >> all-report.md
-          echo "# Windows" >> all-report.md
+          echo "# 🏠 Windows" >> all-report.md
           cat "test-windows-report.md" >> all-report.md
 
       - name: Upload final report
@@ -373,11 +376,11 @@ jobs:
       - name: Update markdown report on Wiki
         if: ${{ github.event.inputs.Markdown == 'true' }}
         run: |
-          echo -e '# Coverage report\n' > wiki/home.md
+          echo -e '# Test report\n' > wiki/home.md
           echo -e 'The test coverage report in `html` format using [go-coverage-report](https://github.com/marketplace/actions/go-coverage-report) is available [here](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.html).\n' >> wiki/home.md
           echo -e 'During testing, the interface operation is checked in the disabled `tcell` mode, as well as the reading and coloring time of all available logs in Linux, macOS and Windows systems.\n' >> wiki/home.md
           echo -e 'To combine test results from different systems [gosovmerge](https://github.com/wadey/gocovmerge) is used.\n' >> wiki/home.md
-          echo -e '# Coverage history\n' >> wiki/home.md
+          echo -e '# 📈 Coverage history\n' >> wiki/home.md
           echo -e '![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage-chart.svg)\n' >> wiki/home.md
           cat all-report.md >> wiki/home.md
           cd wiki
