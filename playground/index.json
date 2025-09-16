@@ -1,0 +1,13 @@
+{
+  "title": "lazyjournal",
+  "description": "Installation and running lazyjournal",
+  "details": {
+    "intro": {
+      "text": "README.md",
+      "foreground": "foreground.sh"
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  }
+}
