@@ -270,10 +270,10 @@ jobs:
       - name: Check coverage report for all tests on Linux with root
         run: |
           out=$(go tool cover -func linux-coverage.out)
-          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "# 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
           echo "Linux coverage: $coverTotal"
-          echo "- Linux: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          echo "- **Linux**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" > all-report.md
 
       - name: Check coverage report for Docker without root
@@ -287,7 +287,7 @@ jobs:
           out=$(go tool cover -func macos-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
           echo "macOS coverage: $coverTotal"
-          echo "- macOS: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          echo "- **macOS**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Check coverage report for Windows
@@ -295,7 +295,7 @@ jobs:
           out=$(go tool cover -func windows-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
           echo "Windows coverage: $coverTotal"
-          echo "- Windows: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          echo "- **Windows**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Install go coverage merge
@@ -311,11 +311,11 @@ jobs:
           out=$(go tool cover -func merge-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
           echo "Total coverage: $coverTotal"
-          echo "- Total: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo "$out" | sed -E 's/.+\///' | sed "s/:/ /g" | head -n -1)
           title="File Line Function Coverage"
           separator="- - - -"
-          echo "## 📚 Test Report" >> $GITHUB_STEP_SUMMARY
+          echo "# 📚 Merge test results" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo -e "$title\n$separator\n$mdReport")
           echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
@@ -384,12 +384,11 @@ jobs:
           echo -e '![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage-chart.svg)\n' >> wiki/home.md
           cat all-report.md >> wiki/home.md
           cd wiki
-          ls
-          git branch
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
           git add home.md
           if ! git diff --staged --quiet; then
+              git diff
               git commit -m "update markdown report"
               git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git master
           else

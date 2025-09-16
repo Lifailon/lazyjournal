@@ -32,8 +32,8 @@ func TestWinFiles(t *testing.T) {
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
 	file.WriteString("## Windows File Logs\n")
-	file.WriteString("| Path | Lines | Read | Color |\n")
-	file.WriteString("|------|-------|------|-------|\n")
+	file.WriteString("| Lines | Read | Color | Path |\n")
+	file.WriteString("|-------|------|-------|------|\n")
 
 	// Тестируемые параметры для функции
 	testCases := []struct {
@@ -113,7 +113,7 @@ func TestWinFiles(t *testing.T) {
 				app.applyFilter(true)
 				endTime2 := time.Since(startTime2)
 				// Записываем в отчет путь, количество строк в массиве прочитанных из файла, время чтения и фильтрации + покраски
-				file.WriteString(fmt.Sprintf("| %s | %d | %s | %s |\n", app.lastLogPath, len(app.currentLogLines), endTime, endTime2))
+				fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, app.lastLogPath)
 			}
 		})
 	}
@@ -127,8 +127,8 @@ func TestWinEvents(t *testing.T) {
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
 	file.WriteString("## Windows Event Logs\n")
-	file.WriteString("| Event Name | Lines | Read | Color |\n")
-	file.WriteString("|------------|-------|------|-------|\n")
+	file.WriteString("| Lines | Read | Color | Event Name |\n")
+	file.WriteString("|-------|------|-------|------------|\n")
 
 	app := &App{
 		testMode:             true,
@@ -170,7 +170,7 @@ func TestWinEvents(t *testing.T) {
 		app.applyFilter(true)
 		endTime2 := time.Since(startTime2)
 
-		file.WriteString(fmt.Sprintf("| %s | %d | %s | %s |\n", serviceName, len(app.currentLogLines), endTime, endTime2))
+		fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, serviceName)
 	}
 }
 
@@ -182,8 +182,8 @@ func TestUnixFiles(t *testing.T) {
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
 	file.WriteString("## Unix File Logs\n")
-	file.WriteString("| Path | Lines | Read | Color |\n")
-	file.WriteString("|------|-------|------|-------|\n")
+	file.WriteString("| Lines | Read | Color | Path |\n")
+	file.WriteString("|-------|------|-------|------|\n")
 
 	testCases := []struct {
 		name       string
@@ -241,7 +241,7 @@ func TestUnixFiles(t *testing.T) {
 				app.applyFilter(true)
 				endTime2 := time.Since(startTime2)
 
-				file.WriteString(fmt.Sprintf("| %s | %d | %s | %s |\n", app.lastLogPath, len(app.currentLogLines), endTime, endTime2))
+				fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, app.lastLogPath)
 			}
 		})
 	}
@@ -255,8 +255,8 @@ func TestLinuxJournal(t *testing.T) {
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
 	file.WriteString("## Linux journals\n")
-	file.WriteString("| Journal Name | Lines | Read | Color |\n")
-	file.WriteString("|--------------|-------|------|-------|\n")
+	file.WriteString("| Lines | Read | Color | Journal Name |\n")
+	file.WriteString("|-------|------|-------|--------------|\n")
 
 	testCases := []struct {
 		name        string
@@ -308,7 +308,7 @@ func TestLinuxJournal(t *testing.T) {
 				app.applyFilter(true)
 				endTime2 := time.Since(startTime2)
 
-				file.WriteString(fmt.Sprintf("| %s | %d | %s | %s |\n", serviceName, len(app.currentLogLines), endTime, endTime2))
+				fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, serviceName)
 			}
 		})
 	}
@@ -318,8 +318,8 @@ func TestDockerContainer(t *testing.T) {
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
 	file.WriteString("## Containers\n")
-	file.WriteString("| Container Name | Lines | Read | Color |\n")
-	file.WriteString("|----------------|-------|------|-------|\n")
+	file.WriteString("| Lines | Read | Color | Container Name |\n")
+	file.WriteString("|-------|------|-------|----------------|\n")
 
 	testCases := []struct {
 		name                         string
@@ -374,7 +374,7 @@ func TestDockerContainer(t *testing.T) {
 				app.applyFilter(true)
 				endTime2 := time.Since(startTime2)
 
-				file.WriteString(fmt.Sprintf("| %s | %d | %s | %s |\n", containerName, len(app.currentLogLines), endTime, endTime2))
+				fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, containerName)
 			}
 		})
 	}
