@@ -8,15 +8,7 @@ on:
         default: false
         type: boolean
       Coverage:
-        description: 'Update coverage report on Wiki'
-        default: false
-        type: boolean
-      HTML:
-        description: 'Update html report on Wiki'
-        default: false
-        type: boolean
-      SVG:
-        description: 'Update chart report on Wiki'
+        description: 'Update html and svg reports on Wiki'
         default: false
         type: boolean
       Markdown:
@@ -331,13 +323,13 @@ jobs:
           name: merge-coverage
           path: merge-coverage.out
 
-      - name: Update reports on Wiki (html and svg optionals)
+      - name: Update html and svg reports on Wiki
         if: ${{ github.event.inputs.Coverage == 'true' }}
         uses: ncruces/go-coverage-report@v0
         with:
           coverage-file: merge-coverage.out
-          report: ${{ github.event.inputs.HTML == 'true' }}
-          chart: ${{ github.event.inputs.SVG == 'true' }}
+          report: true
+          chart: true
           amend: true
         continue-on-error: true
 
@@ -391,11 +383,13 @@ jobs:
           cd wiki
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
-          git switch master
           git add home.md
           if ! git diff --staged --quiet; then
               git commit -m "update markdown report"
-              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git master
+              git push 2> /dev/null ||
+                git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git 2> /dev/null ||
+                git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git master 2> /dev/null ||
+                git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git main
           else
               echo "No changes to commit"
           fi
