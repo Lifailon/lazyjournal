@@ -366,27 +366,28 @@ jobs:
           name: all-report
           path: all-report.md
 
+      - name: Clone Wiki repository
+        if: ${{ github.event.inputs.Markdown == 'true' }}
+        run: git clone https://github.com/Lifailon/lazyjournal.wiki wiki
+
       - name: Update markdown report on Wiki
         if: ${{ github.event.inputs.Markdown == 'true' }}
         run: |
-          cd ..
-          git clone https://github.com/Lifailon/lazyjournal wiki
           echo -e '# Coverage report\n' > wiki/home.md
           echo -e 'The test coverage report in `html` format using [go-coverage-report](https://github.com/marketplace/actions/go-coverage-report) is available [here](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.html).\n' >> wiki/home.md
           echo -e 'During testing, the interface operation is checked in the disabled `tcell` mode, as well as the reading and coloring time of all available logs in Linux, macOS and Windows systems.\n' >> wiki/home.md
           echo -e 'To combine test results from different systems [gosovmerge](https://github.com/wadey/gocovmerge) is used.\n' >> wiki/home.md
           echo -e '# Coverage history\n' >> wiki/home.md
           echo -e '![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage-chart.svg)\n' >> wiki/home.md
-          cat lazyjournal/all-report.md >> wiki/home.md
+          cat all-report.md >> wiki/home.md
           cd wiki
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
           git add home.md
           if ! git diff --staged --quiet; then
               git commit -m "update markdown report"
-              git push origin master 2> /dev/null || 
-                git push --force origin master 2> /dev/null ||
-                git push --force https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git master
+              git push origin master
+              # git push --force https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git master
           else
               echo "No changes to commit"
           fi
