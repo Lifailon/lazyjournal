@@ -133,7 +133,7 @@ type App struct {
 
 	selectUnits                  string // название журнала (UNIT/USER_UNIT/kernel/audit)
 	selectPath                   string // путь к логам (/var/log/)
-	selectContainerizationSystem string // название системы контейнеризации (docker/podman/kubernetes)
+	selectContainerizationSystem string // название системы контейнеризации (docker/compose/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (default/fuzzy/regex)
 
 	logViewCount     string   // количество логов для просмотра
@@ -659,7 +659,7 @@ func runGoCui(mock bool) {
 		debugColorTime:               "0s",
 		selectUnits:                  "services",  // "UNIT" || "USER_UNIT" || "kernel" || "audit"
 		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для macOS) + /root/ || "descriptor"
-		selectContainerizationSystem: "docker",    // "podman" || "kubernetes"
+		selectContainerizationSystem: "docker",    // "compose" || "podman" || "kubernetes"
 		selectFilterMode:             "default",   // "fuzzy" || "regex" || "timestamp"
 		timestampFilterView:          false,
 		sinceTimestampFilterMode:     false,
@@ -3112,9 +3112,26 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	// Получаем версию для проверки, что система контейнеризации установлена
 	var cmd *exec.Cmd
 	if app.sshMode {
-		cmd = exec.Command("ssh", append(app.sshOptions, containerizationSystem, "version")...)
+		// Для compose передаем два аргумента команды (проверяем compose как плагин docker)
+		if containerizationSystem == "compose" {
+			cmd = exec.Command("ssh", append(app.sshOptions,
+				"docker", "compose", "version",
+			)...)
+		} else {
+			cmd = exec.Command("ssh", append(app.sshOptions,
+				containerizationSystem, "version",
+			)...)
+		}
 	} else {
-		cmd = exec.Command(containerizationSystem, "version")
+		if containerizationSystem == "compose" {
+			cmd = exec.Command(
+				"docker", "compose", "version",
+			)
+		} else {
+			cmd = exec.Command(
+				containerizationSystem, "version",
+			)
+		}
 	}
 	_, err := cmd.Output()
 	if err != nil && !app.testMode {
@@ -3129,7 +3146,8 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	if err != nil && app.testMode {
 		log.Print("Error:", containerizationSystem+" not installed (environment not found)")
 	}
-	if containerizationSystem == "kubectl" {
+	switch containerizationSystem {
+	case "kubectl":
 		// Получаем список подов из k8s
 		if app.sshMode {
 			cmd = exec.Command("ssh", append(app.sshOptions,
@@ -3142,7 +3160,17 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 				"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}",
 			)
 		}
-	} else {
+	case "compose":
+		if app.sshMode {
+			cmd = exec.Command("ssh", append(app.sshOptions,
+				"docker", "compose", "ls", "-a",
+			)...)
+		} else {
+			cmd = exec.Command(
+				"docker", "compose", "ls", "-a",
+			)
+		}
+	default:
 		// Получаем список контейнеров из Docker или Podman
 		if app.sshMode {
 			cmd = exec.Command("ssh", append(app.sshOptions,
@@ -3178,7 +3206,26 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	if err != nil && app.testMode {
 		log.Print("Error: access denied or " + containerizationSystem + " not running")
 	}
-	containers := strings.Split(strings.TrimSpace(string(output)), "\n")
+	var containers []string
+	var stringOutput string
+	// Парсим вывод compose
+	if containerizationSystem == "compose" {
+		stacks := strings.Split(strings.TrimSpace(string(output)), "\n")
+		// Удаляем первую строку (элемент массива)
+		stacks = stacks[1:]
+		if len(stacks) != 0 {
+			// Удаляем путь к конфигурационному файлу compose для каждой строки (элемента)
+			for i, e := range stacks {
+				line := strings.Split(e, "/")
+				stacks[i] = line[0]
+			}
+		}
+		containers = stacks
+		stringOutput = strings.Join(containers, "\n")
+	} else {
+		containers = strings.Split(strings.TrimSpace(string(output)), "\n")
+		stringOutput = string(output)
+	}
 	// Проверяем, что список контейнеров не пустой
 	if !app.testMode {
 		if len(containers) == 0 || (len(containers) == 1 && containers[0] == "") {
@@ -3196,24 +3243,35 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			vError.Highlight = true
 		}
 	}
-	// Проверяем статус для покраски и заполняем структуру dockerContainers
+	// Заполняем структуру dockerContainers (название и статус)
 	serviceMap := make(map[string]bool)
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(strings.NewReader(stringOutput))
 	for scanner.Scan() {
 		idName := scanner.Text()
 		parts := strings.Fields(idName)
 		if idName != "" && !serviceMap[idName] {
 			serviceMap[idName] = true
-			containerStatus := parts[2]
+			var containerName string
+			var containerStatus string
+			if containerizationSystem == "compose" {
+				// Извлекаем имя стеке из первого параметра (в compose отсутствует id)
+				containerName = parts[0]
+				// Собираем все статусы в одну строку
+				containerStatus = strings.Join(parts[1:], "\n")
+			} else {
+				containerName = parts[1]
+				containerStatus = parts[2]
+			}
+			// Проверяем статус для покраски
 			switch {
-			case strings.EqualFold(containerStatus, "running"):
+			case strings.HasPrefix(containerStatus, "running") || strings.EqualFold(containerStatus, "running"):
 				containerStatus = "\033[32m" + containerStatus + "\033[0m"
 			case strings.EqualFold(containerStatus, "succeeded"):
 				containerStatus = "\033[33m" + containerStatus + "\033[0m"
 			default:
 				containerStatus = "\033[31m" + containerStatus + "\033[0m"
 			}
-			containerName := parts[1] + " (" + containerStatus + ")"
+			containerName = "[" + containerStatus + "] " + containerName
 			// Фиксируем название namespace для k8s
 			var namespace string
 			if containerizationSystem != "kubectl" || parts[3] == "" {
@@ -7335,7 +7393,7 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-// Функция для переключения выбора системы контейнеризации (Docker/Podman)
+// Функция для переключения списков системы контейнеризации
 func (app *App) setContainersListRight(g *gocui.Gui, v *gocui.View) error {
 	selectedDocker, err := g.View("docker")
 	if err != nil {
@@ -7346,6 +7404,10 @@ func (app *App) setContainersListRight(g *gocui.Gui, v *gocui.View) error {
 	app.selectedDockerContainer = 0
 	switch app.selectContainerizationSystem {
 	case "docker":
+		app.selectContainerizationSystem = "compose"
+		selectedDocker.Title = " < Compose stacks (0) > "
+		app.loadDockerContainer(app.selectContainerizationSystem)
+	case "compose":
 		app.selectContainerizationSystem = "podman"
 		selectedDocker.Title = " < Podman containers (0) > "
 		app.loadDockerContainer(app.selectContainerizationSystem)
@@ -7379,6 +7441,10 @@ func (app *App) setContainersListLeft(g *gocui.Gui, v *gocui.View) error {
 		selectedDocker.Title = " < Podman containers (0) > "
 		app.loadDockerContainer(app.selectContainerizationSystem)
 	case "podman":
+		app.selectContainerizationSystem = "compose"
+		selectedDocker.Title = " < Compose stacks (0) > "
+		app.loadDockerContainer(app.selectContainerizationSystem)
+	case "compose":
 		app.selectContainerizationSystem = "docker"
 		selectedDocker.Title = " < Docker containers (0) > "
 		app.loadDockerContainer(app.selectContainerizationSystem)
