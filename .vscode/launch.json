@@ -19,6 +19,15 @@
       "args": ["-t", "200000", "-u", "10"]
     },
     {
+      "name": "Fast (5K/2s)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-t", "5000", "-u", "2"]
+    },
+    {
       "name": "Disable autoupdate",
       "type": "go",
       "request": "launch",
@@ -52,7 +61,7 @@
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
-      "args": ["-s"]
+      "args": ["-p"]
     },
     {
       "name": "Docker only stream",
