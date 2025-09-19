@@ -3556,15 +3556,16 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 		}
 	}
-	// Читаем лог через docker cli (если файл не найден или к нему нет доступа) или podman/kubectl
-	if !readFileContainer || containerizationSystem == "podman" || containerizationSystem == "kubectl" {
-		// Извлекаем имя без статуса в containerId для k8s
-		if containerizationSystem == "kubectl" {
-			parts := strings.Split(containerName, " (")
-			containerId = parts[0]
+	// Читаем лог через docker cli (если файл не найден или к нему нет доступа) или это compose/podman/kubectl
+	if !readFileContainer || containerizationSystem != "docker" {
+		// Извлекаем имя без статуса в containerId для k8s и docker compose
+		if containerizationSystem == "kubectl" || containerizationSystem == "compose" {
+			parts := strings.Split(containerName, "] ")
+			containerId = parts[1]
 		}
 		var cmd *exec.Cmd
-		if containerizationSystem == "kubectl" {
+		switch containerizationSystem {
+		case "kubectl":
 			// Формируем команду kubectl с нужными ключами
 			if app.sshMode {
 				cmd = exec.Command("ssh", append(app.sshOptions,
@@ -3575,7 +3576,73 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					containerizationSystem, "logs", "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
 				)
 			}
-		} else {
+		case "compose":
+			sinceFilterTextNotSpace := reSpace.ReplaceAllString(app.sinceFilterText, "T")
+			untilFilterTextNotSpace := reSpace.ReplaceAllString(app.untilFilterText, "T")
+			if app.sshMode {
+				switch {
+				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					cmd = exec.Command(
+						"ssh", append(app.sshOptions,
+							"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+							"--since", sinceFilterTextNotSpace,
+							"--until", untilFilterTextNotSpace,
+							"--tail", app.logViewCount,
+						)...,
+					)
+				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+					cmd = exec.Command(
+						"ssh", append(app.sshOptions,
+							"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+							"--since", sinceFilterTextNotSpace,
+							"--tail", app.logViewCount,
+						)...,
+					)
+				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					cmd = exec.Command(
+						"ssh", append(app.sshOptions,
+							"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+							"--until", untilFilterTextNotSpace,
+							"--tail", app.logViewCount,
+						)...,
+					)
+				default:
+					cmd = exec.Command(
+						"ssh", append(app.sshOptions,
+							"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+							"--tail", app.logViewCount,
+						)...,
+					)
+				}
+			} else {
+				switch {
+				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					cmd = exec.Command(
+						"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+						"--since", sinceFilterTextNotSpace,
+						"--until", untilFilterTextNotSpace,
+						"--tail", app.logViewCount,
+					)
+				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+					cmd = exec.Command(
+						"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+						"--since", sinceFilterTextNotSpace,
+						"--tail", app.logViewCount,
+					)
+				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					cmd = exec.Command(
+						"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+						"--until", untilFilterTextNotSpace,
+						"--tail", app.logViewCount,
+					)
+				default:
+					cmd = exec.Command(
+						"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+						"--tail", app.logViewCount,
+					)
+				}
+			}
+		default:
 			// docker/podman cli
 			sinceFilterTextNotSpace := reSpace.ReplaceAllString(app.sinceFilterText, "T")
 			untilFilterTextNotSpace := reSpace.ReplaceAllString(app.untilFilterText, "T")
@@ -3657,7 +3724,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		// Храним комбинированный вывод двух потоков
 		var combined []dockerLogLines
 		switch {
-		case app.dockerStreamMode == "stdout":
+		// Читаем только один поток в режиме stdout или compose
+		case app.dockerStreamMode == "stdout" || containerizationSystem == "compose":
 			// Читаем стандартный вывод
 			stdoutPipe, _ := cmd.StdoutPipe()
 			_ = cmd.Start()
@@ -3665,10 +3733,24 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			stdoutLines := strings.Split(string(stdoutBytes), "\n")
 			// Формируем итоговый массив
 			for _, line := range stdoutLines {
+				// Пропускаем пустые строки
 				if strings.TrimSpace(line) == "" {
 					continue
 				}
-				ts, err := parseTimestamp(line)
+				var ts time.Time
+				var err error
+				// Извлекаем время из compose
+				if containerizationSystem == "compose" {
+					// Сначала извлекаем имя сервиса
+					parts1 := strings.SplitN(line, " | ", 2)
+					// Затем извлекаем timestamp
+					parts2 := strings.SplitN(parts1[1], " ", 2)
+					tsStr := strings.TrimSpace(parts2[0])
+					ts, err = time.Parse(time.RFC3339Nano, tsStr)
+				} else {
+					// Извлекаем время из префикса docker/podman
+					ts, err = parseTimestamp(line)
+				}
 				if err != nil {
 					continue
 				}
@@ -3677,6 +3759,15 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					timestamp: ts,
 					content:   line,
 				})
+			}
+			// Сортируем вывод по timestamp для compose
+			if containerizationSystem == "compose" {
+				sort.Slice(
+					combined,
+					func(i, j int) bool {
+						return combined[i].timestamp.Before(combined[j].timestamp)
+					},
+				)
 			}
 		case app.dockerStreamMode == "stderr":
 			// Читаем вывод ошибок
@@ -3763,9 +3854,12 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				})
 			}
 			// Cортируем итоговый массив по timestamp
-			sort.Slice(combined, func(i, j int) bool {
-				return combined[i].timestamp.Before(combined[j].timestamp)
-			})
+			sort.Slice(
+				combined,
+				func(i, j int) bool {
+					return combined[i].timestamp.Before(combined[j].timestamp)
+				},
+			)
 		}
 		// Добавляем префиксы с типом данных (stdout или stderr) в зависимости от режима флагов
 		var finalLines []string
@@ -3775,8 +3869,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			if !app.timestampDocker {
 				entryLine = removeTimestamp(entry.content)
 			}
-			// Не добавляем профексы
-			if !app.streamTypeDocker {
+			// Не добавляем профексы в отключенном режиме и для compose
+			if !app.streamTypeDocker || containerizationSystem == "compose" {
 				finalLines = append(finalLines, entryLine)
 			} else {
 				prefix := "stdout "
@@ -3790,7 +3884,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		app.currentLogLines = finalLines
 	}
 	// Обновляем фильтр и делиметр всегда для потоков ИЛИ если есть изменения в файле при его чтение
-	if !readFileContainer || (readFileContainer && app.updateFile) || containerizationSystem == "podman" || containerizationSystem == "kubectl" {
+	if !readFileContainer || (readFileContainer && app.updateFile) || containerizationSystem != "docker" {
 		app.updateDelimiter(newUpdate)
 		app.applyFilter(false)
 	}
@@ -4027,7 +4121,7 @@ func (app *App) applyFilter(color bool) {
 		// Фиксируем текущий текст из фильтра
 		app.lastFilterText = filter
 	}
-	// Фильтруем и красим, только если это не строллинг
+	// Фильтруем и красим, только если это не скроллинг
 	if !skip {
 		// Debug end load time
 		endLoadTime := time.Since(app.debugStartTime)
@@ -4063,15 +4157,15 @@ func (app *App) applyFilter(color bool) {
 			}
 			// Проходимся по каждой строке
 			for _, line := range app.currentLogLines {
-				switch {
+				switch app.selectFilterMode {
 				// Fuzzy (неточный поиск без учета регистра)
-				case app.selectFilterMode == "fuzzy":
+				case "fuzzy":
 					outputLine := app.fuzzyFilter(line, filter)
 					if outputLine != "" {
 						app.filteredLogLines = append(app.filteredLogLines, outputLine)
 					}
 				// Regex (с использованием регулярных выражений и без учета регистра по умолчанию)
-				case app.selectFilterMode == "regex":
+				case "regex":
 					outputLine := app.regexFilter(line, regex)
 					if outputLine != "" {
 						app.filteredLogLines = append(app.filteredLogLines, outputLine)
