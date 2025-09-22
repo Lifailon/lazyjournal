@@ -3305,6 +3305,16 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		app.dockerContainersNotFilter = app.dockerContainers
 		app.applyFilterList()
 	}
+	// Заполняем карту уникальных цветов для контейнеров (используется для покраски префиксов в compose)
+	if containerizationSystem == "docker" {
+		for _, dc := range app.dockerContainers {
+			cn := strings.SplitN(dc.name, "] ", 2)[1]
+			if cn != "" {
+				newColor := app.uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(app.uniquePrefixColorArr)]
+				app.uniquePrefixColorMap[cn] = newColor
+			}
+		}
+	}
 }
 
 func (app *App) updateDockerContainerList() {
@@ -4455,7 +4465,7 @@ func (app *App) lineColor(inputLine string) string {
 	var filterColor bool = false
 	// Извлекаем название контейнера в логах стека compose
 	var containerName string
-	if app.selectContainerizationSystem == "compose" {
+	if app.lastContainerizationSystem == "compose" {
 		// Исключаем строку с делиметром
 		if !strings.HasPrefix(inputLine, "⎯") {
 			splitLine := strings.SplitN(inputLine, " | ", 2)
@@ -4490,22 +4500,13 @@ func (app *App) lineColor(inputLine string) string {
 	}
 	if app.selectContainerizationSystem == "compose" && containerName != "" {
 		// Возвращяем название контейнера с уникальной покраской
-		prefixColor := app.uniquePrefixColor(strings.TrimSpace(containerName))
-		return prefixColor + containerName + " |\033[0m " + colorLine
+		if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
+			return app.uniquePrefixColorMap[strings.TrimSpace(containerName)] + containerName + " |\033[0m " + colorLine
+		} else {
+			return containerName + " | " + colorLine
+		}
 	} else {
 		return colorLine
-	}
-}
-
-// Генератор уникальных цветов для префиксов контейнеров в стеках compose
-func (app *App) uniquePrefixColor(prefix string) string {
-	// Извлекаем новый цвет, если имя контейнера отсутствует в карте цветов
-	if app.uniquePrefixColorMap[prefix] == "" {
-		newColor := app.uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(app.uniquePrefixColorArr)]
-		app.uniquePrefixColorMap[prefix] = newColor
-		return app.uniquePrefixColorMap[prefix]
-	} else {
-		return app.uniquePrefixColorMap[prefix]
 	}
 }
 
