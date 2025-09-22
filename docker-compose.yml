@@ -22,7 +22,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Read docker logs from filesystem
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      # Custom configuration (optional)
+      # Kubernetes configuration (optional) for kubectl
+      # - /etc/rancher/k3s/k3s.yaml:/root/.kube/config
+      # Custom lazyjournal configuration (optional)
       - ./config.yml:/bin/config.yml:ro
     privileged: true
     # Remove if not using Web mode
