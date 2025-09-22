@@ -228,6 +228,9 @@ type App struct {
 
 	lastCurrentView string // фиксируем последнее используемое окно для Esc после /
 	backCurrentView bool   // отключаем/ключаем возврат
+
+	uniquePrefixColorMap map[string]string // карта для хранения уникального цвета для каждого контейнера в стеках compose
+	uniquePrefixColorArr []string          // массив для хранения уникальных цветов
 }
 
 func showHelp() {
@@ -682,6 +685,15 @@ func runGoCui(mock bool) {
 		lastCurrentView:              "services",
 		backCurrentView:              false,
 	}
+
+	app.uniquePrefixColorMap = make(map[string]string)
+	app.uniquePrefixColorArr = append(app.uniquePrefixColorArr,
+		"\033[32m", // Зеленый
+		"\033[33m", // Желный
+		"\033[34m", // Синий
+		"\033[35m", // Пурпурный
+		"\033[36m", // Голубой
+	)
 
 	// Определяем используемую ОС (linux/darwin/*bsd/windows) и архитектуру
 	app.getOS = runtime.GOOS
@@ -3105,7 +3117,7 @@ func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors str
 	return decodedOutput, "nil"
 }
 
-// ---------------------------------------- Docker/Podman/k8s ----------------------------------------
+// ---------------------------------------- Docker/Compose/Podman/k8s ----------------------------------------
 
 func (app *App) loadDockerContainer(containerizationSystem string) {
 	app.dockerContainers = nil
@@ -3584,7 +3596,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+							"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 							"--since", sinceFilterTextNotSpace,
 							"--until", untilFilterTextNotSpace,
 							"--tail", app.logViewCount,
@@ -3593,7 +3605,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+							"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 							"--since", sinceFilterTextNotSpace,
 							"--tail", app.logViewCount,
 						)...,
@@ -3601,7 +3613,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+							"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 							"--until", untilFilterTextNotSpace,
 							"--tail", app.logViewCount,
 						)...,
@@ -3609,7 +3621,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				default:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+							"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 							"--tail", app.logViewCount,
 						)...,
 					)
@@ -3618,26 +3630,26 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				switch {
 				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+						"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 						"--since", sinceFilterTextNotSpace,
 						"--until", untilFilterTextNotSpace,
 						"--tail", app.logViewCount,
 					)
 				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+						"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 						"--since", sinceFilterTextNotSpace,
 						"--tail", app.logViewCount,
 					)
 				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+						"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 						"--until", untilFilterTextNotSpace,
 						"--tail", app.logViewCount,
 					)
 				default:
 					cmd = exec.Command(
-						"docker", "compose", "-p", containerId, "logs", "--timestamps", // "--no-color", // "--no-log-prefix",
+						"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 						"--tail", app.logViewCount,
 					)
 				}
@@ -4435,8 +4447,25 @@ func (app *App) mainColor(inputText []string) []string {
 }
 
 func (app *App) lineColor(inputLine string) string {
+	// Если строка пустая, пропускаем ее сразу
+	if inputLine == "" {
+		return ""
+	}
 	var colorLine string
 	var filterColor bool = false
+	// Извлекаем название контейнера в логах стека compose
+	var containerName string
+	if app.selectContainerizationSystem == "compose" {
+		// Исключаем строку с делиметром
+		if !strings.HasPrefix(inputLine, "⎯") {
+			splitLine := strings.SplitN(inputLine, " | ", 2)
+			if splitLine[0] != "" && splitLine[1] != "" {
+				containerName = splitLine[0]
+				// Удаляем название контейнера из покраски
+				inputLine = splitLine[1]
+			}
+		}
+	}
 	// Разбиваем строку по пробелам, сохраняя их
 	words := strings.Split(inputLine, " ")
 	for i, word := range words {
@@ -4459,7 +4488,25 @@ func (app *App) lineColor(inputLine string) string {
 			colorLine += word
 		}
 	}
-	return colorLine
+	if app.selectContainerizationSystem == "compose" && containerName != "" {
+		// Возвращяем название контейнера с уникальной покраской
+		prefixColor := app.uniquePrefixColor(strings.TrimSpace(containerName))
+		return prefixColor + containerName + " |\033[0m " + colorLine
+	} else {
+		return colorLine
+	}
+}
+
+// Генератор уникальных цветов для префиксов контейнеров в стеках compose
+func (app *App) uniquePrefixColor(prefix string) string {
+	// Извлекаем новый цвет, если имя контейнера отсутствует в карте цветов
+	if app.uniquePrefixColorMap[prefix] == "" {
+		newColor := app.uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(app.uniquePrefixColorArr)]
+		app.uniquePrefixColorMap[prefix] = newColor
+		return app.uniquePrefixColorMap[prefix]
+	} else {
+		return app.uniquePrefixColorMap[prefix]
+	}
 }
 
 // Игнорируем регистр и проверяем, что слово окружено границами (не буквы и цифры)
