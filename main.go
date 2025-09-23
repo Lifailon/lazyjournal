@@ -713,7 +713,7 @@ func runGoCui(mock bool) {
 	app.uniquePrefixColorMap = make(map[string]string)
 	app.uniquePrefixColorArr = append(app.uniquePrefixColorArr,
 		"\033[32m", // Зеленый
-		"\033[33m", // Желный
+		"\033[33m", // Желтый
 		"\033[34m", // Синий
 		"\033[35m", // Пурпурный
 		"\033[36m", // Голубой
@@ -1234,7 +1234,7 @@ func parseDateFromName(name string) time.Time {
 	return parsedDate
 }
 
-// Функция для загрузки списка журналов служб или загрузок системы из journalctl
+// Функция для загрузки списка журналов служб или загрузок системы из journald с помощью journalctl
 func (app *App) loadServices(journalName string) {
 	app.journals = nil
 	// Проверка, что в системе установлен/поддерживается утилита journalctl
@@ -1742,6 +1742,9 @@ func (app *App) selectService(g *gocui.Gui, v *gocui.View) error {
 // Функция для загрузки записей журнала выбранной службы через journalctl
 // Второй параметр для обнолвения позиции делимитра нового вывода лога а также сброса автоскролл
 func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
+	if serviceName == "" {
+		return
+	}
 	app.debugStartTime = time.Now()
 	var output []byte
 	var err error
@@ -1889,6 +1892,9 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 
 // Функция для чтения и парсинга содержимого события Windows через wevtutil
 func (app *App) loadWinEventLog(eventName string) (output []byte) {
+	if eventName == "" {
+		return
+	}
 	cmd := exec.Command("powershell", "-Command",
 		"wevtutil qe "+eventName+" /f:text -l:en /c:"+app.logViewCount+
 			" /q:'*[System[TimeCreated[timediff(@SystemTime) <= 2592000000]]]'")
@@ -2683,6 +2689,9 @@ func (app *App) selectFile(g *gocui.Gui, v *gocui.View) error {
 
 // Функция для чтения файла
 func (app *App) loadFileLogs(logName string, newUpdate bool) {
+	if logName == "" {
+		return
+	}
 	app.debugStartTime = time.Now()
 	// В параметре logName имя файла при выборе возвращяется без символов покраски
 	// Получаем путь из массива по имени
@@ -3059,6 +3068,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 
 // Функция для чтения файла с опредилением кодировки в Windows
 func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors string) {
+	if filePath == "" {
+		return
+	}
 	app.debugStartTime = time.Now()
 	// Открываем файл
 	file, err := os.Open(filePath)
@@ -3446,6 +3458,10 @@ func (app *App) selectDocker(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
+	// Прерываем выполнение функции, если имя контейнера пустое (при выборе пустого поля с помощью мыши)
+	if containerName == "" {
+		return
+	}
 	app.debugStartTime = time.Now()
 	containerizationSystem := app.selectContainerizationSystem
 	// Сохраняем систему контейнеризации для автообновления при смене окна
