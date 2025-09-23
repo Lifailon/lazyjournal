@@ -364,7 +364,7 @@ func (app *App) showAudit() {
 
 	execPath, err := os.Executable()
 	if err == nil {
-		if strings.Contains(execPath, "tmp/go-build") || strings.Contains(execPath, "Temp\\go-build") {
+		if strings.Contains(execPath, "go-build") {
 			auditText = append(auditText, "  execType: source code")
 		} else {
 			auditText = append(auditText, "  execType: binary file")
@@ -497,12 +497,35 @@ func (app *App) showAudit() {
 	)
 	containerizationSystems := []string{
 		"docker",
+		"compose",
 		"podman",
 		"kubernetes",
 	}
 	for _, cs := range containerizationSystems {
 		auditText = append(auditText, "  - name: "+cs)
-		if cs == "kubernetes" {
+		switch cs {
+		case "compose":
+			csCheck := exec.Command("docker", "compose", "version")
+			output, err := csCheck.Output()
+			if err == nil {
+				auditText = append(auditText, "    installed: true")
+				csVersion := strings.TrimSpace(string(output))
+				csVersion = strings.Split(csVersion, "version v")[1]
+				auditText = append(auditText, "    version: "+csVersion)
+				cmd := exec.Command(
+					"docker", "compose", "ls", "-a",
+				)
+				_, err := cmd.Output()
+				if err == nil {
+					app.loadDockerContainer(cs)
+					auditText = append(auditText, "    stacks: "+strconv.Itoa(len(app.dockerContainers)))
+				} else {
+					auditText = append(auditText, "    stacks: 0")
+				}
+			} else {
+				auditText = append(auditText, "    installed: false")
+			}
+		case "kubernetes":
 			csCheck := exec.Command("kubectl", "version")
 			output, _ := csCheck.Output()
 			// По умолчанию у version код возврата всегда 1, по этому проверяем вывод
@@ -511,7 +534,7 @@ func (app *App) showAudit() {
 				// Преобразуем байты в строку и обрезаем пробелы
 				csVersion := strings.TrimSpace(string(output))
 				// Удаляем текст до номера версии
-				csVersion = strings.Split(csVersion, "Version: ")[1]
+				csVersion = strings.Split(csVersion, "Version: v")[1]
 				// Забираем первую строку
 				csVersion = strings.Split(csVersion, "\n")[0]
 				auditText = append(auditText, "    version: "+csVersion)
@@ -529,13 +552,14 @@ func (app *App) showAudit() {
 			} else {
 				auditText = append(auditText, "    installed: false")
 			}
-		} else {
+		default:
 			csCheck := exec.Command(cs, "--version")
 			output, err := csCheck.Output()
 			if err == nil {
 				auditText = append(auditText, "    installed: true")
 				csVersion := strings.TrimSpace(string(output))
 				csVersion = strings.Split(csVersion, "version ")[1]
+				csVersion = strings.Split(csVersion, ", ")[0]
 				auditText = append(auditText, "    version: "+csVersion)
 				cmd := exec.Command(
 					cs, "ps", "-a",
