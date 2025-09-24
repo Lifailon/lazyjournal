@@ -3312,9 +3312,12 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			}
 			// Проверяем статус для покраски
 			switch {
-			case strings.HasPrefix(containerStatus, "running") || strings.EqualFold(containerStatus, "running"):
+			case strings.HasPrefix(strings.ToLower(containerStatus), "running") ||
+				strings.HasPrefix(strings.ToLower(containerStatus), "succe"):
 				containerStatus = "\033[32m" + containerStatus + "\033[0m"
-			case strings.EqualFold(containerStatus, "succeeded"):
+			case strings.HasPrefix(strings.ToLower(containerStatus), "pending") ||
+				strings.HasPrefix(strings.ToLower(containerStatus), "pause") ||
+				strings.HasPrefix(strings.ToLower(containerStatus), "restart"):
 				containerStatus = "\033[33m" + containerStatus + "\033[0m"
 			default:
 				containerStatus = "\033[31m" + containerStatus + "\033[0m"
@@ -3787,7 +3790,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		var combined []dockerLogLines
 		switch {
 		// Читаем только один поток в режиме stdout или compose
-		case app.dockerStreamMode == "stdout" || containerizationSystem == "compose":
+		case app.dockerStreamMode == "stdout" || containerizationSystem == "compose" || containerizationSystem == "kubectl":
 			// Читаем стандартный вывод
 			stdoutPipe, _ := cmd.StdoutPipe()
 			_ = cmd.Start()
@@ -3931,8 +3934,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			if !app.timestampDocker {
 				entryLine = removeTimestamp(entry.content)
 			}
-			// Не добавляем профексы в отключенном режиме и для compose
-			if !app.streamTypeDocker || containerizationSystem == "compose" {
+			// Не добавляем профексы в отключенном режиме, а также для compose и kubectl
+			if !app.streamTypeDocker || containerizationSystem == "compose" || containerizationSystem == "kubectl" {
 				finalLines = append(finalLines, entryLine)
 			} else {
 				prefix := "stdout "
