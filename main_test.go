@@ -978,15 +978,28 @@ func TestMockInterface(t *testing.T) {
 		t.Log("\033[32mPASS\033[0m: test coloring")
 	}
 
+	// Обновить вывод лога
+	app.updateLogOutput(false)
+	if debug {
+		t.Log("\033[32mPASS\033[0m: update log (Ctrl+R)")
+	}
+
 	// Проверяем фильтрацию текста для списков
 	app.filterListText = "a"
 	app.createFilterEditor("lists")
 	time.Sleep(1 * time.Second)
-	app.filterListText = ""
+	// app.filterListText = ""
 	app.applyFilterList()
 	time.Sleep(1 * time.Second)
 	if debug {
 		t.Log("\033[32mPASS\033[0m: test filter lists")
+	}
+
+	// Очистка фильтров
+	app.clearFilterListEditor(g)
+	app.clearFilterEditor(g)
+	if debug {
+		t.Log("\033[32mPASS\033[0m: clear filters before exit (Ctrl+C)")
 	}
 
 	// Проверяем фильтрацию по timestamp
