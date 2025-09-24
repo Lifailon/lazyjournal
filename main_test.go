@@ -326,6 +326,7 @@ func TestDockerContainer(t *testing.T) {
 		selectContainerizationSystem string
 	}{
 		{"Docker", "docker"},
+		// {"Compose", "compose"},
 		// {"Podman", "podman"},
 		// {"Kubernetes", "kubectl"},
 	}
@@ -814,17 +815,27 @@ func TestMockInterface(t *testing.T) {
 		keybindingsEnabled:           true,
 	}
 
+	app.uniquePrefixColorMap = make(map[string]string)
+	app.uniquePrefixColorArr = append(app.uniquePrefixColorArr,
+		"\033[32m",
+		"\033[33m",
+		"\033[34m",
+		"\033[35m",
+		"\033[36m",
+	)
+
 	app.getOS = runtime.GOOS
 	app.getArch = runtime.GOARCH
 
 	var err error
+
 	// Отключение tcell для CI
 	g, err = gocui.NewGui(gocui.OutputSimulator, true)
 	var debug bool = true
 
-	// Включить отображение интерфейса для отладки
+	// Debug mode (включить отображение интерфейса и отключить логирование)
 	// g, err = gocui.NewGui(gocui.OutputNormal, true)
-	// var debug bool = false
+	// debug = false
 
 	if err != nil {
 		log.Panicln(err)
@@ -964,7 +975,7 @@ func TestMockInterface(t *testing.T) {
 	app.applyFilter(true)
 	time.Sleep(3 * time.Second)
 	if debug {
-		t.Log("PASS: test coloring")
+		t.Log("\033[32mPASS\033[0m: test coloring")
 	}
 
 	// Проверяем фильтрацию текста для списков
@@ -975,185 +986,251 @@ func TestMockInterface(t *testing.T) {
 	app.applyFilterList()
 	time.Sleep(1 * time.Second)
 	if debug {
-		t.Log("PASS: test filter list")
+		t.Log("\033[32mPASS\033[0m: test filter lists")
 	}
 
-	// Проверяем фильтрацию для timestamp
+	// Проверяем фильтрацию по timestamp
 	app.timestampFilterEditor("sinceFilter")
 	app.timestampFilterEditor("untilFilter")
 	time.Sleep(1 * time.Second)
 	if debug {
-		t.Log("PASS: test fiter timestamp")
+		t.Log("\033[32mPASS\033[0m: test fiter timestamp")
 	}
 
-	// TAB journal
+	// TAB journals
+	if debug {
+		t.Log("\033[33mDEBUG\033[0m: Tab to journals")
+	}
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
+
+	// Journals (services)
 	if v, err := g.View("services"); err == nil {
-		// DOWN
+		// Перемещаемся по списку вниз
 		app.nextService(v, 100)
 		time.Sleep(1 * time.Second)
 		// Загружаем журнал
 		app.selectService(g, v)
 		time.Sleep(3 * time.Second)
-		// UP
+		// Перемещаемся по списку вверх
 		app.prevService(v, 100)
 		time.Sleep(1 * time.Second)
-		// Переключаем списки
+		// Переключаем списки (только для Linux)
 		if runtime.GOOS != "windows" {
-			// Right
-			app.setUnitListRight(g, v)
-			time.Sleep(3 * time.Second)
+			// Вправо
 			if debug {
-				t.Log("PASS: UNIT")
+				t.Log("\033[33mDEBUG\033[0m: List next (right)")
 			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
-				t.Log("PASS: USER_UNIT")
+				t.Log("\033[32mPASS\033[0m: System journals (UNIT)")
 			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
-				t.Log("PASS: Kernel")
+				t.Log("\033[32mPASS\033[0m: User journals (USER_UNIT)")
 			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
-				t.Log("PASS: Services")
+				t.Log("\033[32mPASS\033[0m: Kernel boot")
+			}
+			app.setUnitListRight(g, v)
+			time.Sleep(3 * time.Second)
+			if debug {
+				t.Log("\033[32mPASS\033[0m: Audit rules keys (auditd)")
+			}
+			app.setUnitListRight(g, v)
+			time.Sleep(3 * time.Second)
+			if debug {
+				t.Log("\033[32mPASS\033[0m: Unit list (services)")
+			}
+			// Влево
+			if debug {
+				t.Log("\033[33mDEBUG\033[0m: List back (left)")
 			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
-				t.Log("PASS: Kernel")
+				t.Log("\033[32mPASS\033[0m: Audit rules keys")
 			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
-				t.Log("PASS: USER_UNIT")
+				t.Log("\033[32mPASS\033[0m: Kernel boot")
 			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
-				t.Log("PASS: UNIT")
+				t.Log("\033[32mPASS\033[0m: User journals (USER_UNIT)")
 			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
-				t.Log("PASS: Services")
+				t.Log("\033[32mPASS\033[0m: System journals (UNIT)")
+			}
+			app.setUnitListLeft(g, v)
+			time.Sleep(3 * time.Second)
+			if debug {
+				t.Log("\033[32mPASS\033[0m: Unit list (services)")
 			}
 		}
 	}
 	if debug {
-		t.Log("PASS: test journals")
+		t.Log("\033[32mPASS\033[0m: test journals")
 	}
 
 	// TAB filesystem
+	if debug {
+		t.Log("\033[33mDEBUG\033[0m: Tab to filesystem")
+	}
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
+
+	// File System (varLogs)
 	if v, err := g.View("varLogs"); err == nil {
+		// Перемещаемся по списку вниз
 		app.nextFileName(v, 100)
 		time.Sleep(1 * time.Second)
+		// Загружаем журнал
 		app.selectFile(g, v)
 		time.Sleep(3 * time.Second)
+		// Перемещаемся по списку вверх
 		app.prevFileName(v, 100)
 		time.Sleep(1 * time.Second)
 		if runtime.GOOS != "windows" {
-			app.setLogFilesListRight(g, v)
-			time.Sleep(5 * time.Second)
+			// Вправо
 			if debug {
-				t.Log("PASS: /opt/log")
+				t.Log("\033[33mDEBUG\033[0m: List next (right)")
 			}
 			app.setLogFilesListRight(g, v)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("PASS: /home")
+				t.Log("\033[32mPASS\033[0m: Optional package logs (/opt/log)")
 			}
 			app.setLogFilesListRight(g, v)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("PASS: descriptor")
+				t.Log("\033[32mPASS\033[0m: Users home logs (/home)")
 			}
 			app.setLogFilesListRight(g, v)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("PASS: /var/log")
+				t.Log("\033[32mPASS\033[0m: Process descriptor logs")
+			}
+			app.setLogFilesListRight(g, v)
+			time.Sleep(10 * time.Second)
+			if debug {
+				t.Log("\033[32mPASS\033[0m: System var logs (/var/log)")
+			}
+			// Влево
+			if debug {
+				t.Log("\033[33mDEBUG\033[0m: List back (left)")
 			}
 			app.setLogFilesListLeft(g, v)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("PASS: descriptor")
+				t.Log("\033[32mPASS\033[0m: Process descriptor logs")
 			}
 			app.setLogFilesListLeft(g, v)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("PASS: /home")
+				t.Log("\033[32mPASS\033[0m: Users home logs (/home)")
 			}
 			app.setLogFilesListLeft(g, v)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("PASS: /opt/log")
+				t.Log("\033[32mPASS\033[0m: Optional package logs (/opt/log)")
 			}
 			app.setLogFilesListLeft(g, v)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("PASS: /var/log")
+				t.Log("\033[32mPASS\033[0m: System var logs (/var/log)")
 			}
 		}
 	}
 	if debug {
-		t.Log("PASS: test filesystem")
+		t.Log("\033[32mPASS\033[0m: test filesystem")
 	}
 
-	// TAB docker
+	// TAB containerization system
+	if debug {
+		t.Log("\033[33mDEBUG\033[0m: Tab to containerization system")
+	}
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
+
+	// Containerization System (docker)
 	if v, err := g.View("docker"); err == nil {
+		// Перемещаемся по списку вниз
 		app.nextDockerContainer(v, 100)
 		time.Sleep(1 * time.Second)
+		// Загружаем журнал (ВРЕМЕННО ОТКЛЮЧЕНО)
+		app.selectDocker(g, v)
+		time.Sleep(3 * time.Second)
+		// Перемещаемся по списку вверх
 		app.prevDockerContainer(v, 100)
 		time.Sleep(1 * time.Second)
 		if runtime.GOOS != "windows" {
-			app.setContainersListRight(g, v)
-			time.Sleep(1 * time.Second)
+			// Вправо
 			if debug {
-				t.Log("PASS: Podman")
+				t.Log("\033[33mDEBUG\033[0m: List next (right)")
 			}
 			app.setContainersListRight(g, v)
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			if debug {
-				t.Log("PASS: Kubernetes")
+				t.Log("\033[32mPASS\033[0m: Compose")
 			}
 			app.setContainersListRight(g, v)
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			if debug {
-				t.Log("PASS: Docker")
+				t.Log("\033[32mPASS\033[0m: Podman")
+			}
+			app.setContainersListRight(g, v)
+			time.Sleep(2 * time.Second)
+			if debug {
+				t.Log("\033[32mPASS\033[0m: Kubernetes")
+			}
+			app.setContainersListRight(g, v)
+			time.Sleep(2 * time.Second)
+			if debug {
+				t.Log("\033[32mPASS\033[0m: Docker")
+			}
+			// Влево
+			if debug {
+				t.Log("\033[33mDEBUG\033[0m: List back (left)")
 			}
 			app.setContainersListLeft(g, v)
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			if debug {
-				t.Log("PASS: Kubernetes")
+				t.Log("\033[32mPASS\033[0m: Kubernetes")
 			}
 			app.setContainersListLeft(g, v)
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			if debug {
-				t.Log("PASS: Podman")
+				t.Log("\033[32mPASS\033[0m: Podman")
 			}
 			app.setContainersListLeft(g, v)
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			if debug {
-				t.Log("PASS: Docker")
+				t.Log("\033[32mPASS\033[0m: Compose")
+			}
+			app.setContainersListLeft(g, v)
+			time.Sleep(2 * time.Second)
+			if debug {
+				t.Log("\033[32mPASS\033[0m: Docker")
 			}
 		}
-		time.Sleep(1 * time.Second)
-		app.selectDocker(g, v)
-		time.Sleep(3 * time.Second)
 	}
 	if debug {
-		t.Log("PASS: test containers")
+		t.Log("\033[32mPASS\033[0m: test containers")
 	}
 
 	// TAB filter logs
+	if debug {
+		t.Log("\033[33mDEBUG\033[0m: Tab to filter logs")
+	}
 	app.nextView(g, nil)
 
 	// Проверяем фильтрацию текста для вывода журнала
@@ -1165,189 +1242,249 @@ func TestMockInterface(t *testing.T) {
 	app.applyFilter(true)
 	time.Sleep(3 * time.Second)
 	if debug {
-		t.Log("PASS: test filter logs")
+		t.Log("\033[32mPASS\033[0m: test filter logs output")
 	}
 
 	// Проверяем режимы фильтрации
 	if v, err := g.View("filter"); err == nil {
-		app.setFilterModeRight(g, v)
-		time.Sleep(1 * time.Second)
+		// Вверх
 		if debug {
-			t.Log("PASS: Filter fuzzy")
+			t.Log("\033[33mDEBUG\033[0m: Filter mode next (up)")
 		}
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Filter regex")
+			t.Log("\033[32mPASS\033[0m: Filter fuzzy")
 		}
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Filter timestamp")
+			t.Log("\033[32mPASS\033[0m: Filter regex")
 		}
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Filter default")
+			t.Log("\033[32mPASS\033[0m: Filter timestamp")
+		}
+		app.setFilterModeRight(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Filter default")
+		}
+		// Вниз
+		if debug {
+			t.Log("\033[33mDEBUG\033[0m: Filter mode back (down)")
 		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Filter timestamp")
+			t.Log("\033[32mPASS\033[0m: Filter timestamp")
 		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Filter regex")
+			t.Log("\033[32mPASS\033[0m: Filter regex")
 		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Filter fuzzy")
+			t.Log("\033[32mPASS\033[0m: Filter fuzzy")
 		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Filter default")
+			t.Log("\033[32mPASS\033[0m: Filter default")
 		}
 	}
 	if debug {
-		t.Log("PASS: test filter modes")
+		t.Log("\033[32mPASS\033[0m: test filter modes")
 	}
 
 	// TAB logs output
+	if debug {
+		t.Log("\033[33mDEBUG\033[0m: Tab to logs output")
+	}
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 	if v, err := g.View("logs"); err == nil {
-		// Alt+Right
-		app.setCountLogViewUp(g, v)
-		time.Sleep(1 * time.Second)
+		// Default: 50000
+		// Вверх
 		if debug {
-			t.Log("PASS: Tail 100000")
+			t.Log("\033[33mDEBUG\033[0m: Up tail (Ctrl+X)")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 150000")
+			t.Log("\033[32mPASS\033[0m: Tail 100000")
+		}
+		app.setCountLogViewUp(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 150000")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 200000")
+			t.Log("\033[32mPASS\033[0m: Tail 200000")
 		}
-		// Alt+Left
-		app.setCountLogViewDown(g, v)
-		time.Sleep(1 * time.Second)
+		// Вниз
 		if debug {
-			t.Log("PASS: Tail 150000")
+			t.Log("\033[33mDEBUG\033[0m: Down tail (Ctrl+Z)")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 100000")
+			t.Log("\033[32mPASS\033[0m: Tail 150000")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 50000")
+			t.Log("\033[32mPASS\033[0m: Tail 100000")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 30000")
+			t.Log("\033[32mPASS\033[0m: Tail 50000")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 20000")
+			t.Log("\033[32mPASS\033[0m: Tail 30000")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 10000")
+			t.Log("\033[32mPASS\033[0m: Tail 20000")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 5000")
+			t.Log("\033[32mPASS\033[0m: Tail 10000")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 1000")
+			t.Log("\033[32mPASS\033[0m: Tail 5000")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 500")
+			t.Log("\033[32mPASS\033[0m: Tail 1000")
+		}
+		app.setCountLogViewDown(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 500")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 200")
+			t.Log("\033[32mPASS\033[0m: Tail 200")
 		}
-		// Alt+Right
-		app.setCountLogViewUp(g, v)
-		time.Sleep(1 * time.Second)
+		// Вверх
 		if debug {
-			t.Log("PASS: Tail 500")
-		}
-		app.setCountLogViewUp(g, v)
-		time.Sleep(1 * time.Second)
-		if debug {
-			t.Log("PASS: Tail 1000")
+			t.Log("\033[33mDEBUG\033[0m: Up tail (Ctrl+X)")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 5000")
+			t.Log("\033[32mPASS\033[0m: Tail 500")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 10000")
+			t.Log("\033[32mPASS\033[0m: Tail 1000")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 20000")
+			t.Log("\033[32mPASS\033[0m: Tail 5000")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 30000")
+			t.Log("\033[32mPASS\033[0m: Tail 10000")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("PASS: Tail 50000")
+			t.Log("\033[32mPASS\033[0m: Tail 20000")
 		}
-		// UP output
+		app.setCountLogViewUp(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 30000")
+		}
+		app.setCountLogViewUp(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 50000")
+		}
+		// Поднять журнал на 1
+		if debug {
+			t.Log("\033[33mDEBUG\033[0m: Up logs output on 1")
+		}
 		app.scrollUpLogs(1)
 		time.Sleep(1 * time.Second)
-		// DOWN output
+		// Поднять журнал на 10
+		if debug {
+			t.Log("\033[33mDEBUG\033[0m: Up logs output on 10 (Shift+Up)")
+		}
+		app.scrollUpLogs(10)
+		time.Sleep(1 * time.Second)
+		// Поднять журнал на 500
+		if debug {
+			t.Log("\033[33mDEBUG\033[0m: Up logs output on 500 (Alt+Up)")
+		}
+		app.scrollUpLogs(500)
+		time.Sleep(1 * time.Second)
+		// Поднять журнал еще на 500
+		app.scrollUpLogs(500)
+		time.Sleep(1 * time.Second)
+		// Опустить журнал на 1
+		if debug {
+			t.Log("\033[33mDEBUG\033[0m: Down logs output on 1")
+		}
 		app.scrollDownLogs(1)
 		time.Sleep(1 * time.Second)
-		// Ctrl+A
+		// Опустить журнал на 10
+		if debug {
+			t.Log("\033[33mDEBUG\033[0m: Down logs output on 10 (Shift+Down)")
+		}
+		app.scrollDownLogs(10)
+		time.Sleep(1 * time.Second)
+		// Опустить журнал на 500
+		if debug {
+			t.Log("\033[33mDEBUG\033[0m: Down logs output on 10 (Alt+Down)")
+		}
+		app.scrollDownLogs(500)
+		time.Sleep(1 * time.Second)
+		// Поднять журнал в самый вверх
+		if debug {
+			t.Log("\033[33mDEBUG\033[0m: Up logs output (Ctrl+A/Home)")
+		}
 		app.pageUpLogs()
 		time.Sleep(1 * time.Second)
-		// Ctrl+E
+		// Опустить журнал в самый низ
+		if debug {
+			t.Log("\033[33mDEBUG\033[0m: Down logs output (Ctrl+E/End)")
+		}
 		app.updateLogsView(true)
 		time.Sleep(1 * time.Second)
 	}
 	if debug {
-		t.Log("PASS: test log output")
+		t.Log("\033[32mPASS\033[0m: test log output")
 	}
 
-	// TAB filter list
+	// TAB filter lists
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 
-	// Shift+Tab
+	// Back Tab
 	app.backView(g, nil)
 	time.Sleep(1 * time.Second)
 	app.backView(g, nil)
@@ -1363,7 +1500,7 @@ func TestMockInterface(t *testing.T) {
 	app.backView(g, nil)
 	time.Sleep(1 * time.Second)
 	if debug {
-		t.Log("PASS: test Shift+Tab")
+		t.Log("\033[32mPASS\033[0m: test back tab (Shift+Tab)")
 	}
 
 	// Проверяем переключение окон с помощью мыши
@@ -1380,7 +1517,7 @@ func TestMockInterface(t *testing.T) {
 	app.setSelectView(g, "logs")
 	time.Sleep(1 * time.Second)
 	if debug {
-		t.Log("PASS: test mouse")
+		t.Log("\033[32mPASS\033[0m: test mouse")
 	}
 
 	// Переключаем режим фильтрации на timestamp
