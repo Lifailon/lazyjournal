@@ -129,5 +129,30 @@ copy:
 run-remote: copy
 	@ssh $(SSH_OPTIONS) -t "cd docker/lazyjournal && $(GO_PATH) run main.go"
 
-test-remote: copy
-	@ssh $(SSH_OPTIONS) "cd docker/lazyjournal && $(GO_PATH) test -v -cover ./..."
+test-remote-main: copy
+	@ssh $(SSH_OPTIONS) "cd docker/lazyjournal && $(GO_PATH) test -v -cover --run TestMainInterface ./..."
+
+test-remote-mock: copy
+	@ssh $(SSH_OPTIONS) "cd docker/lazyjournal && $(GO_PATH) test -v -cover --run TestMockInterface ./..."
+
+# Docker
+
+docker-update:
+	@docker compose pull
+
+docker-run: docker-update
+	@docker compose up -d
+	@docker exec -it lazyjournal lazyjournal
+
+k3s-config-prep:
+	cp /etc/rancher/k3s/k3s.yaml ./kubeconfig.yaml
+	sed -i "s/127.0.0.1/192.168.3.101/g" kubeconfig.yaml
+	sed -i "s/# - .\/kubeconfig.yaml/- .\/kubeconfig.yaml/" docker-compose.yml
+
+docker-run-web: docker-update
+	sed -i "s/TTYD=false/TTYD=true/" .env
+	@docker compose up -d
+
+docker-remove:
+	@docker compose down
+	@docker rmi lifailon/lazyjournal

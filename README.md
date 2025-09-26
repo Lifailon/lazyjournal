@@ -169,7 +169,7 @@ Download the [docker-compose](/docker-compose.yml) file and run the container us
 ```shell
 git clone https://github.com/Lifailon/lazyjournal
 cd lazyjournal
-docker-compose up -d
+docker compose up -d
 docker exec -it lazyjournal lazyjournal
 ```
 
