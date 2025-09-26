@@ -1742,6 +1742,8 @@ func (app *App) selectService(g *gocui.Gui, v *gocui.View) error {
 // Функция для загрузки записей журнала выбранной службы через journalctl
 // Второй параметр для обнолвения позиции делимитра нового вывода лога а также сброса автоскролл
 func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
+	// Сбрасываем последнюю используемую систему контейнеризации (ошибка при покраске после compose)
+	app.lastContainerizationSystem = ""
 	if serviceName == "" {
 		return
 	}
@@ -1892,6 +1894,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 
 // Функция для чтения и парсинга содержимого события Windows через wevtutil
 func (app *App) loadWinEventLog(eventName string) (output []byte) {
+	app.lastContainerizationSystem = ""
 	if eventName == "" {
 		return
 	}
@@ -2689,6 +2692,7 @@ func (app *App) selectFile(g *gocui.Gui, v *gocui.View) error {
 
 // Функция для чтения файла
 func (app *App) loadFileLogs(logName string, newUpdate bool) {
+	app.lastContainerizationSystem = ""
 	if logName == "" {
 		return
 	}
@@ -3068,6 +3072,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 
 // Функция для чтения файла с опредилением кодировки в Windows
 func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors string) {
+	app.lastContainerizationSystem = ""
 	if filePath == "" {
 		return
 	}
