@@ -497,14 +497,15 @@ func (app *App) showAudit() {
 	)
 	containerizationSystems := []string{
 		"docker",
-		"compose",
+		"docker compose",
 		"podman",
-		"kubernetes",
+		"kubernetes (kubectl)",
 	}
 	for _, cs := range containerizationSystems {
 		auditText = append(auditText, "  - name: "+cs)
 		switch cs {
-		case "compose":
+		case "docker compose":
+			cs = "compose"
 			csCheck := exec.Command("docker", "compose", "version")
 			output, err := csCheck.Output()
 			if err == nil {
@@ -525,8 +526,9 @@ func (app *App) showAudit() {
 			} else {
 				auditText = append(auditText, "    installed: false")
 			}
-		case "kubernetes":
-			csCheck := exec.Command("kubectl", "version")
+		case "kubernetes (kubectl)":
+			cs = "kubectl"
+			csCheck := exec.Command(cs, "version")
 			output, _ := csCheck.Output()
 			// По умолчанию у version код возврата всегда 1, по этому проверяем вывод
 			if strings.Contains(string(output), "Version:") {
