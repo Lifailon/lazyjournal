@@ -322,7 +322,6 @@ jobs:
           echo "# 📚 Merge test results" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo -e "$title\n$separator\n$mdReport")
           echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Linters reports
         if: ${{ github.event.inputs.Linter == 'true' }}
@@ -343,6 +342,7 @@ jobs:
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           gosec -severity=high ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Upload merge coverage report
         uses: actions/upload-artifact@v4
