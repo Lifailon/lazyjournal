@@ -17,7 +17,11 @@ on:
         default: false
         type: boolean
       Linter:
-        description: 'Linter check'
+        description: 'Check linters'
+        default: false
+        type: boolean
+      LinterAll:
+        description: 'Check all linters'
         default: false
         type: boolean
       Test:
@@ -82,26 +86,35 @@ jobs:
         if: ${{ github.event.inputs.Update == 'true' }}
         run: go get -u ./...
 
-      # Linter
-      - name: Golangci linter check
+      # Linters
+
+      - name: Golangci linters check
         if: ${{ github.event.inputs.Linter == 'true' }}
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          golangci-lint run ./main.go
+          golangci-lint run -v ./main.go
 
-      - name: Critic linter check
+      - name: Critic linters check
         if: ${{ github.event.inputs.Linter == 'true' }}
         run: |
           go install github.com/go-critic/go-critic/cmd/gocritic@latest
-          gocritic check -enableAll ./main.go
+          gocritic check -v -enableAll ./main.go
 
-      - name: Security linter check
+      - name: Security linters check
         if: ${{ github.event.inputs.Linter == 'true' }}
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           gosec -severity=high ./...
 
+      - name: Security linters check
+        if: ${{ github.event.inputs.LinterAll == 'true' }}
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run -v ./main.go --no-config --enable-all
+        continue-on-error: true
+
       # Linux
+
       - name: Start docker container for test in Ubuntu
         if: ${{ (github.event.inputs.Release == 'true' || github.event.inputs.Test == 'true') && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: |
@@ -143,6 +156,7 @@ jobs:
         timeout-minutes: 10
 
       # + Docker without root
+
       - name: Unit testing for docker without root in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: env "PATH=$PATH" go test -v -cover --run "TestDockerContainer"
@@ -163,6 +177,7 @@ jobs:
         continue-on-error: true
 
       # macOS
+
       - name: Unit testing (files, flags, cli and run main interface) in macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
         run: |
@@ -178,6 +193,7 @@ jobs:
         continue-on-error: true
 
       # Windows
+
       - name: Create log file for Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
         run: |
@@ -202,7 +218,8 @@ jobs:
         shell: pwsh
         continue-on-error: true
 
-      # Release
+      # Release (Flags and TMUX)
+
       - name: Install binary from last commit on GitHub
         if: ${{ github.event.inputs.Release == 'true' }}
         run: |

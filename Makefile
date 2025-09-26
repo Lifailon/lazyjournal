@@ -22,10 +22,13 @@ lint-install:
 	go install github.com/go-critic/go-critic/cmd/gocritic@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
 
-lint-check: lint-install
-	golangci-lint run ./main.go
-	gocritic check -enableAll ./main.go
+lint: lint-install
+	golangci-lint run -v ./main.go
+	gocritic check -v -enableAll ./main.go
 	gosec -severity=high ./...
+
+lint-all:
+	golangci-lint run -v ./main.go --no-config --enable-all
 
 # Tests
 
