@@ -230,7 +230,6 @@ type App struct {
 	backCurrentView bool   // отключаем/ключаем возврат
 
 	uniquePrefixColorMap map[string]string // карта для хранения уникального цвета для каждого контейнера в стеках compose
-	uniquePrefixColorArr []string          // массив для хранения уникальных цветов
 }
 
 func showHelp() {
@@ -654,6 +653,16 @@ var (
 	ErrInvalidStat    = errors.New("invalid stat output")
 )
 
+var (
+	uniquePrefixColorArr = []string{
+		"\033[32m", // Зеленый
+		"\033[33m", // Желтый
+		"\033[34m", // Синий
+		"\033[35m", // Пурпурный
+		"\033[36m", // Голубой
+	}
+)
+
 // Определяем название удаленной системы
 func remoteGetOS(sshOptions []string) (string, error) {
 	cmd := exec.Command("ssh", append(sshOptions, "uname", "-s")...)
@@ -710,16 +719,8 @@ func runGoCui(mock bool) {
 		streamTypeDocker:             true,
 		lastCurrentView:              "services",
 		backCurrentView:              false,
+		uniquePrefixColorMap:         make(map[string]string),
 	}
-
-	app.uniquePrefixColorMap = make(map[string]string)
-	app.uniquePrefixColorArr = append(app.uniquePrefixColorArr,
-		"\033[32m", // Зеленый
-		"\033[33m", // Желтый
-		"\033[34m", // Синий
-		"\033[35m", // Пурпурный
-		"\033[36m", // Голубой
-	)
 
 	// Определяем используемую ОС (linux/darwin/*bsd/windows) и архитектуру
 	app.getOS = runtime.GOOS
@@ -3356,7 +3357,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		for _, dc := range app.dockerContainers {
 			cn := strings.SplitN(dc.name, "] ", 2)[1]
 			if cn != "" {
-				newColor := app.uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(app.uniquePrefixColorArr)]
+				newColor := uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(uniquePrefixColorArr)]
 				app.uniquePrefixColorMap[cn] = newColor
 			}
 		}

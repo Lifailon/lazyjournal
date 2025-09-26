@@ -355,16 +355,8 @@ func TestDockerContainer(t *testing.T) {
 				dateTimeRegex:                dateTimeRegex,
 				integersInputRegex:           integersInputRegex,
 				syslogUnitRegex:              syslogUnitRegex,
+				uniquePrefixColorMap:         make(map[string]string),
 			}
-
-			app.uniquePrefixColorMap = make(map[string]string)
-			app.uniquePrefixColorArr = append(app.uniquePrefixColorArr,
-				"\033[32m",
-				"\033[33m",
-				"\033[34m",
-				"\033[35m",
-				"\033[36m",
-			)
 
 			app.loadDockerContainer(app.selectContainerizationSystem)
 			if len(app.dockerContainers) == 0 {
@@ -623,6 +615,7 @@ func TestCommandColor(t *testing.T) {
 		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
+		uniquePrefixColorMap:         make(map[string]string),
 	}
 
 	// Читаем содержимое тестируемого файла
@@ -822,16 +815,8 @@ func TestMockInterface(t *testing.T) {
 		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
+		uniquePrefixColorMap:         make(map[string]string),
 	}
-
-	app.uniquePrefixColorMap = make(map[string]string)
-	app.uniquePrefixColorArr = append(app.uniquePrefixColorArr,
-		"\033[32m",
-		"\033[33m",
-		"\033[34m",
-		"\033[35m",
-		"\033[36m",
-	)
 
 	app.getOS = runtime.GOOS
 	app.getArch = runtime.GOARCH
