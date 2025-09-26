@@ -580,6 +580,7 @@ func TestFilter(t *testing.T) {
 
 func TestFlags(t *testing.T) {
 	app := &App{}
+	app.uniquePrefixColorMap = make(map[string]string)
 	showHelp()
 	showConfig()
 	app.showAudit()
@@ -709,6 +710,7 @@ func TestCommandFuzzyFilter(t *testing.T) {
 		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
+		uniquePrefixColorMap:         make(map[string]string),
 	}
 
 	data, err := os.ReadFile("color.log")
@@ -757,6 +759,7 @@ func TestCommandRegexFilter(t *testing.T) {
 		integersInputRegex:           integersInputRegex,
 		syslogUnitRegex:              syslogUnitRegex,
 		keybindingsEnabled:           true,
+		uniquePrefixColorMap:         make(map[string]string),
 	}
 
 	data, err := os.ReadFile("color.log")
