@@ -22,8 +22,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Read docker logs from filesystem
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      # Kubernetes configuration for kubectl (cluster address should not be localhost)
-      # - /kubeconfig.yaml:/root/.kube/config:ro
+      # Kubernetes configuration for kubectl (cluster address must be accessible to the container)
+      # - ./kubeconfig.yaml:/root/.kube/config:ro
       # Custom lazyjournal configuration (optional)
       # - ./config.yml:/bin/config.yml:ro
     privileged: true
