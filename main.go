@@ -6399,13 +6399,23 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Alt + Down/PgDown and Ctrl+j (500)
+	// Alt/Ctrl + Down/PgDown and Ctrl+j (500)
 	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowDown, gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollDownLogs(500)
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("logs", gocui.KeyPgdn, gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollDownLogs(500)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowDown, gocui.ModMouseCtrl, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollDownLogs(500)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.KeyPgdn, gocui.ModMouseCtrl, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollDownLogs(500)
 	}); err != nil {
 		return err
@@ -6450,13 +6460,23 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Alt + Up/PgUp and Ctrl+k (500)
+	// Alt/Ctrl + Up/PgUp and Ctrl+k (500)
 	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowUp, gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollUpLogs(500)
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("logs", gocui.KeyPgup, gocui.ModAlt, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollUpLogs(500)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.KeyArrowUp, gocui.ModMouseCtrl, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollUpLogs(500)
+	}); err != nil {
+		return err
+	}
+	if err := app.gui.SetKeybinding("logs", gocui.KeyPgup, gocui.ModMouseCtrl, func(g *gocui.Gui, v *gocui.View) error {
 		return app.scrollUpLogs(500)
 	}); err != nil {
 		return err
@@ -6535,6 +6555,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
+	// Enter for return to the window
 	// Возврат к последнему окну до использования слэша с использование Enter из окна фильтрации
 	if err := app.gui.SetKeybinding("filterList", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.backCurrentView {
@@ -6828,8 +6849,15 @@ func (app *App) setupKeybindings() error {
 		if app.filterListText == "" {
 			return quit(g, v)
 		} else {
+			// Очищаем фильтр
 			app.clearFilterListEditor(g)
-			return nil
+			// Возвращяемся к последнему окну из фильтра
+			if app.backCurrentView {
+				app.backCurrentView = false
+				return app.setSelectView(app.gui, app.lastCurrentView)
+			} else {
+				return nil
+			}
 		}
 	}); err != nil {
 		return err
@@ -6870,7 +6898,12 @@ func (app *App) setupKeybindings() error {
 			return quit(g, v)
 		} else {
 			app.clearFilterEditor(g)
-			return nil
+			if app.backCurrentView {
+				app.backCurrentView = false
+				return app.setSelectView(app.gui, app.lastCurrentView)
+			} else {
+				return nil
+			}
 		}
 	}); err != nil {
 		return err
