@@ -4,7 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       Debug:
-        description: 'Advanced summary report'
+        description: 'Advanced summary report from tests'
+        default: false
+        type: boolean
+      Linter:
+        description: 'Check linters for final report'
         default: false
         type: boolean
       Coverage:
@@ -310,8 +314,8 @@ jobs:
           gocovmerge linux-coverage.out docker-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
           out=$(go tool cover -func merge-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
-          echo "Total coverage: $coverTotal"
-          echo "- **Total**: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          echo "Total after merge coverage: $coverTotal"
+          echo "- **Total after merge**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo "$out" | sed -E 's/.+\///' | sed "s/:/ /g" | head -n -1)
           title="File Line Function Coverage"
           separator="- - - -"
@@ -319,6 +323,26 @@ jobs:
           mdReport=$(echo -e "$title\n$separator\n$mdReport")
           echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
+
+      - name: Linters reports
+        if: ${{ github.event.inputs.Linter == 'true' }}
+        run: |
+          echo "# 👮‍♂️ Linters check" >> $GITHUB_STEP_SUMMARY
+          echo "## GolangCI" >> $GITHUB_STEP_SUMMARY
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          golangci-lint run -v ./main.go 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "## Go Critic" >> $GITHUB_STEP_SUMMARY
+          go install github.com/go-critic/go-critic/cmd/gocritic@latest
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          gocritic check -v -enableAll ./main.go 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "## Go Security" >> $GITHUB_STEP_SUMMARY
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          gosec -severity=high ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload merge coverage report
         uses: actions/upload-artifact@v4
