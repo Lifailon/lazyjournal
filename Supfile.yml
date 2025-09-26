@@ -33,23 +33,23 @@ commands:
   creat:
     desc: Creat directory for upload files
     run: |
-      rm -rf git/lazyjournal
-      mkdir -p git/lazyjournal
+      rm -rf docker/lazyjournal
+      mkdir -p docker/lazyjournal
 
   copy:
     desc: Upload all files to remote hosts
     upload:
       - src: \*
-        dst: git/lazyjournal
+        dst: docker/lazyjournal
 
   ls:
     desc: Check directory
-    run: ls -lh git/lazyjournal
+    run: ls -lh docker/lazyjournal
 
   prep:
     desc: Install dependencies and code preparation
     run: |
-      cd git/lazyjournal
+      cd docker/lazyjournal
       go fmt ./...
       go vet ./...
       go get ./...
@@ -60,20 +60,20 @@ commands:
   test:
     desc: Run unit tests
     run: |
-      cd git/lazyjournal
+      cd docker/lazyjournal
       go test -v -cover --run "TestUnixFiles|TestColor|TestFilter|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface"
 
   docker:
     desc: Run docker containers test
     run: |
-      cd git/lazyjournal
+      cd docker/lazyjournal
       go test -v -cover --run "TestDockerContainer"
 
   remove:
     desc: Remove files on remote hosts
     run: |
-      rm -rf git/lazyjournal
-      ls -l git/lazyjournal 2> /dev/null || echo "lazyjournal removed"
+      rm -rf docker/lazyjournal
+      ls -l docker/lazyjournal 2> /dev/null || echo "lazyjournal removed"
 
   bin:
     desc: Install binary from GitHub

@@ -121,10 +121,10 @@ SSH_OPTIONS := lifailon@192.168.3.101 -p 2121
 GO_PATH := /usr/local/go/bin/go
 
 copy:
-	@tar czf - . | ssh $(SSH_OPTIONS) "mkdir -p git/lazyjournal && cd git/lazyjournal && tar xzf -"
+	@tar czf - . | ssh $(SSH_OPTIONS) "mkdir -p docker/lazyjournal && cd docker/lazyjournal && tar xzf -"
 
 run-remote: copy
-	@ssh $(SSH_OPTIONS) -t "cd git/lazyjournal && $(GO_PATH) run main.go"
+	@ssh $(SSH_OPTIONS) -t "cd docker/lazyjournal && $(GO_PATH) run main.go"
 
 test-remote: copy
-	@ssh $(SSH_OPTIONS) "cd git/lazyjournal && $(GO_PATH) test -v -cover ./..."
+	@ssh $(SSH_OPTIONS) "cd docker/lazyjournal && $(GO_PATH) test -v -cover ./..."
