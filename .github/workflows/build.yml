@@ -29,7 +29,7 @@ on:
         default: false
         type: boolean
       Release:
-        description: 'Release check'
+        description: 'Check release'
         default: false
         type: boolean
       Binary:
@@ -75,9 +75,10 @@ jobs:
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: $version" >> $GITHUB_STEP_SUMMARY
           echo "- **Update dependencies**: ${{ github.event.inputs.Update }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Linter check**: ${{ github.event.inputs.Linter }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Check linters**: ${{ github.event.inputs.Linter }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Check all linters**: ${{ github.event.inputs.LinterAll }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Release check**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Check release**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build binary**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build docker image**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
         shell: bash

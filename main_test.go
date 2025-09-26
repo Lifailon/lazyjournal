@@ -357,6 +357,15 @@ func TestDockerContainer(t *testing.T) {
 				syslogUnitRegex:              syslogUnitRegex,
 			}
 
+			app.uniquePrefixColorMap = make(map[string]string)
+			app.uniquePrefixColorArr = append(app.uniquePrefixColorArr,
+				"\033[32m",
+				"\033[33m",
+				"\033[34m",
+				"\033[35m",
+				"\033[36m",
+			)
+
 			app.loadDockerContainer(app.selectContainerizationSystem)
 			if len(app.dockerContainers) == 0 {
 				t.Errorf("Container list is null")
