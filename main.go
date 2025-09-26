@@ -29,7 +29,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var programVersion string = "0.8.0"
+var programVersion string = "0.8.1"
 
 // Структура конфигурации
 type Config struct {
@@ -1896,7 +1896,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 func (app *App) loadWinEventLog(eventName string) (output []byte) {
 	app.lastContainerizationSystem = ""
 	if eventName == "" {
-		return
+		return []byte("")
 	}
 	cmd := exec.Command("powershell", "-Command",
 		"wevtutil qe "+eventName+" /f:text -l:en /c:"+app.logViewCount+
@@ -3074,7 +3074,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors string) {
 	app.lastContainerizationSystem = ""
 	if filePath == "" {
-		return
+		return nil, "file not selected"
 	}
 	app.debugStartTime = time.Now()
 	// Открываем файл
