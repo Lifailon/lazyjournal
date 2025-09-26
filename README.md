@@ -16,7 +16,7 @@
     <a href="https://hub.docker.com/r/lifailon/lazyjournal"><img title="Docker Hub" src="https://img.shields.io/docker/image-size/lifailon/lazyjournal/latest?logo=docker&color=blue&label=Docker+Hub"></a>
 </p>
 
-Terminal user interface for reading logs from `journald`, `auditd`, file system, Docker (including Swarm) containers, Podman and Kubernetes pods with support for output coloring and multiple filtering modes. Written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
+Terminal user interface for reading logs from `journald`, `auditd`, file system, Docker (including Swarm) containers, Compose stacks, Podman and Kubernetes pods with support for output coloring and multiple filtering modes. Written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
 
 This tool is inspired by and with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit). It is also included in [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging), [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
 
@@ -52,6 +52,7 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
 - Apple System Logs support (`asl` format).
 - Search and analyze all logs from remote hosts in one interface using [rsyslog](https://www.rsyslog.com) configuration.
 - Docker and Swarm logs from the file system or stream, including build-in timestamps and filtering by stream.
+- Logs of all containers in Docker Compose stacks, sorted by time for all entries.
 - Podman logs, without the need to run a background process (socket).
 - Kubernetes pods logs (you must first configure a connection to the cluster via `kubectl`).
 - Logs of [k3s](https://github.com/k3s-io/k3s) pods and containers from the file system on any nodes (including workers).
@@ -163,7 +164,7 @@ brew install lazyjournal
 
 ### Docker (Debian-based)
 
-Download the [compose](/docker-compose.yml) file and run the container using the image from [Docker Hub](https://hub.docker.com/r/lifailon/lazyjournal):
+Download the [docker-compose](/docker-compose.yml) file and run the container using the image from [Docker Hub](https://hub.docker.com/r/lifailon/lazyjournal):
 
 ```shell
 git clone https://github.com/Lifailon/lazyjournal
@@ -172,7 +173,7 @@ docker-compose up -d
 docker exec -it lazyjournal lazyjournal
 ```
 
-The image is based on Debian with `systemd` and docker cli pre-installed. The necessary **read-only** permissions are already preset in `docker-compose` to support all log sources from the host system (review it to customize for your individual use).
+The image is based on Debian with `systemd`, docker cli, compose and kubectl pre-installed. The necessary **read-only** permissions are already preset in `docker-compose` to support all log sources from the host system (review it to customize for your individual use). To access Kubernetes logs, you need to forward the configuration to the container (if you are using a local cluster, then change the IP address of the cluster server in the configuration to the address of the host on the local network).
 
 ### Web mode
 
@@ -344,7 +345,7 @@ make test-all
 Check the source code on the base linters using [golangci-lint](https://github.com/golangci/golangci-lint) (including all [critic](https://github.com/go-critic/go-critic) and severity high in [security](https://github.com/securego/gosec)):
 
 ```shell
-make lint-check
+make lint
 ```
 
 ## Contributing
