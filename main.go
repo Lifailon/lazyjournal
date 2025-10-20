@@ -10,6 +10,9 @@ import (
 	"io"
 	"log"
 	"math"
+	"net"
+	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/exec"
 	"os/user"
@@ -242,10 +245,11 @@ func showHelp() {
 	fmt.Println("    --version, -v              Show version")
 	fmt.Println("    --config, -g               Show configuration of hotkeys and settings (check values)")
 	fmt.Println("    --audit, -a                Show audit information")
+	fmt.Println("    --debug, -d                Run the server on 6060 port to view variable values and profiling (pprof)")
 	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 50000)")
 	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	fmt.Println("    --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)")
-	fmt.Println("    --disable-color, -d        Disable output coloring")
+	fmt.Println("    --disable-color, -l        Disable output coloring")
 	fmt.Println("    --disable-mouse, -m        Disable mouse control support")
 	fmt.Println("    --disable-timestamp, -p    Disable timestamp for docker logs")
 	fmt.Println("    --only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)")
@@ -621,6 +625,110 @@ func (config *Config) getConfig() (string, error) {
 	return configPath, err
 }
 
+func (app *App) debugServer() {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/debug/pprof", http.StatusFound)
+	})
+
+	mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+	mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+	mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+	mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+
+	mux.HandleFunc("/debug/pprof/vars", func(w http.ResponseWriter, r *http.Request) {
+		appData := map[string]any{
+			"sshMode":                  app.sshMode,
+			"fastMode":                 app.fastMode,
+			"testMode":                 app.testMode,
+			"tailSpinMode":             app.tailSpinMode,
+			"tailSpinBinName":          app.tailSpinBinName,
+			"colorMode":                app.colorMode,
+			"mouseSupport":             app.mouseSupport,
+			"dockerStreamLogs":         app.dockerStreamLogs,
+			"dockerStreamLogsStr":      app.dockerStreamLogsStr,
+			"dockerStreamMode":         app.dockerStreamMode,
+			"getOS":                    app.getOS,
+			"getArch":                  app.getArch,
+			"hostName":                 app.hostName,
+			"userName":                 app.userName,
+			"systemDisk":               app.systemDisk,
+			"userNameArray":            app.userNameArray,
+			"rootDirArray":             app.rootDirArray,
+			"timestampFilterView":      app.timestampFilterView,
+			"sinceTimestampFilterMode": app.sinceTimestampFilterMode,
+			"untilTimestampFilterMode": app.untilTimestampFilterMode,
+			"sinceFilterText":          app.sinceFilterText,
+			"untilFilterText":          app.untilFilterText,
+			"filterListText":           app.filterListText,
+			// "journalsNotFilter":          app.journalsNotFilter,
+			// "logfilesNotFilter":          app.logfilesNotFilter,
+			// "dockerContainersNotFilter":  app.dockerContainersNotFilter,
+			"windowWidth":  app.windowWidth,
+			"windowHeight": app.windowHeight,
+			"filterText":   app.filterText,
+			// "currentLogLines":            app.currentLogLines,
+			// "filteredLogLines":           app.filteredLogLines,
+			"logScrollPos":               app.logScrollPos,
+			"lastFilterText":             app.lastFilterText,
+			"autoScroll":                 app.autoScroll,
+			"disableAutoScroll":          app.disableAutoScroll,
+			"lastUpdateLine":             app.lastUpdateLine,
+			"updateTime":                 app.updateTime,
+			"lastDateUpdateFile":         app.lastDateUpdateFile,
+			"lastSizeFile":               app.lastSizeFile,
+			"updateFile":                 app.updateFile,
+			"lastWindow":                 app.lastWindow,
+			"lastSelected":               app.lastSelected,
+			"lastSelectUnits":            app.lastSelectUnits,
+			"lastBootId":                 app.lastBootId,
+			"lastLogPath":                app.lastLogPath,
+			"lastContainerizationSystem": app.lastContainerizationSystem,
+			"lastContainerId":            app.lastContainerId,
+			"journalListFrameColor":      app.journalListFrameColor,
+			"fileSystemFrameColor":       app.fileSystemFrameColor,
+			"dockerFrameColor":           app.dockerFrameColor,
+			"debugStartTime":             app.debugStartTime,
+			"debugLoadTime":              app.debugLoadTime,
+			"debugColorTime":             app.debugColorTime,
+			"keybindingsEnabled":         app.keybindingsEnabled,
+			"timestampDocker":            app.timestampDocker,
+			"streamTypeDocker":           app.streamTypeDocker,
+			"trimHttpRegex":              app.trimHttpRegex,
+			"trimHttpsRegex":             app.trimHttpsRegex,
+			"trimPrefixPathRegex":        app.trimPrefixPathRegex,
+			"trimPostfixPathRegex":       app.trimPostfixPathRegex,
+			"hexByteRegex":               app.hexByteRegex,
+			"dateTimeRegex":              app.dateTimeRegex,
+			"integersInputRegex":         app.integersInputRegex,
+			"syslogUnitRegex":            app.syslogUnitRegex,
+			"lastCurrentView":            app.lastCurrentView,
+			"backCurrentView":            app.backCurrentView,
+			"uniquePrefixColorMap":       app.uniquePrefixColorMap,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(appData)
+
+		// w.Header().Set("Content-Type", "text/html")
+		// html := godump.DumpHTML(app)
+		// w.Write([]byte(html))
+	})
+
+	go func() {
+		listener, err := net.Listen("tcp", ":6060")
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		err = http.Serve(listener, mux)
+		if err != nil {
+			log.Println(err)
+		}
+	}()
+}
+
 // Предварительная компиляция регулярных выражений для покраски вывода и их доступности в тестах
 var (
 	// Исключаем все до http:// (включительно) в начале строки
@@ -735,6 +843,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(configFlag, "g", false, "Show configuration of hotkeys and settings (check values)")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
+	pprofDebug := flag.Bool("debug", false, "Run the server on 6060 port to view variable values and profiling (pprof)")
+	flag.BoolVar(pprofDebug, "d", false, "Run the server on 6060 port to view variable values and profiling (pprof)")
 	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
 	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
@@ -742,7 +852,7 @@ func runGoCui(mock bool) {
 	disableScroll := flag.Bool("disable-autoupdate", false, "Disable streaming of new events (log is loaded once without automatic update)")
 	flag.BoolVar(disableScroll, "e", false, "Disable streaming of new events (log is loaded once without automatic update)")
 	disableColor := flag.Bool("disable-color", false, "Disable output coloring")
-	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
+	flag.BoolVar(disableColor, "l", false, "Disable output coloring")
 	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse control support")
 	flag.BoolVar(disableMouse, "m", false, "Disable mouse control support")
 	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for docker logs")
@@ -779,6 +889,10 @@ func runGoCui(mock bool) {
 	if *audit {
 		app.showAudit()
 		os.Exit(0)
+	}
+
+	if *pprofDebug {
+		app.debugServer()
 	}
 
 	// Проверяем и извлекаем значения настроек для флагов из конфигурации
