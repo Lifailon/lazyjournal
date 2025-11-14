@@ -3,24 +3,10 @@ description: Report a bug or issue.
 title: '[Bug]: '
 labels: ['bug']
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Before opening an issue, please check the log source content manually, this will help understand the problem more accurately and resolve it faster.
-        If you have an error running the executable, check running from source code (if you have the ability to install Go) and specify it in the installation method.
-  
-  - type: textarea
-    id: description
-    attributes:
-      label: Description
-      description: Briefly describe the problem and transmit the contents of the error
-    validations:
-      required: true
-
   - type: dropdown
     id: system
     attributes:
-      label: Your system
+      label: System
       default: 0
       options:
         - linux
@@ -46,9 +32,15 @@ body:
     id: os-version
     attributes:
       label: OS version
-      placeholder: Ubuntu 20.04, Ubuntu 24.04, macOS 15.2 or other
+      placeholder: Ubuntu 24.04, macOS 15.2, Windows 10 or other
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        Before opening an issue, please check the log source content manually, this will help understand the problem more accurately and resolve it faster.
+        If you have an error running the executable, check running from source code (if you have the ability to install Go) and specify it in the installation method.
 
   - type: checkboxes
     id: install-method
@@ -57,3 +49,12 @@ body:
       options:
         - label: Binary
         - label: Source code
+        - label: Docker container
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Briefly describe the problem and transmit the contents of the error
+    validations:
+      required: true
