@@ -1,8 +1,8 @@
 # Available hotkeys:
-# a-z, 0-9, f1-f12 and any symbols
+# a-z, 0-9, f1-f12 and any other symbols
+# enter, space, backspace, delete, escape, tab and shift+tab
 # shift+<a-z>
 # ctrl+<a-z>
-# <tab/shift+tab/enter/space/backspace/delete/escape>
 
 hotkeys:
   help: f1
@@ -36,7 +36,10 @@ hotkeys:
   timestampShow: ctrl+t
   exit: ctrl+c
 
+# Default flag values (lower priority)
+
 settings:
+  customPath: /opt
   tailMode: 50000
   updateInterval: 5
   disableAutoUpdate: false
