@@ -73,6 +73,7 @@ type Hotkeys struct {
 
 // Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
 type Settings struct {
+	CustomPath        string `yaml:"customPath"`
 	TailMode          string `yaml:"tailMode"`
 	UpdateInterval    string `yaml:"updateInterval"`
 	DisableAutoUpdate string `yaml:"disableAutoUpdate"`
@@ -135,6 +136,8 @@ type App struct {
 	selectPath                   string // путь к логам (/var/log/)
 	selectContainerizationSystem string // название системы контейнеризации (docker/compose/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (default/fuzzy/regex)
+
+	customPath string // пользовательский путь (по умолчанию, /opt)
 
 	logViewCount     string   // количество логов для просмотра
 	logUpdateSeconds int      // период фонового обновления журнала
@@ -242,12 +245,13 @@ func showHelp() {
 	fmt.Println("    --version, -v              Show version")
 	fmt.Println("    --config, -g               Show configuration of hotkeys and settings (check values)")
 	fmt.Println("    --audit, -a                Show audit information")
+	fmt.Println("    --path, -p                	Custom path to logs in the file system (default: /opt)")
 	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 50000)")
 	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	fmt.Println("    --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)")
 	fmt.Println("    --disable-color, -d        Disable output coloring")
 	fmt.Println("    --disable-mouse, -m        Disable mouse control support")
-	fmt.Println("    --disable-timestamp, -p    Disable timestamp for docker logs")
+	fmt.Println("    --disable-timestamp, -i    Disable timestamp for docker logs")
 	fmt.Println("    --only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
@@ -307,6 +311,7 @@ func showConfig() {
 	fmt.Printf("  exit:                  %s\n", config.Hotkeys.Exit)
 
 	fmt.Println("settings:")
+	fmt.Printf("  customPath:            %s\n", config.Settings.CustomPath)
 	fmt.Printf("  tailMode:              %s\n", config.Settings.TailMode)
 	fmt.Printf("  updateInterval:        %s\n", config.Settings.UpdateInterval)
 	fmt.Printf("  disableColor:          %s\n", config.Settings.DisableColor)
@@ -476,7 +481,7 @@ func (app *App) showAudit() {
 			path string
 		}{
 			{"System var logs", "/var/log/"},
-			{"Optional package logs", "/opt/"},
+			{"Custom path", "/opt"},
 			{"Users home logs", "/home/"},
 			{"Process descriptor logs", "descriptor"},
 		}
@@ -735,6 +740,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(configFlag, "g", false, "Show configuration of hotkeys and settings (check values)")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
+	pathFlag := flag.String("path", "/opt", "Custom path to logs in the file system (default: /opt)")
+	flag.StringVar(pathFlag, "p", "/opt", "Custom path to logs in the file system (default: /opt)")
 	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
 	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
@@ -746,7 +753,7 @@ func runGoCui(mock bool) {
 	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse control support")
 	flag.BoolVar(disableMouse, "m", false, "Disable mouse control support")
 	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for docker logs")
-	flag.BoolVar(disableTimeStamp, "p", false, "Disable timestamp for docker logs")
+	flag.BoolVar(disableTimeStamp, "i", false, "Disable timestamp for docker logs")
 	dockerStreamFlag := flag.Bool("only-stream", false, "Force reading of docker container logs in stream mode (by default from the file system)")
 	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of docker container logs in stream mode (by default from the file system)")
 	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
@@ -786,6 +793,11 @@ func runGoCui(mock bool) {
 	_, errConfig := config.getConfig()
 	if errConfig != nil {
 		fmt.Println(errConfig)
+	}
+
+	// Если значение в конфигурации не пустое а значение флага по умолчанию
+	if config.Settings.CustomPath != "" && *pathFlag == "/opt" {
+		pathFlag = &config.Settings.CustomPath
 	}
 
 	if config.Settings.TailMode != "" && *tailFlag == "50000" {
@@ -842,30 +854,43 @@ func runGoCui(mock bool) {
 
 	// Обработка остальных флагов с учетом полученных данных из конфигурации
 
+	// Проверяем значение флага на валидность
+	if *pathFlag != "" && len(*pathFlag) > 1 && *pathFlag != "/" && strings.HasPrefix(*pathFlag, "/") {
+		app.customPath = *pathFlag
+	} else {
+		// Если ошибка в флаге, возвращяем ошибку
+		if *pathFlag != config.Settings.CustomPath {
+			fmt.Println("Invalid custom path: " + *pathFlag)
+			os.Exit(1)
+		} else {
+			// Если ошибка в конфигурации (или значение не задано), задаем значение по умолчанию
+			app.customPath = "/opt"
+		}
+	}
+
 	if *tailFlag == "200" || *tailFlag == "500" || *tailFlag == "1000" ||
 		*tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" ||
 		*tailFlag == "30000" || *tailFlag == "50000" || *tailFlag == "100000" ||
 		*tailFlag == "150000" || *tailFlag == "200000" {
 		app.logViewCount = *tailFlag
 	} else {
-		// Если ошибка в конфигурации, задаем значение по умолчанию
-		if config.Settings.TailMode != "" && *tailFlag == "" {
-			app.logViewCount = "50000"
-		} else {
-			// Если ошибка в флаге, возвращяем ошибку
+		if *tailFlag != config.Settings.TailMode {
 			fmt.Println("Available values: 200, 500, 1000, 5000, 10000, 20000, 30000 50000, 100000, 150000, 200000 (default: 50000 lines)")
 			os.Exit(1)
+		} else {
+			app.logViewCount = "50000"
 		}
 	}
 
 	if *updateFlag >= 2 && *updateFlag <= 10 {
 		app.logUpdateSeconds = *updateFlag
 	} else {
-		if config.Settings.UpdateInterval != "" && *updateFlag == 0 {
-			app.logUpdateSeconds = 5
-		} else {
+		updateIntervalInt, err := strconv.Atoi(config.Settings.UpdateInterval)
+		if err == nil && *updateFlag != updateIntervalInt {
 			fmt.Println("Valid range: 2-10 (default: 5 seconds)")
 			os.Exit(1)
+		} else {
+			app.logUpdateSeconds = 5
 		}
 	}
 
@@ -2209,7 +2234,7 @@ func (app *App) loadFiles(logPath string) {
 		if app.sshMode {
 			cmd = exec.Command(
 				"ssh", append(app.sshOptions,
-					"find", logPath,
+					"find", app.customPath,
 					"-type", "f",
 					"-name", "*.log", "-o",
 					"-name", "*.log.*",
@@ -2217,7 +2242,7 @@ func (app *App) loadFiles(logPath string) {
 			)
 		} else {
 			cmd = exec.Command(
-				"find", logPath,
+				"find", app.customPath,
 				"-type", "f",
 				"-name", "*.log", "-o",
 				"-name", "*.log.*",
@@ -2246,7 +2271,7 @@ func (app *App) loadFiles(logPath string) {
 			}
 		} else {
 			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
-				log.Print("Error: files not found in /opt/")
+				log.Print("Error: files not found in ", app.customPath)
 			}
 		}
 	default:
@@ -7517,7 +7542,7 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 			switch app.selectPath {
 			case "/var/log/":
 				app.selectPath = "/opt/"
-				selectedVarLog.Title = " < Optional package logs (0) > "
+				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
 				app.loadFiles(app.selectPath)
 			case "/opt/":
 				app.selectPath = "/home/"
@@ -7603,7 +7628,7 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 				app.loadFiles(app.selectPath)
 			case "/home/":
 				app.selectPath = "/opt/"
-				selectedVarLog.Title = " < Optional package logs (0) > "
+				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
 				app.loadFiles(app.selectPath)
 			case "/opt/":
 				app.selectPath = "/var/log/"
