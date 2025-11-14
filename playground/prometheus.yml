@@ -1,0 +1,7 @@
+scrape_configs:
+  - job_name: logporter
+    scrape_interval: 5s
+    scrape_timeout: 1s
+    static_configs:
+      - targets:
+        - logporter:9333
