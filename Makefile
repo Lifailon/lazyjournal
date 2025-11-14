@@ -9,7 +9,7 @@ prep:
 clean:
 	go clean -cache -modcache -testcache
 
-update: prep
+update:
 	go get -u ./...
 
 run: prep
@@ -22,7 +22,7 @@ lint-install:
 	go install github.com/go-critic/go-critic/cmd/gocritic@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
 
-lint: lint-install
+lint:
 	golangci-lint run -v ./main.go
 	gocritic check -v -enableAll ./main.go
 	gosec -severity=high ./...
@@ -36,10 +36,10 @@ test-list:
 	@go test -list . ./...
 	@echo "\nTo run the selected test: \033[32mmake test n=TestMain*\033[0m\n"
 
-test: prep
+test:
 	go test -v -cover --run $(n) ./...
 
-test-all: prep
+test-all:
 	go test -v -cover ./...
 
 # Build
@@ -129,10 +129,7 @@ copy:
 run-remote: copy
 	@ssh $(SSH_OPTIONS) -t "cd docker/lazyjournal && $(GO_PATH) run main.go"
 
-test-remote-main: copy
-	@ssh $(SSH_OPTIONS) "cd docker/lazyjournal && $(GO_PATH) test -v -cover --run TestMainInterface ./..."
-
-test-remote-mock: copy
+test-remote: copy
 	@ssh $(SSH_OPTIONS) "cd docker/lazyjournal && $(GO_PATH) test -v -cover --run TestMockInterface ./..."
 
 # Docker
@@ -144,15 +141,13 @@ docker-run: docker-update
 	@docker compose up -d
 	@docker exec -it lazyjournal lazyjournal
 
-k3s-config-prep:
-	cp /etc/rancher/k3s/k3s.yaml ./kubeconfig.yaml
-	sed -i "s/127.0.0.1/192.168.3.101/g" kubeconfig.yaml
-	sed -i "s/# - .\/kubeconfig.yaml/- .\/kubeconfig.yaml/" docker-compose.yml
-
-docker-run-web: docker-update
-	sed -i "s/TTYD=false/TTYD=true/" .env
-	@docker compose up -d
-
 docker-remove:
 	@docker compose down
 	@docker rmi lifailon/lazyjournal
+
+K3S_ADDR := 192.168.3.101
+
+k3s-config-prep:
+	cp /etc/rancher/k3s/k3s.yaml $HOME/.kube/config
+	sed -i "s/127.0.0.1/$(K3S_ADDR)/g" $HOME/.kube/config
+	sed -i "s/# - $HOME\/.kube/- $HOME\/.kube/" docker-compose.yml
