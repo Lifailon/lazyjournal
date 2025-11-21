@@ -87,11 +87,16 @@ type Settings struct {
 
 // Структура доступных параметров для покраски интерфейса из конфигурации
 type Interface struct {
-	ForegroundColor     string `yaml:"foregroundColor"`
-	BackgroundColor     string `yaml:"backgroundColor"`
-	SelectedWindowColor string `yaml:"selectedWindowColor"`
-	StatusColor         string `yaml:"statusColor"`
-	ErrorColor          string `yaml:"errorColor"`
+	ForegroundColor         string `yaml:"foregroundColor"`
+	BackgroundColor         string `yaml:"backgroundColor"`
+	SelectedForegroundColor string `yaml:"selectedForegroundColor"`
+	SelectedBackgroundColor string `yaml:"selectedBackgroundColor"`
+	FrameColor              string `yaml:"frameColor"`
+	TitleColor              string `yaml:"titleColor"`
+	SelectedFrameColor      string `yaml:"selectedFrameColor"`
+	SelectedTitleColor      string `yaml:"selectedTitleColor"`
+	StatusColor             string `yaml:"statusColor"`
+	ErrorColor              string `yaml:"errorColor"`
 }
 
 // Структура хранения информации о журналах
@@ -122,11 +127,21 @@ type dockerLogLines struct {
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
 
-	foregroundColor     gocui.Attribute // цвет текста по умолчанию
-	backgroundColor     gocui.Attribute // цвет фона интерфейса
-	selectedWindowColor gocui.Attribute // цвет выбранного окна
-	statusColor         gocui.Attribute // цвет окна статуса
-	errorColor          gocui.Attribute // цвет ошибок
+	foregroundColor         gocui.Attribute // цвет текста по умолчанию
+	backgroundColor         gocui.Attribute // цвет фона интерфейса
+	selectedForegroundColor gocui.Attribute // Цвет текста при выборе в списке
+	selectedBackgroundColor gocui.Attribute // Цвет фона при выборе в списке
+	frameColor              gocui.Attribute // цвет окон
+	titleColor              gocui.Attribute // цвет заголовка окон
+	selectedFrameColor      gocui.Attribute // цвет выбранного окна
+	selectedTitleColor      gocui.Attribute // цвет заголовка выбранного окна
+	statusColor             gocui.Attribute // цвет окна статуса
+	errorColor              gocui.Attribute // цвет ошибок
+
+	// Цвета окон по умолчанию (изменяется в зависимости от доступности журналов)
+	journalListFrameColor gocui.Attribute
+	fileSystemFrameColor  gocui.Attribute
+	dockerFrameColor      gocui.Attribute
 
 	sshMode             bool     // использовать вызов команд (exec.Command) через ssh
 	sshOptions          []string // опции для ssh подключения
@@ -148,7 +163,7 @@ type App struct {
 	userNameArray []string // список всех пользователей
 	rootDirArray  []string // список всех корневых каталогов
 
-	customPath string // пользовательский путь (по умолчанию, /opt)
+	customPath string // // пользовательский путь вместо /opt по умолчанию (#31)
 
 	selectUnits                  string // название журнала (UNIT/USER_UNIT/kernel/audit)
 	selectPath                   string // путь к логам (/var/log/)
@@ -217,11 +232,6 @@ type App struct {
 	lastLogPath                string
 	lastContainerizationSystem string
 	lastContainerId            string
-
-	// Цвета окон по умолчанию (изменяется в зависимости от доступности журналов)
-	journalListFrameColor gocui.Attribute
-	fileSystemFrameColor  gocui.Attribute
-	dockerFrameColor      gocui.Attribute
 
 	// Фиксируем последнее время загрузки и покраски журнала
 	debugStartTime time.Time
@@ -295,54 +305,59 @@ func showConfig() {
 	// fmt.Println(string(configData))
 	// Выводим полученные значения из конфигурации (форматированный вывод) с проверкой на пустые значения
 	fmt.Println("hotkeys:")
-	fmt.Printf("  help:                  %s\n", config.Hotkeys.Help)
-	fmt.Printf("  up:                    %s\n", config.Hotkeys.Up)
-	fmt.Printf("  quickUp:               %s\n", config.Hotkeys.QuickUp)
-	fmt.Printf("  veryQuickUp:           %s\n", config.Hotkeys.VeryQuickUp)
-	fmt.Printf("  switchFilterMode:      %s\n", config.Hotkeys.SwitchFilterMode)
-	fmt.Printf("  down:                  %s\n", config.Hotkeys.Down)
-	fmt.Printf("  quickDown:             %s\n", config.Hotkeys.QuickDown)
-	fmt.Printf("  veryQuickDown:         %s\n", config.Hotkeys.VeryQuickDown)
-	fmt.Printf("  backSwitchFilterMode:  %s\n", config.Hotkeys.BackSwitchFilterMode)
-	fmt.Printf("  left:                  %s\n", config.Hotkeys.Left)
-	fmt.Printf("  right:                 %s\n", config.Hotkeys.Right)
-	fmt.Printf("  switchWindow:          %s\n", config.Hotkeys.SwitchWindow)
-	fmt.Printf("  backSwitchWindows:     %s\n", config.Hotkeys.BackSwitchWindows)
-	fmt.Printf("  loadJournal:           %s\n", config.Hotkeys.LoadJournal)
-	fmt.Printf("  goToFilter:            %s\n", config.Hotkeys.GoToFilter)
-	fmt.Printf("  goToEnd:               %s\n", config.Hotkeys.GoToEnd)
-	fmt.Printf("  goToTop:               %s\n", config.Hotkeys.GoToTop)
-	fmt.Printf("  tailModeMore:          %s\n", config.Hotkeys.TailModeMore)
-	fmt.Printf("  tailModeLess:          %s\n", config.Hotkeys.TailModeLess)
-	fmt.Printf("  updateIntervalMore:    %s\n", config.Hotkeys.UpdateIntervalMore)
-	fmt.Printf("  updateIntervalLess:    %s\n", config.Hotkeys.UpdateIntervalLess)
-	fmt.Printf("  autoUpdateJournal:     %s\n", config.Hotkeys.AutoUpdateJournal)
-	fmt.Printf("  updateJournal:         %s\n", config.Hotkeys.UpdateJournal)
-	fmt.Printf("  updateLists:           %s\n", config.Hotkeys.UpdateLists)
-	fmt.Printf("  colorDisable:          %s\n", config.Hotkeys.ColorDisable)
-	fmt.Printf("  tailspinEnable:        %s\n", config.Hotkeys.TailspinEnable)
-	fmt.Printf("  switchDockerMode:      %s\n", config.Hotkeys.SwitchDockerMode)
-	fmt.Printf("  switchStreamMode:      %s\n", config.Hotkeys.SwitchStreamMode)
-	fmt.Printf("  timestampShow:         %s\n", config.Hotkeys.TimestampShow)
-	fmt.Printf("  exit:                  %s\n", config.Hotkeys.Exit)
+	fmt.Printf("  help:                     %s\n", config.Hotkeys.Help)
+	fmt.Printf("  up:                       %s\n", config.Hotkeys.Up)
+	fmt.Printf("  quickUp:                  %s\n", config.Hotkeys.QuickUp)
+	fmt.Printf("  veryQuickUp:              %s\n", config.Hotkeys.VeryQuickUp)
+	fmt.Printf("  switchFilterMode:         %s\n", config.Hotkeys.SwitchFilterMode)
+	fmt.Printf("  down:                     %s\n", config.Hotkeys.Down)
+	fmt.Printf("  quickDown:                %s\n", config.Hotkeys.QuickDown)
+	fmt.Printf("  veryQuickDown:            %s\n", config.Hotkeys.VeryQuickDown)
+	fmt.Printf("  backSwitchFilterMode:     %s\n", config.Hotkeys.BackSwitchFilterMode)
+	fmt.Printf("  left:                     %s\n", config.Hotkeys.Left)
+	fmt.Printf("  right:                    %s\n", config.Hotkeys.Right)
+	fmt.Printf("  switchWindow:             %s\n", config.Hotkeys.SwitchWindow)
+	fmt.Printf("  backSwitchWindows:        %s\n", config.Hotkeys.BackSwitchWindows)
+	fmt.Printf("  loadJournal:              %s\n", config.Hotkeys.LoadJournal)
+	fmt.Printf("  goToFilter:               %s\n", config.Hotkeys.GoToFilter)
+	fmt.Printf("  goToEnd:                  %s\n", config.Hotkeys.GoToEnd)
+	fmt.Printf("  goToTop:                  %s\n", config.Hotkeys.GoToTop)
+	fmt.Printf("  tailModeMore:             %s\n", config.Hotkeys.TailModeMore)
+	fmt.Printf("  tailModeLess:             %s\n", config.Hotkeys.TailModeLess)
+	fmt.Printf("  updateIntervalMore:       %s\n", config.Hotkeys.UpdateIntervalMore)
+	fmt.Printf("  updateIntervalLess:       %s\n", config.Hotkeys.UpdateIntervalLess)
+	fmt.Printf("  autoUpdateJournal:        %s\n", config.Hotkeys.AutoUpdateJournal)
+	fmt.Printf("  updateJournal:            %s\n", config.Hotkeys.UpdateJournal)
+	fmt.Printf("  updateLists:              %s\n", config.Hotkeys.UpdateLists)
+	fmt.Printf("  colorDisable:             %s\n", config.Hotkeys.ColorDisable)
+	fmt.Printf("  tailspinEnable:           %s\n", config.Hotkeys.TailspinEnable)
+	fmt.Printf("  switchDockerMode:         %s\n", config.Hotkeys.SwitchDockerMode)
+	fmt.Printf("  switchStreamMode:         %s\n", config.Hotkeys.SwitchStreamMode)
+	fmt.Printf("  timestampShow:            %s\n", config.Hotkeys.TimestampShow)
+	fmt.Printf("  exit:                     %s\n", config.Hotkeys.Exit)
 
 	fmt.Println("settings:")
-	fmt.Printf("  customPath:            %s\n", config.Settings.CustomPath)
-	fmt.Printf("  tailMode:              %s\n", config.Settings.TailMode)
-	fmt.Printf("  updateInterval:        %s\n", config.Settings.UpdateInterval)
-	fmt.Printf("  disableColor:          %s\n", config.Settings.DisableColor)
-	fmt.Printf("  disableAutoUpdate:     %s\n", config.Settings.DisableAutoUpdate)
-	fmt.Printf("  disableMouse:          %s\n", config.Settings.DisableMouse)
-	fmt.Printf("  disableTimestamp:      %s\n", config.Settings.DisableTimestamp)
-	fmt.Printf("  onlyStream:            %s\n", config.Settings.OnlyStream)
-	fmt.Printf("  disableFastMode:       %s\n", config.Settings.DisableFastMode)
+	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
+	fmt.Printf("  tailMode:                 %s\n", config.Settings.TailMode)
+	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
+	fmt.Printf("  disableColor:             %s\n", config.Settings.DisableColor)
+	fmt.Printf("  disableAutoUpdate:        %s\n", config.Settings.DisableAutoUpdate)
+	fmt.Printf("  disableMouse:             %s\n", config.Settings.DisableMouse)
+	fmt.Printf("  disableTimestamp:         %s\n", config.Settings.DisableTimestamp)
+	fmt.Printf("  onlyStream:               %s\n", config.Settings.OnlyStream)
+	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
 
 	fmt.Println("interface:")
-	fmt.Printf("  foregroundColor:       %s\n", config.Interface.ForegroundColor)
-	fmt.Printf("  backgroundColor:       %s\n", config.Interface.BackgroundColor)
-	fmt.Printf("  selectedWindowColor:   %s\n", config.Interface.SelectedWindowColor)
-	fmt.Printf("  statusColor:           %s\n", config.Interface.StatusColor)
-	fmt.Printf("  errorColor:            %s\n", config.Interface.ErrorColor)
+	fmt.Printf("  foregroundColor:          %s\n", config.Interface.ForegroundColor)
+	fmt.Printf("  backgroundColor:          %s\n", config.Interface.BackgroundColor)
+	fmt.Printf("  selectedForegroundColor:  %s\n", config.Interface.SelectedForegroundColor)
+	fmt.Printf("  selectedBackgroundColor:  %s\n", config.Interface.SelectedBackgroundColor)
+	fmt.Printf("  frameColor:               %s\n", config.Interface.FrameColor)
+	fmt.Printf("  titleColor:               %s\n", config.Interface.TitleColor)
+	fmt.Printf("  selectedFrameColor:       %s\n", config.Interface.SelectedFrameColor)
+	fmt.Printf("  selectedTitleColor:       %s\n", config.Interface.SelectedTitleColor)
+	fmt.Printf("  statusColor:              %s\n", config.Interface.StatusColor)
+	fmt.Printf("  errorColor:               %s\n", config.Interface.ErrorColor)
 }
 
 // Audit (#18) for homebrew
@@ -695,7 +710,7 @@ var mapColorFromConfig = map[string]gocui.Attribute{
 	"black":   gocui.ColorBlack,
 	"yellow":  gocui.ColorYellow,
 	"red":     gocui.ColorRed,
-	"blud":    gocui.ColorBlue,
+	"blue":    gocui.ColorBlue,
 	"cyan":    gocui.ColorCyan,
 	"magenta": gocui.ColorMagenta,
 	"white":   gocui.ColorWhite,
@@ -980,10 +995,40 @@ func runGoCui(mock bool) {
 		app.backgroundColor = gocui.ColorDefault
 	}
 
-	lowerSelectedWindowColor := strings.ToLower(config.Interface.SelectedWindowColor)
-	app.selectedWindowColor, ok = mapColorFromConfig[lowerSelectedWindowColor]
+	lowerSelectedForegroundColor := strings.ToLower(config.Interface.SelectedForegroundColor)
+	app.selectedForegroundColor, ok = mapColorFromConfig[lowerSelectedForegroundColor]
 	if !ok {
-		app.selectedWindowColor = gocui.ColorGreen
+		app.selectedForegroundColor = gocui.ColorBlack
+	}
+
+	lowerSelectedBackgroundColor := strings.ToLower(config.Interface.SelectedBackgroundColor)
+	app.selectedBackgroundColor, ok = mapColorFromConfig[lowerSelectedBackgroundColor]
+	if !ok {
+		app.selectedBackgroundColor = gocui.ColorGreen
+	}
+
+	lowerFrameColor := strings.ToLower(config.Interface.FrameColor)
+	app.frameColor, ok = mapColorFromConfig[lowerFrameColor]
+	if !ok {
+		app.frameColor = gocui.ColorDefault
+	}
+
+	lowerTitleColor := strings.ToLower(config.Interface.TitleColor)
+	app.titleColor, ok = mapColorFromConfig[lowerTitleColor]
+	if !ok {
+		app.titleColor = gocui.ColorDefault
+	}
+
+	lowerSelectedFrameColor := strings.ToLower(config.Interface.SelectedFrameColor)
+	app.selectedFrameColor, ok = mapColorFromConfig[lowerSelectedFrameColor]
+	if !ok {
+		app.selectedFrameColor = gocui.ColorGreen
+	}
+
+	lowerSelectedTitleColor := strings.ToLower(config.Interface.SelectedTitleColor)
+	app.selectedTitleColor, ok = mapColorFromConfig[lowerSelectedTitleColor]
+	if !ok {
+		app.selectedTitleColor = gocui.ColorGreen
 	}
 
 	lowerStatusColor := strings.ToLower(config.Interface.StatusColor)
@@ -997,6 +1042,10 @@ func runGoCui(mock bool) {
 	if !ok {
 		app.errorColor = gocui.ColorRed
 	}
+
+	app.journalListFrameColor = app.frameColor
+	app.fileSystemFrameColor = app.frameColor
+	app.dockerFrameColor = app.frameColor
 
 	// Определяем переменные и массивы для покраски вывода
 
@@ -1103,7 +1152,7 @@ func runGoCui(mock bool) {
 
 	// Цветовая схема GUI
 	g.FgColor = app.foregroundColor // foreground (цвет текста по умолчанию)
-	g.BgColor = app.backgroundColor // background (фон)
+	g.BgColor = app.backgroundColor // background (фон всего интерфейса)
 
 	// Привязка клавиш для работы с интерфейсом из функции setupKeybindings()
 	if err := app.setupKeybindings(); err != nil {
@@ -1212,8 +1261,9 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Title = "Filtering lists"
 		v.Editable = true
 		v.Wrap = true
-		v.FrameColor = gocui.ColorGreen // Цвет границ окна
-		v.TitleColor = gocui.ColorGreen // Цвет заголовка
+		// Первое выбранное окно при запуске, по этому выделяем зеленым цветом
+		v.FrameColor = app.selectedFrameColor // Цвет границы окна
+		v.TitleColor = app.selectedTitleColor // Цвет заголовка окна
 		v.Editor = app.createFilterEditor("lists")
 	}
 
@@ -1228,9 +1278,9 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Wrap = false                  // отключаем перенос строк
 		v.Autoscroll = true             // включаем автопрокрутку
 		// Цветовая схема из форка awesome-gocui/gocui
-		v.SelBgColor = gocui.ColorGreen // Цвет фона при выборе в списке
-		v.SelFgColor = gocui.ColorBlack // Цвет текста
-		app.updateServicesList()        // выводим список журналов в это окно
+		v.SelFgColor = app.selectedForegroundColor // Цвет текста при выборе в списке
+		v.SelBgColor = app.selectedBackgroundColor // Цвет фона при выборе в списке
+		app.updateServicesList()                   // выводим список журналов в это окно
 	}
 
 	// Окно для списка логов из файловой системы
@@ -1242,8 +1292,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
-		v.SelBgColor = gocui.ColorGreen
-		v.SelFgColor = gocui.ColorBlack
+		v.SelFgColor = app.selectedForegroundColor
+		v.SelBgColor = app.selectedBackgroundColor
 		app.updateLogsList()
 	}
 
@@ -1256,8 +1306,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
-		v.SelBgColor = gocui.ColorGreen
-		v.SelFgColor = gocui.ColorBlack
+		v.SelFgColor = app.selectedForegroundColor
+		v.SelBgColor = app.selectedBackgroundColor
 	}
 
 	// Окно ввода текста для фильтрации
@@ -1278,8 +1328,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		}
 		v.Wrap = true
 		v.Autoscroll = false
-		// Цвет текста (зеленый)
-		v.FgColor = gocui.ColorGreen
+		// Постоянный цвет стрелочек в окне скролла
+		v.FgColor = app.selectedBackgroundColor
 		// Заполняем окно стрелками
 		_, viewHeight := v.Size()
 		fmt.Fprintln(v, "▲")
@@ -1352,9 +1402,9 @@ func (app *App) loadServices(journalName string) {
 	if err != nil && app.testMode {
 		log.Print("Error: systemd-journald not supported")
 	}
-	switch {
+	switch journalName {
 	// Services list from systemd
-	case journalName == "services":
+	case "services":
 		// Получаем список всех юнитов в системе через systemctl в формате JSON
 		var unitsList *exec.Cmd
 		if app.sshMode {
@@ -1374,9 +1424,9 @@ func (app *App) loadServices(journalName string) {
 				return
 			}
 			v, _ := app.gui.View("services")
-			app.journalListFrameColor = gocui.ColorDefault
-			if v.FrameColor != gocui.ColorDefault {
-				v.FrameColor = gocui.ColorGreen
+			app.journalListFrameColor = app.frameColor
+			if v.FrameColor != app.frameColor {
+				v.FrameColor = app.selectedFrameColor
 			}
 			v.Highlight = true
 		}
@@ -1437,7 +1487,7 @@ func (app *App) loadServices(journalName string) {
 			}
 		}
 	// Audit rules keys from auditd
-	case journalName == "auditd":
+	case "auditd":
 		// Получаем список правил
 		var auditRulesList *exec.Cmd
 		if app.sshMode {
@@ -1464,9 +1514,9 @@ func (app *App) loadServices(journalName string) {
 				return
 			}
 			v, _ := app.gui.View("services")
-			app.journalListFrameColor = gocui.ColorDefault
-			if v.FrameColor != gocui.ColorDefault {
-				v.FrameColor = gocui.ColorGreen
+			app.journalListFrameColor = app.frameColor
+			if v.FrameColor != app.frameColor {
+				v.FrameColor = app.selectedFrameColor
 			}
 			v.Highlight = true
 		}
@@ -1499,7 +1549,7 @@ func (app *App) loadServices(journalName string) {
 			}
 		}
 	// Boots list from journald
-	case journalName == "kernel":
+	case "kernel":
 		// Получаем список загрузок системы
 		var bootCmd *exec.Cmd
 		if app.sshMode {
@@ -1519,9 +1569,9 @@ func (app *App) loadServices(journalName string) {
 				return
 			} else {
 				vError, _ := app.gui.View("services")
-				app.journalListFrameColor = gocui.ColorDefault
-				if vError.FrameColor != gocui.ColorDefault {
-					vError.FrameColor = gocui.ColorGreen
+				app.journalListFrameColor = app.frameColor
+				if vError.FrameColor != app.frameColor {
+					vError.FrameColor = app.selectedFrameColor
 				}
 				vError.Highlight = true
 			}
@@ -1618,9 +1668,9 @@ func (app *App) loadServices(journalName string) {
 				return
 			} else {
 				vError, _ := app.gui.View("services")
-				app.journalListFrameColor = gocui.ColorDefault
-				if vError.FrameColor != gocui.ColorDefault {
-					vError.FrameColor = gocui.ColorGreen
+				app.journalListFrameColor = app.frameColor
+				if vError.FrameColor != app.frameColor {
+					vError.FrameColor = app.selectedFrameColor
 				}
 				vError.Highlight = true
 			}
@@ -2170,9 +2220,9 @@ func (app *App) loadFiles(logPath string) {
 				return
 			} else {
 				vError, _ := app.gui.View("varLogs")
-				app.fileSystemFrameColor = gocui.ColorDefault
-				if vError.FrameColor != gocui.ColorDefault {
-					vError.FrameColor = gocui.ColorGreen
+				app.fileSystemFrameColor = app.frameColor
+				if vError.FrameColor != app.frameColor {
+					vError.FrameColor = app.selectedFrameColor
 				}
 				vError.Highlight = true
 			}
@@ -2256,9 +2306,9 @@ func (app *App) loadFiles(logPath string) {
 				return
 			} else {
 				vError, _ := app.gui.View("varLogs")
-				app.fileSystemFrameColor = gocui.ColorDefault
-				if vError.FrameColor != gocui.ColorDefault {
-					vError.FrameColor = gocui.ColorGreen
+				app.fileSystemFrameColor = app.frameColor
+				if vError.FrameColor != app.frameColor {
+					vError.FrameColor = app.selectedFrameColor
 				}
 				vError.Highlight = true
 			}
@@ -2329,9 +2379,9 @@ func (app *App) loadFiles(logPath string) {
 				return
 			} else {
 				vError, _ := app.gui.View("varLogs")
-				app.fileSystemFrameColor = gocui.ColorDefault
-				if vError.FrameColor != gocui.ColorDefault {
-					vError.FrameColor = gocui.ColorGreen
+				app.fileSystemFrameColor = app.frameColor
+				if vError.FrameColor != app.frameColor {
+					vError.FrameColor = app.selectedFrameColor
 				}
 				vError.Highlight = true
 			}
@@ -2384,9 +2434,9 @@ func (app *App) loadFiles(logPath string) {
 				return
 			} else {
 				vError, _ := app.gui.View("varLogs")
-				app.fileSystemFrameColor = gocui.ColorDefault
-				if vError.FrameColor != gocui.ColorDefault {
-					vError.FrameColor = gocui.ColorGreen
+				app.fileSystemFrameColor = app.frameColor
+				if vError.FrameColor != app.frameColor {
+					vError.FrameColor = app.selectedFrameColor
 				}
 				vError.Highlight = true
 			}
@@ -2421,9 +2471,9 @@ func (app *App) loadFiles(logPath string) {
 		}
 		if app.fileSystemFrameColor == app.errorColor && !app.testMode {
 			vError, _ := app.gui.View("varLogs")
-			app.fileSystemFrameColor = gocui.ColorDefault
-			if vError.FrameColor != gocui.ColorDefault {
-				vError.FrameColor = gocui.ColorGreen
+			app.fileSystemFrameColor = app.frameColor
+			if vError.FrameColor != app.frameColor {
+				vError.FrameColor = app.selectedFrameColor
 			}
 			vError.Highlight = true
 		}
@@ -2616,9 +2666,9 @@ func (app *App) loadWinFiles(logPath string) {
 			return
 		} else {
 			vError, _ := app.gui.View("varLogs")
-			app.fileSystemFrameColor = gocui.ColorDefault
-			if vError.FrameColor != gocui.ColorDefault {
-				vError.FrameColor = gocui.ColorGreen
+			app.fileSystemFrameColor = app.frameColor
+			if vError.FrameColor != app.frameColor {
+				vError.FrameColor = app.selectedFrameColor
 			}
 			vError.Highlight = true
 		}
@@ -3343,10 +3393,10 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			return
 		} else {
 			vError, _ := app.gui.View("docker")
-			app.dockerFrameColor = gocui.ColorDefault
 			vError.Highlight = true
-			if vError.FrameColor != gocui.ColorDefault {
-				vError.FrameColor = gocui.ColorGreen
+			app.dockerFrameColor = app.frameColor
+			if vError.FrameColor != app.frameColor {
+				vError.FrameColor = app.selectedFrameColor
 			}
 		}
 	}
@@ -3383,9 +3433,9 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			return
 		} else {
 			vError, _ := app.gui.View("docker")
-			app.fileSystemFrameColor = gocui.ColorDefault
-			if vError.FrameColor != gocui.ColorDefault {
-				vError.FrameColor = gocui.ColorGreen
+			app.fileSystemFrameColor = app.frameColor
+			if vError.FrameColor != app.frameColor {
+				vError.FrameColor = app.selectedFrameColor
 			}
 			vError.Highlight = true
 		}
@@ -4143,11 +4193,11 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			// Если фильтр пустой, отключаем фильтрацию
 			switch {
 			case strings.TrimSpace(v.Buffer()) == "":
-				v.FrameColor = gocui.ColorGreen
+				v.FrameColor = app.selectedFrameColor
 				app.sinceTimestampFilterMode = false
 				// Проверяем формат и активируем фильтрацию
 			case app.timestampCheckFormat(strings.TrimSpace(v.Buffer())):
-				v.FrameColor = gocui.ColorGreen
+				v.FrameColor = app.selectedFrameColor
 				app.sinceTimestampFilterMode = true
 			default:
 				v.FrameColor = app.errorColor
@@ -4157,11 +4207,11 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			app.untilFilterText = strings.TrimSpace(v.Buffer())
 			switch {
 			case strings.TrimSpace(v.Buffer()) == "":
-				v.FrameColor = gocui.ColorGreen
+				v.FrameColor = app.selectedFrameColor
 				app.untilTimestampFilterMode = false
 				// Проверяем формат и активируем фильтрацию
 			case app.timestampCheckFormat(strings.TrimSpace(v.Buffer())):
-				v.FrameColor = gocui.ColorGreen
+				v.FrameColor = app.selectedFrameColor
 				app.untilTimestampFilterMode = true
 			default:
 				v.FrameColor = app.errorColor
@@ -4273,7 +4323,7 @@ func (app *App) applyFilter(color bool) {
 			return
 		}
 		if color {
-			v.FrameColor = gocui.ColorGreen
+			v.FrameColor = app.selectedFrameColor
 		}
 		// Если текст фильтра не менялся и позиция курсора не в самом конце журнала, то пропускаем фильтрацию и покраску при пролистывании
 		vLogs, _ := app.gui.View("logs")
@@ -7024,7 +7074,7 @@ func (app *App) setupKeybindings() error {
 		} else {
 			v.Clear()
 			app.sinceFilterText = strings.TrimSpace(v.Buffer())
-			v.FrameColor = gocui.ColorGreen
+			v.FrameColor = app.selectedFrameColor
 			app.sinceTimestampFilterMode = false
 			return nil
 		}
@@ -7037,7 +7087,7 @@ func (app *App) setupKeybindings() error {
 		} else {
 			v.Clear()
 			app.untilFilterText = strings.TrimSpace(v.Buffer())
-			v.FrameColor = gocui.ColorGreen
+			v.FrameColor = app.selectedFrameColor
 			app.untilTimestampFilterMode = false
 			return nil
 		}
@@ -7184,8 +7234,8 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	helpView.Title = " Help "
 	helpView.Autoscroll = true
 	helpView.Wrap = true
-	helpView.FrameColor = gocui.ColorGreen
-	helpView.TitleColor = gocui.ColorGreen
+	helpView.FrameColor = app.selectedFrameColor
+	helpView.TitleColor = app.selectedTitleColor
 	helpView.Clear()
 	fmt.Fprintln(helpView, "\n                   \033[32m_                              \033[36m_                                    _ ")
 	fmt.Fprintln(helpView, "                  \033[32m| |                            \033[36m| |                                  | |")
@@ -7256,8 +7306,8 @@ func (app *App) showInterfaceInfo(g *gocui.Gui, errInfo bool, text string) {
 		helpView.TitleColor = app.errorColor
 	} else {
 		helpView.Title = " Info "
-		helpView.FrameColor = gocui.ColorGreen
-		helpView.TitleColor = gocui.ColorGreen
+		helpView.FrameColor = app.selectedFrameColor
+		helpView.TitleColor = app.selectedTitleColor
 	}
 	helpView.Wrap = true
 	helpView.Clear()
@@ -7370,8 +7420,8 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 			// Обработка времени и даты
 			v.Editor = app.timestampFilterEditor("sinceFilter")
 			// Изменить цвет окна
-			v.FrameColor = gocui.ColorGreen
-			v.TitleColor = gocui.ColorGreen
+			v.FrameColor = app.selectedFrameColor
+			v.TitleColor = app.selectedTitleColor
 			// Выбираем новое окно
 			if _, err := g.SetCurrentView("sinceFilter"); err != nil {
 				return nil
@@ -7405,8 +7455,8 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 		if _, err := g.SetCurrentView("filter"); err != nil {
 			return nil
 		}
-		v.FrameColor = gocui.ColorGreen
-		v.TitleColor = gocui.ColorGreen
+		v.FrameColor = app.selectedFrameColor
+		v.TitleColor = app.selectedTitleColor
 		selectedFilter.Title = "Filter (Default)"
 		app.selectFilterMode = "default"
 	}
@@ -7435,8 +7485,8 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 			v.Editable = true
 			v.Wrap = true
 			v.Editor = app.timestampFilterEditor("sinceFilter")
-			v.FrameColor = gocui.ColorGreen
-			v.TitleColor = gocui.ColorGreen
+			v.FrameColor = app.selectedFrameColor
+			v.TitleColor = app.selectedTitleColor
 			if _, err := g.SetCurrentView("sinceFilter"); err != nil {
 				return nil
 			}
@@ -7465,8 +7515,8 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 		if _, err := g.SetCurrentView("filter"); err != nil {
 			return nil
 		}
-		v.FrameColor = gocui.ColorGreen
-		v.TitleColor = gocui.ColorGreen
+		v.FrameColor = app.selectedFrameColor
+		v.TitleColor = app.selectedTitleColor
 		selectedFilter.Title = "Filter (Regex)"
 		app.selectFilterMode = "regex"
 	case "Filter (Regex)":
@@ -7820,124 +7870,124 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 		switch {
 		case currentView.Name() == "filterList":
 			nextView = "services"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
-			selectedServices.FrameColor = gocui.ColorGreen
-			selectedServices.TitleColor = gocui.ColorGreen
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
+			selectedServices.FrameColor = app.selectedFrameColor
+			selectedServices.TitleColor = app.selectedTitleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedDocker.TitleColor = app.titleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "services":
 			nextView = "varLogs"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
-			selectedVarLog.FrameColor = gocui.ColorGreen
-			selectedVarLog.TitleColor = gocui.ColorGreen
+			selectedServices.TitleColor = app.titleColor
+			selectedVarLog.FrameColor = app.selectedFrameColor
+			selectedVarLog.TitleColor = app.selectedTitleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedDocker.TitleColor = app.titleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "varLogs":
 			nextView = "docker"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
+			selectedServices.TitleColor = app.titleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
-			selectedDocker.FrameColor = gocui.ColorGreen
-			selectedDocker.TitleColor = gocui.ColorGreen
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
+			selectedDocker.FrameColor = app.selectedFrameColor
+			selectedDocker.TitleColor = app.selectedTitleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "docker":
 			if app.timestampFilterView {
 				nextView = "sinceFilter"
-				selectedFilterList.FrameColor = gocui.ColorDefault
-				selectedFilterList.TitleColor = gocui.ColorDefault
+				selectedFilterList.FrameColor = app.frameColor
+				selectedFilterList.TitleColor = app.titleColor
 				selectedServices.FrameColor = app.journalListFrameColor
-				selectedServices.TitleColor = gocui.ColorDefault
+				selectedServices.TitleColor = app.titleColor
 				selectedVarLog.FrameColor = app.fileSystemFrameColor
-				selectedVarLog.TitleColor = gocui.ColorDefault
+				selectedVarLog.TitleColor = app.titleColor
 				selectedDocker.FrameColor = app.dockerFrameColor
-				selectedDocker.TitleColor = gocui.ColorDefault
-				sinceFilter.FrameColor = gocui.ColorGreen // new
-				sinceFilter.TitleColor = gocui.ColorGreen // new
-				selectedLogs.FrameColor = gocui.ColorDefault
-				selectedScrollLogs.FrameColor = gocui.ColorDefault
+				selectedDocker.TitleColor = app.titleColor
+				sinceFilter.FrameColor = app.selectedFrameColor // new
+				sinceFilter.TitleColor = app.selectedTitleColor // new
+				selectedLogs.FrameColor = app.frameColor
+				selectedScrollLogs.FrameColor = app.frameColor
 			} else {
 				nextView = "filter"
-				selectedFilterList.FrameColor = gocui.ColorDefault
-				selectedFilterList.TitleColor = gocui.ColorDefault
+				selectedFilterList.FrameColor = app.frameColor
+				selectedFilterList.TitleColor = app.titleColor
 				selectedServices.FrameColor = app.journalListFrameColor
-				selectedServices.TitleColor = gocui.ColorDefault
+				selectedServices.TitleColor = app.titleColor
 				selectedVarLog.FrameColor = app.fileSystemFrameColor
-				selectedVarLog.TitleColor = gocui.ColorDefault
+				selectedVarLog.TitleColor = app.titleColor
 				selectedDocker.FrameColor = app.dockerFrameColor
-				selectedDocker.TitleColor = gocui.ColorDefault
-				selectedFilter.FrameColor = gocui.ColorGreen
-				selectedFilter.TitleColor = gocui.ColorGreen
-				selectedLogs.FrameColor = gocui.ColorDefault
-				selectedScrollLogs.FrameColor = gocui.ColorDefault
+				selectedDocker.TitleColor = app.titleColor
+				selectedFilter.FrameColor = app.selectedFrameColor
+				selectedFilter.TitleColor = app.selectedTitleColor
+				selectedLogs.FrameColor = app.frameColor
+				selectedScrollLogs.FrameColor = app.frameColor
 			}
 		case currentView.Name() == "sinceFilter":
 			nextView = "untilFilter"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
+			selectedServices.TitleColor = app.titleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			sinceFilter.FrameColor = gocui.ColorDefault // new
-			sinceFilter.TitleColor = gocui.ColorDefault // new
-			untilFilter.FrameColor = gocui.ColorGreen   // new
-			untilFilter.TitleColor = gocui.ColorGreen   // new
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedDocker.TitleColor = app.titleColor
+			sinceFilter.FrameColor = app.frameColor         // new
+			sinceFilter.TitleColor = app.titleColor         // new
+			untilFilter.FrameColor = app.selectedFrameColor // new
+			untilFilter.TitleColor = app.selectedTitleColor // new
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "filter" || currentView.Name() == "untilFilter":
 			if app.timestampFilterView {
-				untilFilter.FrameColor = gocui.ColorDefault // new
-				untilFilter.TitleColor = gocui.ColorDefault // new
+				untilFilter.FrameColor = app.frameColor // new
+				untilFilter.TitleColor = app.titleColor // new
 			}
 			nextView = "logs"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
+			selectedServices.TitleColor = app.titleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorGreen
-			selectedScrollLogs.FrameColor = gocui.ColorGreen
+			selectedDocker.TitleColor = app.titleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.selectedFrameColor
+			selectedScrollLogs.FrameColor = app.selectedFrameColor
 		case currentView.Name() == "logs":
 			nextView = "filterList"
-			selectedFilterList.FrameColor = gocui.ColorGreen
-			selectedFilterList.TitleColor = gocui.ColorGreen
+			selectedFilterList.FrameColor = app.selectedFrameColor
+			selectedFilterList.TitleColor = app.selectedTitleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
+			selectedServices.TitleColor = app.titleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedDocker.TitleColor = app.titleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		}
 	}
 	// Устанавливаем новое активное окно
@@ -7997,124 +8047,124 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 		switch {
 		case currentView.Name() == "filterList":
 			nextView = "logs"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
+			selectedServices.TitleColor = app.titleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorGreen
-			selectedScrollLogs.FrameColor = gocui.ColorGreen
+			selectedDocker.TitleColor = app.titleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.selectedFrameColor
+			selectedScrollLogs.FrameColor = app.selectedFrameColor
 		case currentView.Name() == "services":
 			nextView = "filterList"
-			selectedFilterList.FrameColor = gocui.ColorGreen
-			selectedFilterList.TitleColor = gocui.ColorGreen
+			selectedFilterList.FrameColor = app.selectedFrameColor
+			selectedFilterList.TitleColor = app.selectedTitleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
+			selectedServices.TitleColor = app.titleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedDocker.TitleColor = app.titleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "logs":
 			if app.timestampFilterView {
 				nextView = "untilFilter"
-				selectedFilterList.FrameColor = gocui.ColorDefault
-				selectedFilterList.TitleColor = gocui.ColorDefault
+				selectedFilterList.FrameColor = app.frameColor
+				selectedFilterList.TitleColor = app.titleColor
 				selectedServices.FrameColor = app.journalListFrameColor
-				selectedServices.TitleColor = gocui.ColorDefault
+				selectedServices.TitleColor = app.titleColor
 				selectedVarLog.FrameColor = app.fileSystemFrameColor
-				selectedVarLog.TitleColor = gocui.ColorDefault
+				selectedVarLog.TitleColor = app.titleColor
 				selectedDocker.FrameColor = app.dockerFrameColor
-				selectedDocker.TitleColor = gocui.ColorDefault
-				untilFilter.FrameColor = gocui.ColorGreen // new
-				untilFilter.TitleColor = gocui.ColorGreen // new
-				selectedLogs.FrameColor = gocui.ColorDefault
-				selectedScrollLogs.FrameColor = gocui.ColorDefault
+				selectedDocker.TitleColor = app.titleColor
+				untilFilter.FrameColor = app.selectedFrameColor // new
+				untilFilter.TitleColor = app.selectedTitleColor // new
+				selectedLogs.FrameColor = app.frameColor
+				selectedScrollLogs.FrameColor = app.frameColor
 			} else {
 				nextView = "filter"
-				selectedFilterList.FrameColor = gocui.ColorDefault
-				selectedFilterList.TitleColor = gocui.ColorDefault
+				selectedFilterList.FrameColor = app.frameColor
+				selectedFilterList.TitleColor = app.titleColor
 				selectedServices.FrameColor = app.journalListFrameColor
-				selectedServices.TitleColor = gocui.ColorDefault
+				selectedServices.TitleColor = app.titleColor
 				selectedVarLog.FrameColor = app.fileSystemFrameColor
-				selectedVarLog.TitleColor = gocui.ColorDefault
+				selectedVarLog.TitleColor = app.titleColor
 				selectedDocker.FrameColor = app.dockerFrameColor
-				selectedDocker.TitleColor = gocui.ColorDefault
-				selectedFilter.FrameColor = gocui.ColorGreen
-				selectedFilter.TitleColor = gocui.ColorGreen
-				selectedLogs.FrameColor = gocui.ColorDefault
-				selectedScrollLogs.FrameColor = gocui.ColorDefault
+				selectedDocker.TitleColor = app.titleColor
+				selectedFilter.FrameColor = app.selectedFrameColor
+				selectedFilter.TitleColor = app.selectedTitleColor
+				selectedLogs.FrameColor = app.frameColor
+				selectedScrollLogs.FrameColor = app.frameColor
 			}
 		case currentView.Name() == "untilFilter":
 			nextView = "sinceFilter"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
+			selectedServices.TitleColor = app.titleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			sinceFilter.FrameColor = gocui.ColorGreen   // new
-			sinceFilter.TitleColor = gocui.ColorGreen   // new
-			untilFilter.FrameColor = gocui.ColorDefault // new
-			untilFilter.TitleColor = gocui.ColorDefault // new
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedDocker.TitleColor = app.titleColor
+			sinceFilter.FrameColor = app.selectedFrameColor // new
+			sinceFilter.TitleColor = app.selectedTitleColor // new
+			untilFilter.FrameColor = app.frameColor         // new
+			untilFilter.TitleColor = app.titleColor         // new
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "filter" || currentView.Name() == "sinceFilter":
 			if app.timestampFilterView {
-				sinceFilter.FrameColor = gocui.ColorDefault // new
-				sinceFilter.TitleColor = gocui.ColorDefault // new
+				sinceFilter.FrameColor = app.frameColor // new
+				sinceFilter.TitleColor = app.titleColor // new
 			}
 			nextView = "docker"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
+			selectedServices.TitleColor = app.titleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
-			selectedDocker.FrameColor = gocui.ColorGreen
-			selectedDocker.TitleColor = gocui.ColorGreen
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
+			selectedDocker.FrameColor = app.selectedFrameColor
+			selectedDocker.TitleColor = app.selectedTitleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "docker":
 			nextView = "varLogs"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
 			selectedServices.FrameColor = app.journalListFrameColor
-			selectedServices.TitleColor = gocui.ColorDefault
-			selectedVarLog.FrameColor = gocui.ColorGreen
-			selectedVarLog.TitleColor = gocui.ColorGreen
+			selectedServices.TitleColor = app.titleColor
+			selectedVarLog.FrameColor = app.selectedFrameColor
+			selectedVarLog.TitleColor = app.selectedTitleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedDocker.TitleColor = app.titleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "varLogs":
 			nextView = "services"
-			selectedFilterList.FrameColor = gocui.ColorDefault
-			selectedFilterList.TitleColor = gocui.ColorDefault
-			selectedServices.FrameColor = gocui.ColorGreen
-			selectedServices.TitleColor = gocui.ColorGreen
+			selectedFilterList.FrameColor = app.frameColor
+			selectedFilterList.TitleColor = app.titleColor
+			selectedServices.FrameColor = app.selectedFrameColor
+			selectedServices.TitleColor = app.selectedTitleColor
 			selectedVarLog.FrameColor = app.fileSystemFrameColor
-			selectedVarLog.TitleColor = gocui.ColorDefault
+			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
-			selectedDocker.TitleColor = gocui.ColorDefault
-			selectedFilter.FrameColor = gocui.ColorDefault
-			selectedFilter.TitleColor = gocui.ColorDefault
-			selectedLogs.FrameColor = gocui.ColorDefault
-			selectedScrollLogs.FrameColor = gocui.ColorDefault
+			selectedDocker.TitleColor = app.titleColor
+			selectedFilter.FrameColor = app.frameColor
+			selectedFilter.TitleColor = app.titleColor
+			selectedLogs.FrameColor = app.frameColor
+			selectedScrollLogs.FrameColor = app.frameColor
 		}
 	}
 	if _, err := g.SetCurrentView(nextView); err != nil {
@@ -8128,18 +8178,18 @@ func (app *App) setSelectView(g *gocui.Gui, viewName string) error {
 	views := []string{"filterList", "services", "varLogs", "docker", "filter", "sinceFilter", "untilFilter", "logs"}
 	for _, name := range views {
 		if v, err := g.View(name); err == nil {
-			v.FrameColor = gocui.ColorDefault
+			v.FrameColor = app.frameColor
 			// Исключение для tail
 			if name != "logs" {
-				v.TitleColor = gocui.ColorDefault
+				v.TitleColor = app.titleColor
 			}
 		}
 	}
 	// Устанавливаем цвет для активного окна
 	if v, err := g.View(viewName); err == nil {
-		v.FrameColor = gocui.ColorGreen
+		v.FrameColor = app.selectedFrameColor
 		if viewName != "logs" {
-			v.TitleColor = gocui.ColorGreen
+			v.TitleColor = app.selectedTitleColor
 		}
 	}
 	// Устанавливаем фокус на активное окно

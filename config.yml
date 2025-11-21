@@ -48,3 +48,18 @@ settings:
   disableTimestamp: false
   onlyStream: false
   disableFastMode: false
+
+# Available colors:
+# default, green, black, yellow, red, blue, cyan, magenta, white
+
+interface:
+  foregroundColor: default
+  backgroundColor: default
+  selectedForegroundColor: black
+  selectedBackgroundColor: green
+  frameColor: default
+  titleColor: default
+  selectedFrameColor: green
+  selectedTitleColor: green
+  statusColor: yellow
+  errorColor: red
