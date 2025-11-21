@@ -33,8 +33,9 @@ var programVersion string = "0.8.1"
 
 // Структура конфигурации
 type Config struct {
-	Hotkeys  Hotkeys  `yaml:"hotkeys"`
-	Settings Settings `yaml:"settings"`
+	Hotkeys   Hotkeys   `yaml:"hotkeys"`
+	Settings  Settings  `yaml:"settings"`
+	Interface Interface `yaml:"interface"`
 }
 
 // Структура доступных сочетаний клавиш для переопределения (#23)
@@ -84,6 +85,15 @@ type Settings struct {
 	DisableFastMode   string `yaml:"disableFastMode"`
 }
 
+// Структура доступных параметров для покраски интерфейса из конфигурации
+type Interface struct {
+	ForegroundColor     string `yaml:"foregroundColor"`
+	BackgroundColor     string `yaml:"backgroundColor"`
+	SelectedWindowColor string `yaml:"selectedWindowColor"`
+	StatusColor         string `yaml:"statusColor"`
+	ErrorColor          string `yaml:"errorColor"`
+}
+
 // Структура хранения информации о журналах
 type Journal struct {
 	name    string // название журнала (имя службы) или дата загрузки
@@ -112,6 +122,12 @@ type dockerLogLines struct {
 type App struct {
 	gui *gocui.Gui // графический интерфейс (gocui)
 
+	foregroundColor     gocui.Attribute // цвет текста по умолчанию
+	backgroundColor     gocui.Attribute // цвет фона интерфейса
+	selectedWindowColor gocui.Attribute // цвет выбранного окна
+	statusColor         gocui.Attribute // цвет окна статуса
+	errorColor          gocui.Attribute // цвет ошибок
+
 	sshMode             bool     // использовать вызов команд (exec.Command) через ssh
 	sshOptions          []string // опции для ssh подключения
 	fastMode            bool     // загрузка журналов в горутине (beta mode)
@@ -132,12 +148,12 @@ type App struct {
 	userNameArray []string // список всех пользователей
 	rootDirArray  []string // список всех корневых каталогов
 
+	customPath string // пользовательский путь (по умолчанию, /opt)
+
 	selectUnits                  string // название журнала (UNIT/USER_UNIT/kernel/audit)
 	selectPath                   string // путь к логам (/var/log/)
 	selectContainerizationSystem string // название системы контейнеризации (docker/compose/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (default/fuzzy/regex)
-
-	customPath string // пользовательский путь (по умолчанию, /opt)
 
 	logViewCount     string   // количество логов для просмотра
 	logUpdateSeconds int      // период фонового обновления журнала
@@ -321,7 +337,12 @@ func showConfig() {
 	fmt.Printf("  onlyStream:            %s\n", config.Settings.OnlyStream)
 	fmt.Printf("  disableFastMode:       %s\n", config.Settings.DisableFastMode)
 
-	fmt.Println()
+	fmt.Println("interface:")
+	fmt.Printf("  foregroundColor:       %s\n", config.Interface.ForegroundColor)
+	fmt.Printf("  backgroundColor:       %s\n", config.Interface.BackgroundColor)
+	fmt.Printf("  selectedWindowColor:   %s\n", config.Interface.SelectedWindowColor)
+	fmt.Printf("  statusColor:           %s\n", config.Interface.StatusColor)
+	fmt.Printf("  errorColor:            %s\n", config.Interface.ErrorColor)
 }
 
 // Audit (#18) for homebrew
@@ -658,17 +679,29 @@ var (
 	ErrInvalidStat    = errors.New("invalid stat output")
 )
 
-var (
-	uniquePrefixColorArr = []string{
-		"\033[32m", // Зеленый
-		"\033[33m", // Желтый
-		"\033[34m", // Синий
-		"\033[35m", // Пурпурный
-		"\033[36m", // Голубой
-	}
-)
+// Статический массив ANSI цветов для покраски названий стеков в docker compose
+var uniquePrefixColorArr = []string{
+	"\033[32m", // Зеленый
+	"\033[33m", // Желтый
+	"\033[34m", // Синий
+	"\033[35m", // Пурпурный
+	"\033[36m", // Голубой
+}
 
-// Определяем название удаленной системы
+// Статический массив для сопоставления цветов в конфигурации с атрибутами gocui
+var mapColorFromConfig = map[string]gocui.Attribute{
+	"default": gocui.ColorDefault,
+	"green":   gocui.ColorGreen,
+	"black":   gocui.ColorBlack,
+	"yellow":  gocui.ColorYellow,
+	"red":     gocui.ColorRed,
+	"blud":    gocui.ColorBlue,
+	"cyan":    gocui.ColorCyan,
+	"magenta": gocui.ColorMagenta,
+	"white":   gocui.ColorWhite,
+}
+
+// Функция для опредиления название удаленной системы
 func remoteGetOS(sshOptions []string) (string, error) {
 	cmd := exec.Command("ssh", append(sshOptions, "uname", "-s")...)
 	output, err := cmd.Output()
@@ -679,6 +712,7 @@ func remoteGetOS(sshOptions []string) (string, error) {
 	}
 }
 
+// Объявляем GUI
 var g *gocui.Gui
 
 func runGoCui(mock bool) {
@@ -707,9 +741,6 @@ func runGoCui(mock bool) {
 		timestampFilterView:          false,
 		sinceTimestampFilterMode:     false,
 		untilTimestampFilterMode:     false,
-		journalListFrameColor:        gocui.ColorDefault,
-		fileSystemFrameColor:         gocui.ColorDefault,
-		dockerFrameColor:             gocui.ColorDefault,
 		autoScroll:                   true,
 		trimHttpRegex:                trimHttpRegex,
 		trimHttpsRegex:               trimHttpsRegex,
@@ -932,6 +963,41 @@ func runGoCui(mock bool) {
 		}
 	}
 
+	// Извлекаем цвета из конфигурации для покраски интерфейса
+
+	var ok bool
+
+	lowerForegroundColor := strings.ToLower(config.Interface.ForegroundColor)
+	app.foregroundColor, ok = mapColorFromConfig[lowerForegroundColor]
+	// Если значение не найдено в массиве mapColorFromConfig, присваиваем значение по умолчанию
+	if !ok {
+		app.foregroundColor = gocui.ColorDefault
+	}
+
+	lowerBackgroundColor := strings.ToLower(config.Interface.BackgroundColor)
+	app.backgroundColor, ok = mapColorFromConfig[lowerBackgroundColor]
+	if !ok {
+		app.backgroundColor = gocui.ColorDefault
+	}
+
+	lowerSelectedWindowColor := strings.ToLower(config.Interface.SelectedWindowColor)
+	app.selectedWindowColor, ok = mapColorFromConfig[lowerSelectedWindowColor]
+	if !ok {
+		app.selectedWindowColor = gocui.ColorGreen
+	}
+
+	lowerStatusColor := strings.ToLower(config.Interface.StatusColor)
+	app.statusColor, ok = mapColorFromConfig[lowerStatusColor]
+	if !ok {
+		app.statusColor = gocui.ColorYellow
+	}
+
+	lowerErrorColor := strings.ToLower(config.Interface.ErrorColor)
+	app.errorColor, ok = mapColorFromConfig[lowerErrorColor]
+	if !ok {
+		app.errorColor = gocui.ColorRed
+	}
+
 	// Определяем переменные и массивы для покраски вывода
 
 	// Текущее имя хоста
@@ -1036,8 +1102,8 @@ func runGoCui(mock bool) {
 	}
 
 	// Цветовая схема GUI
-	g.FgColor = gocui.ColorDefault // поля всех окон и цвет текста
-	g.BgColor = gocui.ColorDefault // фон
+	g.FgColor = app.foregroundColor // foreground (цвет текста по умолчанию)
+	g.BgColor = app.backgroundColor // background (фон)
 
 	// Привязка клавиш для работы с интерфейсом из функции setupKeybindings()
 	if err := app.setupKeybindings(); err != nil {
@@ -1277,7 +1343,7 @@ func (app *App) loadServices(journalName string) {
 	if err != nil && !app.testMode {
 		vError, _ := app.gui.View("services")
 		vError.Clear()
-		app.journalListFrameColor = gocui.ColorRed
+		app.journalListFrameColor = app.errorColor
 		vError.FrameColor = app.journalListFrameColor
 		vError.Highlight = false
 		fmt.Fprintln(vError, "\033[31msystemd-journald not supported\033[0m")
@@ -1301,7 +1367,7 @@ func (app *App) loadServices(journalName string) {
 			if err != nil {
 				vError, _ := app.gui.View("services")
 				vError.Clear()
-				app.journalListFrameColor = gocui.ColorRed
+				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
 				fmt.Fprintln(vError, "\033[31mAccess denied in systemd via systemctl\033[0m")
@@ -1391,7 +1457,7 @@ func (app *App) loadServices(journalName string) {
 				}
 				vError, _ := app.gui.View("services")
 				vError.Clear()
-				app.journalListFrameColor = gocui.ColorRed
+				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
 				fmt.Fprintln(vError, "\033[31m"+errorText+"\033[0m")
@@ -1446,7 +1512,7 @@ func (app *App) loadServices(journalName string) {
 			if err != nil {
 				vError, _ := app.gui.View("services")
 				vError.Clear()
-				app.journalListFrameColor = gocui.ColorRed
+				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
 				fmt.Fprintln(vError, "\033[31mError getting boot information from journald\033[0m")
@@ -1545,7 +1611,7 @@ func (app *App) loadServices(journalName string) {
 			if err != nil {
 				vError, _ := app.gui.View("services")
 				vError.Clear()
-				app.journalListFrameColor = gocui.ColorRed
+				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
 				fmt.Fprintln(vError, "\033[31mError getting services from journald via journalctl\033[0m")
@@ -2096,7 +2162,7 @@ func (app *App) loadFiles(logPath string) {
 				vError, _ := app.gui.View("varLogs")
 				vError.Clear()
 				// Меняем цвет окна на красный
-				app.fileSystemFrameColor = gocui.ColorRed
+				app.fileSystemFrameColor = app.errorColor
 				vError.FrameColor = app.fileSystemFrameColor
 				// Отключаем курсор и выводим сообщение об ошибке
 				vError.Highlight = false
@@ -2182,7 +2248,7 @@ func (app *App) loadFiles(logPath string) {
 				vError, _ := app.gui.View("varLogs")
 				vError.Clear()
 				// Меняем цвет окна на красный
-				app.fileSystemFrameColor = gocui.ColorRed
+				app.fileSystemFrameColor = app.errorColor
 				vError.FrameColor = app.fileSystemFrameColor
 				// Отключаем курсор и выводим сообщение об ошибке
 				vError.Highlight = false
@@ -2255,7 +2321,7 @@ func (app *App) loadFiles(logPath string) {
 				vError, _ := app.gui.View("varLogs")
 				vError.Clear()
 				// Меняем цвет окна на красный
-				app.fileSystemFrameColor = gocui.ColorRed
+				app.fileSystemFrameColor = app.errorColor
 				vError.FrameColor = app.fileSystemFrameColor
 				// Отключаем курсор и выводим сообщение об ошибке
 				vError.Highlight = false
@@ -2353,7 +2419,7 @@ func (app *App) loadFiles(logPath string) {
 		if err == nil {
 			output = append(output, outputRootDir...)
 		}
-		if app.fileSystemFrameColor == gocui.ColorRed && !app.testMode {
+		if app.fileSystemFrameColor == app.errorColor && !app.testMode {
 			vError, _ := app.gui.View("varLogs")
 			app.fileSystemFrameColor = gocui.ColorDefault
 			if vError.FrameColor != gocui.ColorDefault {
@@ -2543,7 +2609,7 @@ func (app *App) loadWinFiles(logPath string) {
 		if len(files) == 0 || (len(files) == 1 && files[0] == "") {
 			vError, _ := app.gui.View("varLogs")
 			vError.Clear()
-			app.fileSystemFrameColor = gocui.ColorRed
+			app.fileSystemFrameColor = app.errorColor
 			vError.FrameColor = app.fileSystemFrameColor
 			vError.Highlight = false
 			fmt.Fprintln(vError, "\033[31mPermission denied (files not found)\033[0m")
@@ -3218,7 +3284,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	if err != nil && !app.testMode {
 		vError, _ := app.gui.View("docker")
 		vError.Clear()
-		app.dockerFrameColor = gocui.ColorRed
+		app.dockerFrameColor = app.errorColor
 		vError.FrameColor = app.dockerFrameColor
 		vError.Highlight = false
 		fmt.Fprintln(vError, "\033[31m"+containerizationSystem+" not installed (environment not found)\033[0m")
@@ -3270,7 +3336,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		if err != nil {
 			vError, _ := app.gui.View("docker")
 			vError.Clear()
-			app.dockerFrameColor = gocui.ColorRed
+			app.dockerFrameColor = app.errorColor
 			vError.FrameColor = app.dockerFrameColor
 			vError.Highlight = false
 			fmt.Fprintln(vError, "\033[31mAccess denied or "+containerizationSystem+" not running\033[0m")
@@ -4084,7 +4150,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				v.FrameColor = gocui.ColorGreen
 				app.sinceTimestampFilterMode = true
 			default:
-				v.FrameColor = gocui.ColorRed
+				v.FrameColor = app.errorColor
 				app.sinceTimestampFilterMode = false
 			}
 		case "untilFilter":
@@ -4098,7 +4164,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				v.FrameColor = gocui.ColorGreen
 				app.untilTimestampFilterMode = true
 			default:
-				v.FrameColor = gocui.ColorRed
+				v.FrameColor = app.errorColor
 				app.untilTimestampFilterMode = false
 			}
 		}
@@ -4245,7 +4311,7 @@ func (app *App) applyFilter(color bool) {
 				// В случае синтаксической ошибки регулярного выражения, красим окно красным цветом и завершаем цикл
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("filter")
-					v.FrameColor = gocui.ColorRed
+					v.FrameColor = app.errorColor
 					return
 				}
 				if err != nil && !app.testMode {
@@ -5508,7 +5574,7 @@ func (app *App) updateLogsView(lowerDown bool) {
 	} else {
 		v.Title = "Logs: 0% (0) [" + app.debugLoadTime + "/" + app.debugColorTime + "]"
 	}
-	v.TitleColor = gocui.ColorYellow
+	v.TitleColor = app.statusColor
 	app.viewScrollLogs(percentage)
 }
 
@@ -7186,8 +7252,8 @@ func (app *App) showInterfaceInfo(g *gocui.Gui, errInfo bool, text string) {
 	}
 	if errInfo {
 		helpView.Title = " Error "
-		helpView.FrameColor = gocui.ColorRed
-		helpView.TitleColor = gocui.ColorRed
+		helpView.FrameColor = app.errorColor
+		helpView.TitleColor = app.errorColor
 	} else {
 		helpView.Title = " Info "
 		helpView.FrameColor = gocui.ColorGreen
