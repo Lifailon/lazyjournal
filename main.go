@@ -33,9 +33,25 @@ var programVersion string = "0.8.1"
 
 // Структура конфигурации
 type Config struct {
-	Hotkeys   Hotkeys   `yaml:"hotkeys"`
 	Settings  Settings  `yaml:"settings"`
+	Hotkeys   Hotkeys   `yaml:"hotkeys"`
 	Interface Interface `yaml:"interface"`
+}
+
+// Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
+type Settings struct {
+	TailMode            string `yaml:"tailMode"`
+	UpdateInterval      string `yaml:"updateInterval"`
+	DisableAutoUpdate   string `yaml:"disableAutoUpdate"`
+	DisableColor        string `yaml:"disableColor"`
+	DisableMouse        string `yaml:"disableMouse"`
+	DisableTimestamp    string `yaml:"disableTimestamp"`
+	OnlyStream          string `yaml:"onlyStream"`
+	DockerContext       string `yaml:"dockerContext"`
+	KubernetesContext   string `yaml:"kubernetesContext"`
+	KubernetesNamespace string `yaml:"kubernetesNamespace"`
+	CustomPath          string `yaml:"customPath"`
+	DisableFastMode     string `yaml:"disableFastMode"`
 }
 
 // Структура доступных сочетаний клавиш для переопределения (#23)
@@ -70,19 +86,6 @@ type Hotkeys struct {
 	SwitchStreamMode     string `yaml:"switchStreamMode"`
 	TimestampShow        string `yaml:"timestampShow"`
 	Exit                 string `yaml:"exit"`
-}
-
-// Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
-type Settings struct {
-	CustomPath        string `yaml:"customPath"`
-	TailMode          string `yaml:"tailMode"`
-	UpdateInterval    string `yaml:"updateInterval"`
-	DisableAutoUpdate string `yaml:"disableAutoUpdate"`
-	DisableColor      string `yaml:"disableColor"`
-	DisableMouse      string `yaml:"disableMouse"`
-	DisableTimestamp  string `yaml:"disableTimestamp"`
-	OnlyStream        string `yaml:"onlyStream"`
-	DisableFastMode   string `yaml:"disableFastMode"`
 }
 
 // Структура доступных параметров для покраски интерфейса из конфигурации
@@ -154,6 +157,10 @@ type App struct {
 	dockerStreamLogs    bool     // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
 	dockerStreamLogsStr string   // отображаемый режим чтения журнала Docker (в зависимости от прав доступа и флага)
 	dockerStreamMode    string   // переменная для хранения режима чтения потоков (all, stdout или stderr)
+
+	dockerContext       string
+	kubernetesContext   string
+	kubernetesNamespace string
 
 	getOS         string   // название ОС
 	getArch       string   // архитектура процессора
@@ -266,25 +273,28 @@ func showHelp() {
 	fmt.Println("lazyjournal - A TUI for reading logs from journald, auditd, file system, Docker containers, Podman and Kubernetes pods.")
 	fmt.Println("Source code: https://github.com/Lifailon/lazyjournal")
 	fmt.Println("If you have problems with the application, please open issue: https://github.com/Lifailon/lazyjournal/issues")
-	fmt.Println("")
+	fmt.Println()
 	fmt.Println("  Flags:")
 	fmt.Println("    --help, -h                 Show help")
 	fmt.Println("    --version, -v              Show version")
 	fmt.Println("    --config, -g               Show configuration of hotkeys and settings (check values)")
 	fmt.Println("    --audit, -a                Show audit information")
-	fmt.Println("    --path, -p                	Custom path to logs in the file system (default: /opt)")
 	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 50000)")
 	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	fmt.Println("    --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)")
 	fmt.Println("    --disable-color, -d        Disable output coloring")
 	fmt.Println("    --disable-mouse, -m        Disable mouse control support")
-	fmt.Println("    --disable-timestamp, -i    Disable timestamp for docker logs")
-	fmt.Println("    --only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)")
+	fmt.Println("    --disable-timestamp, -i    Disable timestamp for Docker logs")
+	fmt.Println("    --only-stream, -o          Force reading of Docker container logs in stream mode (by default from the file system)")
+	fmt.Println("    --docker-context, -C       Use the specified Docker context (default: default)")
+	fmt.Println("    --kubernetes-context, -k   Use the specified Kubernetes context (default: default)")
+	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
+	fmt.Println("    --path, -p                 Custom path to logs in the file system (default: /opt)")
+	fmt.Println("    --ssh, -s                  Connect to remote host (use standard ssh options, separated by spaces in quotes)")
+	fmt.Println("                               Example: lazyjournal --ssh \"lifailon@192.168.3.101 -p 22\"")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
-	fmt.Println("    --ssh, -s                  Connect to remote host (use standard ssh options, separated by spaces in quotes)")
-	fmt.Println("                               Example: lazyjournal --ssh \"lifailon@192.168.3.101 -p 22\"")
 	fmt.Println()
 }
 
@@ -305,6 +315,20 @@ func showConfig() {
 	// Выводим содержимое конфигурации
 	// fmt.Println(string(configData))
 	// Выводим полученные значения из конфигурации (форматированный вывод) с проверкой на пустые значения
+	fmt.Println("settings:")
+	fmt.Printf("  tailMode:                 %s\n", config.Settings.TailMode)
+	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
+	fmt.Printf("  disableColor:             %s\n", config.Settings.DisableColor)
+	fmt.Printf("  disableAutoUpdate:        %s\n", config.Settings.DisableAutoUpdate)
+	fmt.Printf("  disableMouse:             %s\n", config.Settings.DisableMouse)
+	fmt.Printf("  disableTimestamp:         %s\n", config.Settings.DisableTimestamp)
+	fmt.Printf("  onlyStream:               %s\n", config.Settings.OnlyStream)
+	fmt.Printf("  dockerContext:            %s\n", config.Settings.DockerContext)
+	fmt.Printf("  kubernetesContext:        %s\n", config.Settings.KubernetesContext)
+	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
+	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
+	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
+
 	fmt.Println("hotkeys:")
 	fmt.Printf("  help:                     %s\n", config.Hotkeys.Help)
 	fmt.Printf("  up:                       %s\n", config.Hotkeys.Up)
@@ -336,17 +360,6 @@ func showConfig() {
 	fmt.Printf("  switchStreamMode:         %s\n", config.Hotkeys.SwitchStreamMode)
 	fmt.Printf("  timestampShow:            %s\n", config.Hotkeys.TimestampShow)
 	fmt.Printf("  exit:                     %s\n", config.Hotkeys.Exit)
-
-	fmt.Println("settings:")
-	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
-	fmt.Printf("  tailMode:                 %s\n", config.Settings.TailMode)
-	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
-	fmt.Printf("  disableColor:             %s\n", config.Settings.DisableColor)
-	fmt.Printf("  disableAutoUpdate:        %s\n", config.Settings.DisableAutoUpdate)
-	fmt.Printf("  disableMouse:             %s\n", config.Settings.DisableMouse)
-	fmt.Printf("  disableTimestamp:         %s\n", config.Settings.DisableTimestamp)
-	fmt.Printf("  onlyStream:               %s\n", config.Settings.OnlyStream)
-	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
 
 	fmt.Println("interface:")
 	fmt.Printf("  foregroundColor:          %s\n", config.Interface.ForegroundColor)
@@ -582,7 +595,7 @@ func (app *App) showAudit() {
 				csVersion = strings.Split(csVersion, "\n")[0]
 				auditText = append(auditText, "    version: "+csVersion)
 				cmd := exec.Command(
-					cs, "get", "pods", "-A",
+					cs, "get", "pods", app.kubernetesNamespace, "--context", app.kubernetesContext,
 					"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{'\\n'}{end}",
 				)
 				_, err := cmd.Output()
@@ -742,6 +755,9 @@ func runGoCui(mock bool) {
 		mouseSupport:                 true,
 		dockerStreamLogs:             false,
 		dockerStreamMode:             "all",
+		dockerContext:                "default",
+		kubernetesContext:            "default",
+		kubernetesNamespace:          "all",
 		startServices:                0, // начальная позиция списка юнитов
 		selectedJournal:              0, // начальный индекс выбранного журнала
 		startFiles:                   0,
@@ -804,8 +820,6 @@ func runGoCui(mock bool) {
 	flag.BoolVar(configFlag, "g", false, "Show configuration of hotkeys and settings (check values)")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
-	pathFlag := flag.String("path", "/opt", "Custom path to logs in the file system (default: /opt)")
-	flag.StringVar(pathFlag, "p", "/opt", "Custom path to logs in the file system (default: /opt)")
 	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
 	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
@@ -816,18 +830,26 @@ func runGoCui(mock bool) {
 	flag.BoolVar(disableColor, "d", false, "Disable output coloring")
 	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse control support")
 	flag.BoolVar(disableMouse, "m", false, "Disable mouse control support")
-	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for docker logs")
-	flag.BoolVar(disableTimeStamp, "i", false, "Disable timestamp for docker logs")
-	dockerStreamFlag := flag.Bool("only-stream", false, "Force reading of docker container logs in stream mode (by default from the file system)")
-	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of docker container logs in stream mode (by default from the file system)")
+	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for Docker logs")
+	flag.BoolVar(disableTimeStamp, "i", false, "Disable timestamp for Docker logs")
+	dockerStreamFlag := flag.Bool("only-stream", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
+	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
+	dockerContextFlag := flag.String("docker-context", "default", "Use the specified Docker context (default: default)")
+	flag.StringVar(dockerContextFlag, "C", "default", "Use the specified Docker context (default: default)")
+	kubernetesContextFlag := flag.String("kubernetes-context", "default", "Use the specified Kubernetes context (default: default)")
+	flag.StringVar(kubernetesContextFlag, "k", "default", "Use the specified Kubernetes context (default: default)")
+	kubernetesNamespaceFlag := flag.String("namespace", "all", "Use the specified Kubernetes namespace (default: all)")
+	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
+	pathFlag := flag.String("path", "/opt", "Custom path to logs in the file system (default: /opt)")
+	flag.StringVar(pathFlag, "p", "/opt", "Custom path to logs in the file system (default: /opt)")
+	sshModeFlag := flag.String("ssh", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
+	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
 	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
 	flag.BoolVar(commandColor, "c", false, "ANSI coloring in command line mode")
 	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
 	flag.StringVar(commandFuzzy, "f", "", "Filtering using fuzzy search in command line mode")
 	commandRegex := flag.String("command-regex", "", "Filtering using regular expression (regexp) in command line mode")
 	flag.StringVar(commandRegex, "r", "", "Filtering using regular expression (regexp) in command line mode")
-	sshModeFlag := flag.String("ssh", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
-	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
 
 	// Обработка аргументов
 	flag.Parse()
@@ -859,11 +881,7 @@ func runGoCui(mock bool) {
 		fmt.Println(errConfig)
 	}
 
-	// Если значение в конфигурации не пустое а значение флага по умолчанию
-	if config.Settings.CustomPath != "" && *pathFlag == "/opt" {
-		pathFlag = &config.Settings.CustomPath
-	}
-
+	// Если значение в конфигурации не пустое и значение флага по умолчанию
 	if config.Settings.TailMode != "" && *tailFlag == "50000" {
 		tailFlag = &config.Settings.TailMode
 	}
@@ -910,28 +928,31 @@ func runGoCui(mock bool) {
 		}
 	}
 
+	if config.Settings.DockerContext != "" && *dockerContextFlag == "default" {
+		dockerContextFlag = &config.Settings.DockerContext
+	}
+
+	if config.Settings.KubernetesContext != "" && *kubernetesContextFlag == "default" {
+		kubernetesContextFlag = &config.Settings.KubernetesContext
+	}
+
+	if config.Settings.KubernetesNamespace != "" && *kubernetesNamespaceFlag == "all" {
+		kubernetesNamespaceFlag = &config.Settings.KubernetesNamespace
+	}
+
+	if config.Settings.CustomPath != "" && *pathFlag == "/opt" {
+		pathFlag = &config.Settings.CustomPath
+	}
+
 	if config.Settings.DisableFastMode != "" {
 		if strings.EqualFold(config.Settings.DisableFastMode, "true") {
 			app.fastMode = false
 		}
 	}
 
-	// Обработка остальных флагов с учетом полученных данных из конфигурации
+	// Обработка флагов с учетом значений, полученных из командной строки
 
 	// Проверяем значение флага на валидность
-	if *pathFlag != "" && len(*pathFlag) > 1 && *pathFlag != "/" && strings.HasPrefix(*pathFlag, "/") {
-		app.customPath = *pathFlag
-	} else {
-		// Если ошибка в флаге, возвращяем ошибку
-		if *pathFlag != config.Settings.CustomPath {
-			fmt.Println("Invalid custom path: " + *pathFlag)
-			os.Exit(1)
-		} else {
-			// Если ошибка в конфигурации (или значение не задано), задаем значение по умолчанию
-			app.customPath = "/opt"
-		}
-	}
-
 	if *tailFlag == "200" || *tailFlag == "500" || *tailFlag == "1000" ||
 		*tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" ||
 		*tailFlag == "30000" || *tailFlag == "50000" || *tailFlag == "100000" ||
@@ -939,9 +960,11 @@ func runGoCui(mock bool) {
 		app.logViewCount = *tailFlag
 	} else {
 		if *tailFlag != config.Settings.TailMode {
+			// Если ошибка в флаге, возвращяем ошибку
 			fmt.Println("Available values: 200, 500, 1000, 5000, 10000, 20000, 30000 50000, 100000, 150000, 200000 (default: 50000 lines)")
 			os.Exit(1)
 		} else {
+			// Если ошибка в конфигурации (или значение не задано), задаем значение по умолчанию
 			app.logViewCount = "50000"
 		}
 	}
@@ -993,6 +1016,27 @@ func runGoCui(mock bool) {
 			} else {
 				app.dockerStreamLogsStr = "json"
 			}
+		}
+	}
+
+	app.dockerContext = *dockerContextFlag
+
+	app.kubernetesContext = *kubernetesContextFlag
+
+	if *kubernetesNamespaceFlag == "all" {
+		app.kubernetesNamespace = "--all-namespaces"
+	} else {
+		app.kubernetesNamespace = "--namespace " + *kubernetesNamespaceFlag
+	}
+
+	if *pathFlag != "" && len(*pathFlag) > 1 && *pathFlag != "/" && strings.HasPrefix(*pathFlag, "/") {
+		app.customPath = *pathFlag
+	} else {
+		if *pathFlag != config.Settings.CustomPath {
+			fmt.Println("Invalid custom path: " + *pathFlag)
+			os.Exit(1)
+		} else {
+			app.customPath = "/opt"
 		}
 	}
 
@@ -3366,12 +3410,12 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		// Получаем список подов из k8s
 		if app.sshMode {
 			cmd = exec.Command("ssh", append(app.sshOptions,
-				containerizationSystem, "get", "pods", "-A",
+				containerizationSystem, "get", "pods", app.kubernetesNamespace, "--context", app.kubernetesContext,
 				"-o", "'jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}'",
 			)...)
 		} else {
 			cmd = exec.Command(
-				containerizationSystem, "get", "pods", "-A", // -A/--all-namespaces
+				containerizationSystem, "get", "pods", app.kubernetesNamespace, "--context", app.kubernetesContext,
 				"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}",
 			)
 		}
