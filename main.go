@@ -258,6 +258,7 @@ type App struct {
 	lastCurrentView string // фиксируем последнее используемое окно для Esc после /
 	backCurrentView bool   // отключаем/ключаем возврат
 
+	dockerCompose        string            // название используемого исполняемого файла docker-compose или как плагин "docker compose"
 	uniquePrefixColorMap map[string]string // карта для хранения уникального цвета для каждого контейнера в стеках compose
 }
 
@@ -546,7 +547,7 @@ func (app *App) showAudit() {
 		switch cs {
 		case "docker compose":
 			cs = "compose"
-			csCheck := exec.Command("docker", "compose", "version")
+			csCheck := exec.Command(app.dockerCompose, "version")
 			output, err := csCheck.Output()
 			if err == nil {
 				auditText = append(auditText, "    installed: true")
@@ -554,7 +555,7 @@ func (app *App) showAudit() {
 				csVersion = strings.Split(csVersion, "version v")[1]
 				auditText = append(auditText, "    version: "+csVersion)
 				cmd := exec.Command(
-					"docker", "compose", "ls", "-a",
+					app.dockerCompose, "ls", "-a",
 				)
 				_, err := cmd.Output()
 				if err == nil {
@@ -770,12 +771,29 @@ func runGoCui(mock bool) {
 		streamTypeDocker:             true,
 		lastCurrentView:              "services",
 		backCurrentView:              false,
+		dockerCompose:                "docker compose",
 		uniquePrefixColorMap:         make(map[string]string),
 	}
 
 	// Определяем используемую ОС (linux/darwin/*bsd/windows) и архитектуру
 	app.getOS = runtime.GOOS
 	app.getArch = runtime.GOARCH
+
+	// Проверяем установку compose как плагина docker или устанавливаем docker-compose
+	var composeVer *exec.Cmd
+	if app.sshMode {
+		composeVer = exec.Command("ssh", append(app.sshOptions,
+			app.dockerCompose, "version",
+		)...)
+	} else {
+		composeVer = exec.Command(
+			app.dockerCompose, "version",
+		)
+	}
+	_, composeErr := composeVer.Output()
+	if composeErr != nil {
+		app.dockerCompose = "docker-compose"
+	}
 
 	// Аргументы
 	help := flag.Bool("help", false, "Show help")
@@ -3312,7 +3330,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		// Для compose передаем два аргумента команды (проверяем compose как плагин docker)
 		if containerizationSystem == "compose" {
 			cmd = exec.Command("ssh", append(app.sshOptions,
-				"docker", "compose", "version",
+				app.dockerCompose, "version",
 			)...)
 		} else {
 			cmd = exec.Command("ssh", append(app.sshOptions,
@@ -3322,7 +3340,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	} else {
 		if containerizationSystem == "compose" {
 			cmd = exec.Command(
-				"docker", "compose", "version",
+				app.dockerCompose, "version",
 			)
 		} else {
 			cmd = exec.Command(
@@ -3360,11 +3378,11 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	case "compose":
 		if app.sshMode {
 			cmd = exec.Command("ssh", append(app.sshOptions,
-				"docker", "compose", "ls", "-a",
+				app.dockerCompose, "ls", "-a",
 			)...)
 		} else {
 			cmd = exec.Command(
-				"docker", "compose", "ls", "-a",
+				app.dockerCompose, "ls", "-a",
 			)
 		}
 	default:
@@ -3798,7 +3816,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
+							app.dockerCompose, "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 							"--since", sinceFilterTextNotSpace,
 							"--until", untilFilterTextNotSpace,
 							"--tail", app.logViewCount,
@@ -3807,7 +3825,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
+							app.dockerCompose, "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 							"--since", sinceFilterTextNotSpace,
 							"--tail", app.logViewCount,
 						)...,
@@ -3815,7 +3833,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
+							app.dockerCompose, "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 							"--until", untilFilterTextNotSpace,
 							"--tail", app.logViewCount,
 						)...,
@@ -3823,7 +3841,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				default:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
+							app.dockerCompose, "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 							"--tail", app.logViewCount,
 						)...,
 					)
@@ -3832,26 +3850,26 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				switch {
 				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
+						app.dockerCompose, "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 						"--since", sinceFilterTextNotSpace,
 						"--until", untilFilterTextNotSpace,
 						"--tail", app.logViewCount,
 					)
 				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
+						app.dockerCompose, "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 						"--since", sinceFilterTextNotSpace,
 						"--tail", app.logViewCount,
 					)
 				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
+						app.dockerCompose, "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 						"--until", untilFilterTextNotSpace,
 						"--tail", app.logViewCount,
 					)
 				default:
 					cmd = exec.Command(
-						"docker", "compose", "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
+						app.dockerCompose, "-p", containerId, "logs", "--timestamps", "--no-color", // "--no-log-prefix",
 						"--tail", app.logViewCount,
 					)
 				}
