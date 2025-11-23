@@ -551,14 +551,14 @@ func (app *App) showAudit() {
 	)
 	containerizationSystems := []string{
 		"docker",
-		"docker compose",
+		"docker-compose",
 		"podman",
-		"kubernetes (kubectl)",
+		"kubernetes",
 	}
 	for _, cs := range containerizationSystems {
 		auditText = append(auditText, "  - name: "+cs)
 		switch cs {
-		case "docker compose":
+		case "docker-compose":
 			cs = "compose"
 			csCheck := exec.Command(app.dockerCompose, "version")
 			output, err := csCheck.Output()
@@ -580,7 +580,7 @@ func (app *App) showAudit() {
 			} else {
 				auditText = append(auditText, "    installed: false")
 			}
-		case "kubernetes (kubectl)":
+		case "kubernetes":
 			cs = "kubectl"
 			csCheck := exec.Command(cs, "version")
 			output, _ := csCheck.Output()
@@ -594,32 +594,15 @@ func (app *App) showAudit() {
 				// Забираем первую строку
 				csVersion = strings.Split(csVersion, "\n")[0]
 				auditText = append(auditText, "    version: "+csVersion)
-				auditText = append(auditText, "    context: "+app.kubernetesContext)
-				auditText = append(auditText, "    namespace: "+app.kubernetesNamespace)
-				if app.kubernetesContext == "all" {
+				// Определяем namespace
+				currentNamespace := app.kubernetesNamespace
+				if app.kubernetesNamespace == "all" {
 					app.kubernetesNamespace = "--all-namespaces"
 				} else {
 					app.kubernetesNamespace = "--namespace " + app.kubernetesNamespace
 				}
+				// kubectl pods
 				cmd := exec.Command(
-					cs, "config", "get-contexts", "-o", "name", "--context", app.kubernetesContext,
-				)
-				contexts, err := cmd.Output()
-				if err == nil {
-					auditText = append(auditText, "    contexts: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(contexts)), "\n"))))
-				} else {
-					auditText = append(auditText, "    contexts: 0")
-				}
-				cmd = exec.Command(
-					cs, "get", "namespaces", "-o", "name", "--context", app.kubernetesContext,
-				)
-				namespaces, err := cmd.Output()
-				if err == nil {
-					auditText = append(auditText, "    namespaces: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(namespaces)), "\n"))))
-				} else {
-					auditText = append(auditText, "    namespaces: 0")
-				}
-				cmd = exec.Command(
 					cs, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
 					"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{'\\n'}{end}",
 				)
@@ -629,6 +612,30 @@ func (app *App) showAudit() {
 					auditText = append(auditText, "    pods: "+strconv.Itoa(len(app.dockerContainers)))
 				} else {
 					auditText = append(auditText, "    pods: 0")
+				}
+				// kubectl context
+				auditText = append(auditText, "    context: ")
+				auditText = append(auditText, "      current: "+app.kubernetesContext)
+				cmd = exec.Command(
+					cs, "config", "get-contexts", "-o", "name", "--context", app.kubernetesContext,
+				)
+				contexts, err := cmd.Output()
+				if err == nil {
+					auditText = append(auditText, "      count: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(contexts)), "\n"))))
+				} else {
+					auditText = append(auditText, "      count: 0")
+				}
+				// kubectl namespace
+				auditText = append(auditText, "    namespace: ")
+				auditText = append(auditText, "      current: "+currentNamespace)
+				cmd = exec.Command(
+					cs, "get", "namespaces", "-o", "name", "--context", app.kubernetesContext,
+				)
+				namespaces, err := cmd.Output()
+				if err == nil {
+					auditText = append(auditText, "      count: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(namespaces)), "\n"))))
+				} else {
+					auditText = append(auditText, "      count: 0")
 				}
 			} else {
 				auditText = append(auditText, "    installed: false")
@@ -643,15 +650,6 @@ func (app *App) showAudit() {
 				csVersion = strings.Split(csVersion, ", ")[0]
 				auditText = append(auditText, "    version: "+csVersion)
 				cmd := exec.Command(
-					cs, "context", "ls", "-q",
-				)
-				contexts, err := cmd.Output()
-				if err == nil {
-					auditText = append(auditText, "    contexts: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(contexts)), "\n"))))
-				} else {
-					auditText = append(auditText, "    contexts: 0")
-				}
-				cmd = exec.Command(
 					cs, "ps", "-a", "--context", "default",
 					"--format", "{{.ID}} {{.Names}} {{.State}}",
 				)
@@ -661,6 +659,18 @@ func (app *App) showAudit() {
 					auditText = append(auditText, "    containers: "+strconv.Itoa(len(app.dockerContainers)))
 				} else {
 					auditText = append(auditText, "    containers: 0")
+				}
+				// docker/podman context
+				auditText = append(auditText, "    context: ")
+				auditText = append(auditText, "      current: "+app.dockerContext)
+				cmd = exec.Command(
+					cs, "context", "ls", "-q",
+				)
+				contexts, err := cmd.Output()
+				if err == nil {
+					auditText = append(auditText, "      count: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(contexts)), "\n"))))
+				} else {
+					auditText = append(auditText, "      count: 0")
 				}
 			} else {
 				auditText = append(auditText, "    installed: false")
@@ -3472,7 +3482,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			)...)
 		} else {
 			cmd = exec.Command(
-				containerizationSystem, "ps", "-a", "--context", app.dockerContext,
+				containerizationSystem, "--context", app.dockerContext, "ps", "-a",
 				"--format", "{{.ID}} {{.Names}} {{.State}}",
 			)
 		}
@@ -3485,7 +3495,11 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			app.dockerFrameColor = app.errorColor
 			vError.FrameColor = app.dockerFrameColor
 			vError.Highlight = false
-			fmt.Fprintln(vError, "\033[31mAccess denied or "+containerizationSystem+" not running\033[0m")
+			if containerizationSystem == "kubectl" {
+				fmt.Fprintln(vError, "\033[31mUnable to access the Kubernetes cluster\033[0m")
+			} else {
+				fmt.Fprintln(vError, "\033[31mAccess denied or "+containerizationSystem+" service stopped\033[0m")
+			}
 			return
 		} else {
 			vError, _ := app.gui.View("docker")
@@ -3497,7 +3511,11 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		}
 	}
 	if err != nil && app.testMode {
-		log.Print("Error: access denied or " + containerizationSystem + " not running")
+		if containerizationSystem == "kubectl" {
+			log.Print("Error: unable to access the Kubernetes cluster")
+		} else {
+			log.Print("Error: access denied or " + containerizationSystem + " service stopped")
+		}
 	}
 	var containers []string
 	var stringOutput string
@@ -3735,9 +3753,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	} else {
 		containerId = app.lastContainerId
 	}
-	// Читаем журналы Docker из файловой системы в формате JSON (если не отключено флагом и есть доступ)
+	// Читаем журналы Docker из файловой системы в формате JSON (если не отключено флагом и docker context default)
 	var readFileContainer bool
-	if containerizationSystem == "docker" && !app.dockerStreamLogs {
+	if containerizationSystem == "docker" && !app.dockerStreamLogs && app.dockerContext == "default" {
 		// Получаем путь к журналу контейнера в файловой системе по id с помощью метода docker cli
 		var cmd *exec.Cmd
 		if app.sshMode {
@@ -3995,26 +4013,26 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				switch {
 				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						containerizationSystem, "logs", "--timestamps", "--context", app.dockerContext, "--tail", app.logViewCount,
+						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 						"--since", sinceFilterTextNotSpace,
 						"--until", untilFilterTextNotSpace,
 						containerId,
 					)
 				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						containerizationSystem, "logs", "--timestamps", "--context", app.dockerContext, "--tail", app.logViewCount,
+						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 						"--since", sinceFilterTextNotSpace,
 						containerId,
 					)
 				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						containerizationSystem, "logs", "--timestamps", "--context", app.dockerContext, "--tail", app.logViewCount,
+						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 						"--until", untilFilterTextNotSpace,
 						containerId,
 					)
 				default:
 					cmd = exec.Command(
-						containerizationSystem, "logs", "--timestamps", "--context", app.dockerContext, "--tail", app.logViewCount,
+						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 						containerId,
 					)
 				}
