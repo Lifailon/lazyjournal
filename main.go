@@ -594,11 +594,36 @@ func (app *App) showAudit() {
 				// Забираем первую строку
 				csVersion = strings.Split(csVersion, "\n")[0]
 				auditText = append(auditText, "    version: "+csVersion)
+				auditText = append(auditText, "    context: "+app.kubernetesContext)
+				auditText = append(auditText, "    namespace: "+app.kubernetesNamespace)
+				if app.kubernetesContext == "all" {
+					app.kubernetesNamespace = "--all-namespaces"
+				} else {
+					app.kubernetesNamespace = "--namespace " + app.kubernetesNamespace
+				}
 				cmd := exec.Command(
-					cs, "get", "pods", app.kubernetesNamespace, "--context", app.kubernetesContext,
+					cs, "config", "get-contexts", "-o", "name", "--context", app.kubernetesContext,
+				)
+				contexts, err := cmd.Output()
+				if err == nil {
+					auditText = append(auditText, "    contexts: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(contexts)), "\n"))))
+				} else {
+					auditText = append(auditText, "    contexts: 0")
+				}
+				cmd = exec.Command(
+					cs, "get", "namespaces", "-o", "name", "--context", app.kubernetesContext,
+				)
+				namespaces, err := cmd.Output()
+				if err == nil {
+					auditText = append(auditText, "    namespaces: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(namespaces)), "\n"))))
+				} else {
+					auditText = append(auditText, "    namespaces: 0")
+				}
+				cmd = exec.Command(
+					cs, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
 					"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase}{'\\n'}{end}",
 				)
-				_, err := cmd.Output()
+				_, err = cmd.Output()
 				if err == nil {
 					app.loadDockerContainer(cs)
 					auditText = append(auditText, "    pods: "+strconv.Itoa(len(app.dockerContainers)))
@@ -618,10 +643,19 @@ func (app *App) showAudit() {
 				csVersion = strings.Split(csVersion, ", ")[0]
 				auditText = append(auditText, "    version: "+csVersion)
 				cmd := exec.Command(
-					cs, "ps", "-a",
+					cs, "context", "ls", "-q",
+				)
+				contexts, err := cmd.Output()
+				if err == nil {
+					auditText = append(auditText, "    contexts: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(contexts)), "\n"))))
+				} else {
+					auditText = append(auditText, "    contexts: 0")
+				}
+				cmd = exec.Command(
+					cs, "ps", "-a", "--context", "default",
 					"--format", "{{.ID}} {{.Names}} {{.State}}",
 				)
-				_, err := cmd.Output()
+				_, err = cmd.Output()
 				if err == nil {
 					app.loadDockerContainer(cs)
 					auditText = append(auditText, "    containers: "+strconv.Itoa(len(app.dockerContainers)))
@@ -3410,12 +3444,12 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		// Получаем список подов из k8s
 		if app.sshMode {
 			cmd = exec.Command("ssh", append(app.sshOptions,
-				containerizationSystem, "get", "pods", app.kubernetesNamespace, "--context", app.kubernetesContext,
+				containerizationSystem, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
 				"-o", "'jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}'",
 			)...)
 		} else {
 			cmd = exec.Command(
-				containerizationSystem, "get", "pods", app.kubernetesNamespace, "--context", app.kubernetesContext,
+				containerizationSystem, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
 				"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}",
 			)
 		}
@@ -3438,7 +3472,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			)...)
 		} else {
 			cmd = exec.Command(
-				containerizationSystem, "ps", "-a",
+				containerizationSystem, "ps", "-a", "--context", app.dockerContext,
 				"--format", "{{.ID}} {{.Names}} {{.State}}",
 			)
 		}
@@ -3832,7 +3866,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 		}
 	}
-	// Читаем лог через docker cli (если файл не найден или к нему нет доступа) или это compose/podman/kubectl
+	// Читаем лог через docker cli (если файл не найден или к нему нет доступа) или для compose/podman/kubectl
 	if !readFileContainer || containerizationSystem != "docker" {
 		// Извлекаем имя без статуса в containerId для k8s и docker compose
 		if containerizationSystem == "kubectl" || containerizationSystem == "compose" {
@@ -3842,14 +3876,14 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		var cmd *exec.Cmd
 		switch containerizationSystem {
 		case "kubectl":
-			// Формируем команду kubectl с нужными ключами
+			// Формируем команду kubectl с нужными ключами и предварительно извлеченным namespace при выборе пода
 			if app.sshMode {
 				cmd = exec.Command("ssh", append(app.sshOptions,
-					containerizationSystem, "logs", "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
+					containerizationSystem, "logs", "--context", app.kubernetesContext, "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
 				)...)
 			} else {
 				cmd = exec.Command(
-					containerizationSystem, "logs", "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
+					containerizationSystem, "logs", "--context", app.kubernetesContext, "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
 				)
 			}
 		case "compose":
@@ -3927,36 +3961,32 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs", "--timestamps",
+							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
 							"--since", sinceFilterTextNotSpace,
 							"--until", untilFilterTextNotSpace,
-							"--tail", app.logViewCount,
 							containerId,
 						)...,
 					)
 				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs", "--timestamps",
+							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
 							"--since", sinceFilterTextNotSpace,
-							"--tail", app.logViewCount,
 							containerId,
 						)...,
 					)
 				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs", "--timestamps",
+							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
 							"--until", untilFilterTextNotSpace,
-							"--tail", app.logViewCount,
 							containerId,
 						)...,
 					)
 				default:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs", "--timestamps",
-							"--tail", app.logViewCount,
+							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
 							containerId,
 						)...,
 					)
@@ -3965,30 +3995,26 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				switch {
 				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						containerizationSystem, "logs", "--timestamps",
+						containerizationSystem, "logs", "--timestamps", "--context", app.dockerContext, "--tail", app.logViewCount,
 						"--since", sinceFilterTextNotSpace,
 						"--until", untilFilterTextNotSpace,
-						"--tail", app.logViewCount,
 						containerId,
 					)
 				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						containerizationSystem, "logs", "--timestamps",
+						containerizationSystem, "logs", "--timestamps", "--context", app.dockerContext, "--tail", app.logViewCount,
 						"--since", sinceFilterTextNotSpace,
-						"--tail", app.logViewCount,
 						containerId,
 					)
 				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
 					cmd = exec.Command(
-						containerizationSystem, "logs", "--timestamps",
+						containerizationSystem, "logs", "--timestamps", "--context", app.dockerContext, "--tail", app.logViewCount,
 						"--until", untilFilterTextNotSpace,
-						"--tail", app.logViewCount,
 						containerId,
 					)
 				default:
 					cmd = exec.Command(
-						containerizationSystem, "logs", "--timestamps",
-						"--tail", app.logViewCount,
+						containerizationSystem, "logs", "--timestamps", "--context", app.dockerContext, "--tail", app.logViewCount,
 						containerId,
 					)
 				}
