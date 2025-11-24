@@ -506,7 +506,7 @@ func (app *App) showAudit() {
 				name        string
 				journalName string
 			}{
-				{"Unit list", "services"},
+				{"Unit service list", "services"},
 				{"System journals", "UNIT"},
 				{"User journals", "USER_UNIT"},
 				{"Kernel boot", "kernel"},
@@ -1380,10 +1380,10 @@ func (app *App) layout(g *gocui.Gui) error {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
-		v.Title = " < Unit list (0) > " // заголовок окна
-		v.Highlight = true              // выделение активного элемента в списке
-		v.Wrap = false                  // отключаем перенос строк
-		v.Autoscroll = true             // включаем автопрокрутку
+		v.Title = " < Unit service list (0) > " // заголовок окна
+		v.Highlight = true                      // выделение активного элемента в списке
+		v.Wrap = false                          // отключаем перенос строк
+		v.Autoscroll = true                     // включаем автопрокрутку
 		// Цветовая схема из форка awesome-gocui/gocui
 		v.SelFgColor = app.selectedForegroundColor // Цвет текста при выборе в списке
 		v.SelBgColor = app.selectedBackgroundColor // Цвет фона при выборе в списке
@@ -1512,12 +1512,16 @@ func (app *App) loadServices(journalName string) {
 	switch journalName {
 	// Services list from systemd
 	case "services":
-		// Получаем список всех юнитов в системе через systemctl в формате JSON
+		// Получаем список всех юнитов со статусом работы и фильтрацией по сервисам через systemctl в формате JSON
 		var unitsList *exec.Cmd
 		if app.sshMode {
-			unitsList = exec.Command("ssh", append(app.sshOptions, "systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--output=json")...) // "--type=service"
+			unitsList = exec.Command("ssh", append(app.sshOptions,
+				"systemctl", "list-units", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
+			)...)
 		} else {
-			unitsList = exec.Command("systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager", "--output=json") // "--type=service"
+			unitsList = exec.Command(
+				"systemctl", "list-units", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
+			)
 		}
 		output, err := unitsList.Output()
 		if !app.testMode {
@@ -1540,8 +1544,19 @@ func (app *App) loadServices(journalName string) {
 		if err != nil && app.testMode {
 			log.Print("Error: access denied in systemd via systemctl")
 		}
+		// Получаем список всех юнит-файлов для извлечения статус автозагрузки
+		// var unitFilesList *exec.Cmd
+		// if app.sshMode {
+		// 	unitFilesList = exec.Command("ssh", append(app.sshOptions,
+		// 		"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
+		// 	)...)
+		// } else {
+		// 	unitFilesList = exec.Command(
+		// 		"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
+		// 	)
+		// }
 		// Чтение данных в формате JSON
-		var units []map[string]interface{}
+		var units []map[string]any
 		err = json.Unmarshal(output, &units)
 		// Если ошибка JSON, создаем массив вручную
 		if err != nil {
@@ -1554,8 +1569,9 @@ func (app *App) loadServices(journalName string) {
 					continue
 				}
 				// Заполняем временный массив из строки
-				unit := map[string]interface{}{
+				unit := map[string]any{
 					"unit":   fields[0],
+					"load":   fields[1],
 					"active": fields[2],
 					"sub":    fields[3],
 				}
@@ -1564,23 +1580,29 @@ func (app *App) loadServices(journalName string) {
 			}
 		}
 		serviceMap := make(map[string]bool)
-		// Обработка записей
+		// Анализ статуса
 		for _, unit := range units {
-			// Извлечение данных в формате JSON и проверка статуса для покраски
 			unitName, _ := unit["unit"].(string)
-			active, _ := unit["active"].(string)
-			if active == "active" {
-				active = "\033[32m" + active + "\033[0m"
-			} else {
-				active = "\033[31m" + active + "\033[0m"
+			// Состояние выполнения
+			// serviceStatus, _ := unit["active"].(string)
+			// Детализированное состояние
+			serviceSubStatus, _ := unit["sub"].(string)
+			switch serviceSubStatus {
+			case "running":
+				serviceSubStatus = "\033[32m" + "run" + "\033[0m"
+			case "exited":
+				serviceSubStatus = "\033[32m" + "exit" + "\033[0m"
+			case "dead":
+				serviceSubStatus = "\033[31m" + serviceSubStatus + "\033[0m"
+			default:
+				serviceSubStatus = "\033[33m" + serviceSubStatus + "\033[0m"
 			}
-			sub, _ := unit["sub"].(string)
-			if sub == "exited" || sub == "dead" {
-				sub = "\033[31m" + sub + "\033[0m"
-			} else {
-				sub = "\033[32m" + sub + "\033[0m"
+			// Добавляем в вывода статуса состояние загрузки юнита в память (чтение конфигурации)
+			serviceLoadStatus, _ := unit["load"].(string)
+			if serviceLoadStatus != "loaded" {
+				serviceSubStatus = serviceSubStatus + "/" + "\033[33m" + serviceLoadStatus + "\033[0m"
 			}
-			name := unitName + " (" + active + "/" + sub + ")"
+			name := "[" + serviceSubStatus + "] " + unitName
 			bootID := unitName
 			// Уникальный ключ для проверки
 			uniqueKey := name + ":" + bootID
@@ -2093,9 +2115,8 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 	// Для юнитов systemd и других журналов по названию (--unit=UNIT)
 	default:
 		if selectUnits == "services" {
-			// Удаляем статусы с покраской из навзания
-			var ansiEscape = regexp.MustCompile(`\s\(.+\)`)
-			serviceName = ansiEscape.ReplaceAllString(serviceName, "")
+			// Удаляем статусы сервисов из навзания
+			serviceName = strings.Split(serviceName, "] ")[1]
 		}
 		var cmd *exec.Cmd
 		if app.sshMode {
@@ -7798,7 +7819,7 @@ func (app *App) setUnitListRight(g *gocui.Gui, v *gocui.View) error {
 		app.loadServices(app.selectUnits)
 	case "auditd":
 		app.selectUnits = "services"
-		selectedServices.Title = " < Unit list (0) > "
+		selectedServices.Title = " < Unit service list (0) > "
 		app.loadServices(app.selectUnits)
 	}
 	return nil
@@ -7831,7 +7852,7 @@ func (app *App) setUnitListLeft(g *gocui.Gui, v *gocui.View) error {
 		app.loadServices(app.selectUnits)
 	case "UNIT":
 		app.selectUnits = "services"
-		selectedServices.Title = " < Unit list (0) > "
+		selectedServices.Title = " < Unit service list (0) > "
 		app.loadServices(app.selectUnits)
 	}
 	return nil
