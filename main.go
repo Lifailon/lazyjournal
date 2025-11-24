@@ -115,6 +115,7 @@ type Logfile struct {
 
 type DockerContainers struct {
 	name      string
+	rawName   string
 	id        string
 	namespace string
 }
@@ -3614,6 +3615,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			default:
 				containerStatus = "\033[31m"
 			}
+			rawContainerName := containerName
 			if containerizationSystem == "compose" {
 				// Извлекаем количество запущенных контейнров из статуса
 				var runContainersInt int
@@ -3654,6 +3656,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			}
 			app.dockerContainers = append(app.dockerContainers, DockerContainers{
 				name:      containerName,
+				rawName:   rawContainerName,
 				id:        parts[0],
 				namespace: namespace,
 			})
@@ -3669,7 +3672,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	// Заполняем карту уникальных цветов для контейнеров (используется для покраски префиксов в compose)
 	if containerizationSystem == "docker" {
 		for _, dc := range app.dockerContainers {
-			cn := dc.name
+			cn := dc.rawName
 			if cn != "" {
 				newColor := uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(uniquePrefixColorArr)]
 				app.uniquePrefixColorMap[cn] = newColor
@@ -3945,10 +3948,14 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	}
 	// Читаем лог через docker cli (если файл не найден или к нему нет доступа) или для compose/podman/kubectl
 	if !readFileContainer || containerizationSystem != "docker" {
-		// Извлекаем имя без статуса в containerId для k8s и docker compose
-		if containerizationSystem == "kubectl" || containerizationSystem == "compose" {
+		// Извлекаем имя без статуса в containerId для docker compose и Kubernetes
+		if containerizationSystem == "compose" || containerizationSystem == "kubectl" {
 			parts := strings.Split(containerName, "] ")
-			containerId = parts[1]
+			if len(parts) > 1 {
+				containerId = parts[1]
+			} else {
+				containerId = parts[0]
+			}
 		}
 		var cmd *exec.Cmd
 		switch containerizationSystem {
