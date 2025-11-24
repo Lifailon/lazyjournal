@@ -1,9 +1,23 @@
+# Default flag values (lower priority)
+settings:
+  tailMode: 50000
+  updateInterval: 5
+  disableAutoUpdate: false
+  disableColor: false
+  disableMouse: false
+  disableTimestamp: false
+  onlyStream: false
+  dockerContext: default
+  kubernetesContext: default
+  kubernetesNamespace: all
+  customPath: /opt
+  disableFastMode: false
+
 # Available hotkeys:
 # a-z, 0-9, f1-f12 and any other symbols
 # enter, space, backspace, delete, escape, tab and shift+tab
 # shift+<a-z>
 # ctrl+<a-z>
-
 hotkeys:
   help: f1
   up: k
@@ -36,22 +50,7 @@ hotkeys:
   timestampShow: ctrl+t
   exit: ctrl+c
 
-# Default flag values (lower priority)
-
-settings:
-  customPath: /opt
-  tailMode: 50000
-  updateInterval: 5
-  disableAutoUpdate: false
-  disableColor: false
-  disableMouse: false
-  disableTimestamp: false
-  onlyStream: false
-  disableFastMode: false
-
-# Available colors:
-# default, green, black, yellow, red, blue, cyan, magenta, white
-
+# Available colors: default, green, black, yellow, red, blue, cyan, magenta, white
 interface:
   foregroundColor: default
   backgroundColor: default
