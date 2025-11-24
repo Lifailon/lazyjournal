@@ -3595,24 +3595,56 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 				// Извлекаем имя стеке из первого параметра (в compose отсутствует id)
 				containerName = parts[0]
 				// Собираем все статусы в одну строку
-				containerStatus = strings.Join(parts[1:], "\n")
+				containerStatus = strings.Join(parts[1:], " ")
 			} else {
 				containerName = parts[1]
 				containerStatus = parts[2]
 			}
+			composeStatus := containerStatus
 			// Проверяем статус для покраски
 			switch {
 			case strings.HasPrefix(strings.ToLower(containerStatus), "running") ||
 				strings.HasPrefix(strings.ToLower(containerStatus), "succe"):
-				containerStatus = "\033[32m" + containerStatus + "\033[0m"
+				containerStatus = "\033[32m"
 			case strings.HasPrefix(strings.ToLower(containerStatus), "pending") ||
 				strings.HasPrefix(strings.ToLower(containerStatus), "pause") ||
-				strings.HasPrefix(strings.ToLower(containerStatus), "restart"):
-				containerStatus = "\033[33m" + containerStatus + "\033[0m"
+				strings.HasPrefix(strings.ToLower(containerStatus), "restart") ||
+				strings.Contains(strings.ToLower(containerStatus), "exited") && strings.Contains(strings.ToLower(containerStatus), "running"):
+				containerStatus = "\033[33m"
 			default:
-				containerStatus = "\033[31m" + containerStatus + "\033[0m"
+				containerStatus = "\033[31m"
 			}
-			containerName = "[" + containerStatus + "] " + containerName
+			if containerizationSystem == "compose" {
+				// Извлекаем количество запущенных контейнров из статуса
+				var runContainersInt int
+				runContainersArr := strings.Split(composeStatus, "running(")
+				if len(runContainersArr) > 1 {
+					runContainersArr = strings.Split(runContainersArr[1], ")")
+					runContainersInt, err = strconv.Atoi(runContainersArr[0])
+					if err != nil {
+						runContainersInt = 0
+					}
+				} else {
+					runContainersArr = []string{"0"}
+					runContainersInt = 0
+				}
+				// Извлекаем количество остановленных контейнров из статуса
+				var exitContainersInt int
+				exitContainersArr := strings.Split(composeStatus, "exited(")
+				if len(exitContainersArr) > 1 {
+					exitContainersArr = strings.Split(exitContainersArr[1], ")")
+					exitContainersInt, err = strconv.Atoi(exitContainersArr[0])
+					if err != nil {
+						exitContainersInt = 0
+					}
+				} else {
+					exitContainersInt = 0
+				}
+				allContainers := strconv.Itoa(runContainersInt + exitContainersInt)
+				containerName = "[" + runContainersArr[0] + " of " + allContainers + "] " + containerStatus + containerName + "\033[0m"
+			} else {
+				containerName = containerStatus + containerName + "\033[0m"
+			}
 			// Фиксируем название namespace для k8s
 			var namespace string
 			if containerizationSystem != "kubectl" || parts[3] == "" {
@@ -3637,7 +3669,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	// Заполняем карту уникальных цветов для контейнеров (используется для покраски префиксов в compose)
 	if containerizationSystem == "docker" {
 		for _, dc := range app.dockerContainers {
-			cn := strings.SplitN(dc.name, "] ", 2)[1]
+			cn := dc.name
 			if cn != "" {
 				newColor := uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(uniquePrefixColorArr)]
 				app.uniquePrefixColorMap[cn] = newColor
