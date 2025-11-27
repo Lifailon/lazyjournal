@@ -38,6 +38,9 @@ lint:
 	gocritic check -v -enableAll ./main.go
 	gosec -severity=high ./...
 
+lint-fix:
+	golangci-lint run --fix ./main.go
+
 lint-all:
 	golangci-lint run -v ./main.go --no-config --enable-all
 

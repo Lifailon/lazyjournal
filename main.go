@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1896,7 +1897,7 @@ func (app *App) loadWinEvents() {
 			"Sort-Object -Descending RecordCount | "+
 			"ConvertTo-Json")
 	eventsJson, _ := cmd.Output()
-	var events []map[string]interface{}
+	var events []map[string]any
 	_ = json.Unmarshal(eventsJson, &events)
 	for _, event := range events {
 		// Извлечение названия журнала и количество записей
@@ -1935,10 +1936,7 @@ func (app *App) updateServicesList() {
 	// Очищаем окно
 	v.Clear()
 	// Вычисляем конечную позицию видимой области (стартовая позиция + максимальное количество видимых строк)
-	visibleEnd := app.startServices + app.maxVisibleServices
-	if visibleEnd > len(app.journals) {
-		visibleEnd = len(app.journals)
-	}
+	visibleEnd := min(app.startServices+app.maxVisibleServices, len(app.journals))
 	// Отображаем только элементы в пределах видимой области
 	for i := app.startServices; i < visibleEnd; i++ {
 		fmt.Fprintln(v, app.journals[i].name)
@@ -2914,10 +2912,7 @@ func (app *App) updateLogsList() {
 		return
 	}
 	v.Clear()
-	visibleEnd := app.startFiles + app.maxVisibleFiles
-	if visibleEnd > len(app.logfiles) {
-		visibleEnd = len(app.logfiles)
-	}
+	visibleEnd := min(app.startFiles+app.maxVisibleFiles, len(app.logfiles))
 	for i := app.startFiles; i < visibleEnd; i++ {
 		fmt.Fprintln(v, app.logfiles[i].name)
 	}
@@ -3134,7 +3129,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				app.currentLogLines = strings.Split(string(output), "\n")
 			// Читаем архивные логи в формате pcap/pcapng (macOS)
 			case strings.HasSuffix(logFullPath, "pcap.gz") || strings.HasSuffix(logFullPath, "pcapng.gz"):
-				var unpacker string = "gzip"
+				var unpacker = "gzip"
 				// Создаем временный файл
 				tmpFile, err := os.CreateTemp("", "temp-*.pcap")
 				if err != nil && !app.testMode {
@@ -3758,10 +3753,7 @@ func (app *App) updateDockerContainerList() {
 		return
 	}
 	v.Clear()
-	visibleEnd := app.startDockerContainers + app.maxVisibleDockerContainers
-	if visibleEnd > len(app.dockerContainers) {
-		visibleEnd = len(app.dockerContainers)
-	}
+	visibleEnd := min(app.startDockerContainers+app.maxVisibleDockerContainers, len(app.dockerContainers))
 	for i := app.startDockerContainers; i < visibleEnd; i++ {
 		fmt.Fprintln(v, app.dockerContainers[i].name)
 	}
@@ -3969,7 +3961,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				// Обрабатываем вывод в формате JSON построчно
 				for _, line := range lines {
 					// JSON-структура для парсинга
-					var jsonData map[string]interface{}
+					var jsonData map[string]any
 					err := json.Unmarshal([]byte(line), &jsonData)
 					if err != nil {
 						continue
@@ -4624,7 +4616,7 @@ func (app *App) applyFilterList() {
 // Функция для фильтрации записей текущего журнала + покраска
 func (app *App) applyFilter(color bool) {
 	filter := app.filterText
-	var skip bool = false
+	var skip = false
 	var size int
 	var viewHeight int
 	var err error
@@ -4737,11 +4729,7 @@ func (app *App) applyFilter(color bool) {
 	// Debug: корректируем текущую позицию скролла, если размер массива стал меньше
 	if size > len(app.filteredLogLines) {
 		newScrollPos := len(app.filteredLogLines) - viewHeight
-		if newScrollPos > 0 {
-			app.logScrollPos = newScrollPos
-		} else {
-			app.logScrollPos = 0
-		}
+		app.logScrollPos = max(newScrollPos, 0)
 	}
 	// Обновляем автоскролл (всегда опускаем вывод в самый низ) для отображения отфильтрованных записей
 	if !app.testMode {
@@ -4764,7 +4752,7 @@ func (app *App) fuzzyFilter(inputLine, filter string) string {
 	filterWords := strings.Fields(filter)
 	// Опускаем регистр текущей строки цикла
 	lineLower := strings.ToLower(inputLine)
-	var match bool = true
+	var match = true
 	// Проверяем, если строка не содержит хотя бы одно слово из фильтра, то пропускаем строку
 	for _, word := range filterWords {
 		if !strings.Contains(lineLower, word) {
@@ -4934,7 +4922,7 @@ func (app *App) mainColor(inputText []string) []string {
 	// Объявляем группу ожидания для синхронизации всех горутин (воркеров)
 	var wg sync.WaitGroup
 	// Создаем maxWorkers горутин, где каждая будет обрабатывать задачи из канала tasks
-	for i := 0; i < maxWorkers; i++ {
+	for range maxWorkers {
 		go func() {
 			// Горутина будет работать, пока в канале tasks есть задачи
 			for index := range tasks {
@@ -4965,7 +4953,7 @@ func (app *App) lineColor(inputLine string) string {
 		return ""
 	}
 	var colorLine string
-	var filterColor bool = false
+	var filterColor = false
 	// Извлекаем название контейнера в логах стека compose
 	var containerName string
 	if app.lastContainerizationSystem == "compose" {
@@ -4981,6 +4969,7 @@ func (app *App) lineColor(inputLine string) string {
 	}
 	// Разбиваем строку по пробелам, сохраняя их
 	words := strings.Split(inputLine, " ")
+	var colorLineSb4984 strings.Builder
 	for i, word := range words {
 		// Исключаем строки с покраской при поиске (Background)
 		if strings.Contains(word, "\x1b[0;44m") {
@@ -4996,11 +4985,12 @@ func (app *App) lineColor(inputLine string) string {
 		}
 		// Добавляем слово обратно с пробелами
 		if i != len(words)-1 {
-			colorLine += word + " "
+			colorLineSb4984.WriteString(word + " ")
 		} else {
-			colorLine += word
+			colorLineSb4984.WriteString(word)
 		}
 	}
+	colorLine += colorLineSb4984.String()
 	if app.lastContainerizationSystem == "compose" && containerName != "" {
 		// Возвращяем название контейнера с уникальной покраской
 		if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
@@ -5023,12 +5013,7 @@ func (app *App) replaceWordLower(word, keyword, color string) string {
 
 // Поиск пользователей
 func (app *App) containsUser(searchWord string) bool {
-	for _, user := range app.userNameArray {
-		if user == searchWord {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(app.userNameArray, searchWord)
 }
 
 // Поиск корневых директорий
@@ -5074,7 +5059,7 @@ func (app *App) wordColor(inputWord string) string {
 	// Опускаем регистр слова
 	inputWordLower := strings.ToLower(inputWord)
 	// Значение по умолчанию
-	var coloredWord string = inputWord
+	var coloredWord = inputWord
 	switch {
 	// URL
 	case strings.Contains(inputWord, "http://"):
@@ -5093,14 +5078,16 @@ func (app *App) wordColor(inputWord string) string {
 		cleanedWord = app.trimPostfixPathRegex.ReplaceAllString(cleanedWord, "")
 		// Начинаем с желтого цвета
 		coloredChars := "\033[33m"
+		var coloredCharsSb5096 strings.Builder
 		for _, char := range cleanedWord {
 			// Красим символы разделителя путей в пурпурный и возвращяем цвет
 			if char == '/' {
-				coloredChars += "\033[35m" + string(char) + "\033[33m"
+				coloredCharsSb5096.WriteString("\033[35m" + string(char) + "\033[33m")
 			} else {
-				coloredChars += string(char)
+				coloredCharsSb5096.WriteRune(char)
 			}
 		}
+		coloredChars += coloredCharsSb5096.String()
 		coloredWord = strings.ReplaceAll(inputWord, cleanedWord, "\033[35m"+coloredChars+"\033[0m")
 	// Желтый (известные имена: hostname и username) [33m]
 	case strings.Contains(inputWord, app.hostName):
@@ -5762,28 +5749,32 @@ func (app *App) wordColor(inputWord string) string {
 	case app.hexByteRegex.MatchString(inputWord):
 		coloredWord = app.hexByteRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
 			colored := ""
+			var coloredSb5765 strings.Builder
 			for _, char := range match {
 				if char == 'x' {
-					colored += "\033[35m" + string(char) + "\033[0m"
+					coloredSb5765.WriteString("\033[35m" + string(char) + "\033[0m")
 				} else {
-					colored += "\033[34m" + string(char) + "\033[0m"
+					coloredSb5765.WriteString("\033[34m" + string(char) + "\033[0m")
 				}
 			}
+			colored += coloredSb5765.String()
 			return colored
 		})
 	// DateTime
 	case app.dateTimeRegex.MatchString(inputWord):
 		coloredWord = app.dateTimeRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
 			colored := ""
+			var coloredSb5778 strings.Builder
 			for _, char := range match {
 				if char == '-' || char == '.' || char == ':' || char == '+' || char == 'T' || char == 'Z' {
 					// Пурпурный для символов
-					colored += "\033[35m" + string(char) + "\033[0m"
+					coloredSb5778.WriteString("\033[35m" + string(char) + "\033[0m")
 				} else {
 					// Синий для цифр
-					colored += "\033[34m" + string(char) + "\033[0m"
+					coloredSb5778.WriteString("\033[34m" + string(char) + "\033[0m")
 				}
 			}
+			colored += coloredSb5778.String()
 			return colored
 		})
 	// Integers
@@ -5875,15 +5866,12 @@ func (app *App) updateLogsView(lowerDown bool) {
 	}
 	// Определяем количество строк для отображения, начиная с позиции logScrollPos
 	startLine := app.logScrollPos
-	endLine := startLine + viewHeight
-	if endLine > len(app.filteredLogLines) {
-		endLine = len(app.filteredLogLines)
-	}
+	endLine := min(startLine+viewHeight, len(app.filteredLogLines))
 	// Учитываем auto wrap (только в конце лога)
 	if app.logScrollPos == len(app.filteredLogLines)-viewHeight-1 {
-		var viewLines int = 0                             // количество строк для вывода
-		var viewCounter int = 0                           // обратный счетчик видимых строк для остановки
-		var viewIndex int = len(app.filteredLogLines) - 1 // начальный индекс для строк с конца
+		var viewLines = 0                             // количество строк для вывода
+		var viewCounter = 0                           // обратный счетчик видимых строк для остановки
+		var viewIndex = len(app.filteredLogLines) - 1 // начальный индекс для строк с конца
 		for {
 			// Фиксируем текущую входную строку и счетчик
 			viewLines += 1
@@ -5916,7 +5904,7 @@ func (app *App) updateLogsView(lowerDown bool) {
 		}
 	}
 	// Вычисляем процент прокрутки и обновляем заголовок
-	var percentage int = 0
+	var percentage = 0
 	if len(app.filteredLogLines) > 0 {
 		// Стартовая позиция + размер текущего вывода логов и округляем в большую сторону (math)
 		percentage = int(math.Ceil(float64((startLine+viewHeight)*100) / float64(len(app.filteredLogLines))))
@@ -6261,7 +6249,7 @@ func (app *App) updateDelimiter(newUpdate bool) {
 			if width > lengthDelimiter+lengthDelimiter+10 {
 				delimiter2 = strings.Repeat("⎯", lengthDelimiter+1)
 			}
-			var delimiterString string = delimiter1 + " " + app.updateTime + " " + delimiter2
+			var delimiterString = delimiter1 + " " + app.updateTime + " " + delimiter2
 			// Вставляем новую строку после указанного индекса + 1 пустая строка (сдвигая остальные строки массива)
 			app.currentLogLines = append(app.currentLogLines[:delimiterIndex+1],
 				append([]string{delimiterString}, app.currentLogLines[delimiterIndex+1:]...)...)
@@ -7268,12 +7256,12 @@ func (app *App) setupKeybindings() error {
 	// Переключение режима вывода потоков журналов (фильтрация по потоку)
 	customStreamMode := getHotkey(config.Hotkeys.SwitchStreamMode, "ctrl+s")
 	if err := app.gui.SetKeybinding("", customStreamMode, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		switch {
-		case app.dockerStreamMode == "all":
+		switch app.dockerStreamMode {
+		case "all":
 			app.dockerStreamMode = "stdout"
-		case app.dockerStreamMode == "stdout":
+		case "stdout":
 			app.dockerStreamMode = "stderr"
-		case app.dockerStreamMode == "stderr":
+		case "stderr":
 			app.dockerStreamMode = "all"
 		}
 		app.updateLogOutput(false)
