@@ -1512,7 +1512,7 @@ func (app *App) loadServices(journalName string) {
 	switch journalName {
 	// Services list from systemd
 	case "services":
-		// Получаем список всех юнитов со статусом работы и фильтрацией по сервисам через systemctl в формате JSON
+		// (1) Получаем список всех юнитов со статусом работы и фильтрацией по сервисам через systemctl в формате JSON
 		var unitsList *exec.Cmd
 		if app.sshMode {
 			unitsList = exec.Command("ssh", append(app.sshOptions,
@@ -1544,17 +1544,6 @@ func (app *App) loadServices(journalName string) {
 		if err != nil && app.testMode {
 			log.Print("Error: access denied in systemd via systemctl")
 		}
-		// Получаем список всех юнит-файлов для извлечения статус автозагрузки
-		// var unitFilesList *exec.Cmd
-		// if app.sshMode {
-		// 	unitFilesList = exec.Command("ssh", append(app.sshOptions,
-		// 		"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
-		// 	)...)
-		// } else {
-		// 	unitFilesList = exec.Command(
-		// 		"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
-		// 	)
-		// }
 		// Чтение данных в формате JSON
 		var units []map[string]any
 		err = json.Unmarshal(output, &units)
@@ -1562,10 +1551,10 @@ func (app *App) loadServices(journalName string) {
 		if err != nil {
 			lines := strings.Split(string(output), "\n")
 			for _, line := range lines {
-				// Разбиваем строку на поля (эквивалентно: awk '{print $1,$3,$4}')
+				// Разбиваем строку на поля (эквивалентно: awk '{print $1,$2,$3,$4}')
 				fields := strings.Fields(line)
 				// Пропускаем строки с недостаточным количеством полей
-				if len(fields) < 3 {
+				if len(fields) < 4 {
 					continue
 				}
 				// Заполняем временный массив из строки
@@ -1579,6 +1568,35 @@ func (app *App) loadServices(journalName string) {
 				units = append(units, unit)
 			}
 		}
+		// (2) Получаем список всех юнит-файлов для извлечения статуса автозагрузки и отключенных сервисов
+		var unitFilesList *exec.Cmd
+		if app.sshMode {
+			unitFilesList = exec.Command("ssh", append(app.sshOptions,
+				"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
+			)...)
+		} else {
+			unitFilesList = exec.Command(
+				"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
+			)
+		}
+		output, _ = unitFilesList.Output()
+		var unitFiles []map[string]any
+		err = json.Unmarshal(output, &unitFiles)
+		if err != nil {
+			lines := strings.Split(string(output), "\n")
+			for _, line := range lines {
+				fields := strings.Fields(line)
+				if len(fields) < 3 {
+					continue
+				}
+				unit := map[string]any{
+					"unit_file": fields[0],
+					"state":     fields[1],
+					"preset":    fields[2], // предустановленное состояние, при установке пакета
+				}
+				unitFiles = append(unitFiles, unit)
+			}
+		}
 		serviceMap := make(map[string]bool)
 		// Анализ статуса
 		for _, unit := range units {
@@ -1589,7 +1607,7 @@ func (app *App) loadServices(journalName string) {
 			serviceSubStatus, _ := unit["sub"].(string)
 			switch serviceSubStatus {
 			case "running":
-				serviceSubStatus = "\033[32m" + "run" + "\033[0m"
+				serviceSubStatus = "\033[32m" + "running" + "\033[0m"
 			case "exited":
 				serviceSubStatus = "\033[32m" + "exit" + "\033[0m"
 			case "dead":
@@ -1597,10 +1615,23 @@ func (app *App) loadServices(journalName string) {
 			default:
 				serviceSubStatus = "\033[33m" + serviceSubStatus + "\033[0m"
 			}
-			// Добавляем в вывода статуса состояние загрузки юнита в память (чтение конфигурации)
+			// Добавляем статус состояние чтение конфигурации, только если была ошибка загрузки юнита в память
 			serviceLoadStatus, _ := unit["load"].(string)
 			if serviceLoadStatus != "loaded" {
 				serviceSubStatus = serviceSubStatus + "/" + "\033[33m" + serviceLoadStatus + "\033[0m"
+			}
+			// (3) Добавляем статус автозагрузки (symlink в директорию /usr/lib/systemd/system)
+			for i, unitFile := range unitFiles {
+				if unitFileName, ok := unitFile["unit_file"].(string); ok && unitFileName == unitName {
+					if unitFile["state"].(string) == "disabled" {
+						serviceSubStatus = serviceSubStatus + "/" + "\033[31m" + unitFile["state"].(string) + "\033[0m"
+					} else {
+						serviceSubStatus = serviceSubStatus + "/" + "\033[32m" + unitFile["state"].(string) + "\033[0m"
+					}
+					// Удаляем найденный сервис из массива юнит файлов (list-unit-files)
+					unitFiles = append(unitFiles[:i], unitFiles[i+1:]...)
+
+				}
 			}
 			name := "[" + serviceSubStatus + "] " + unitName
 			bootID := unitName
@@ -1614,6 +1645,20 @@ func (app *App) loadServices(journalName string) {
 					boot_id: bootID,
 				})
 			}
+		}
+		// (4) Добавляем выключенные сервисы, которые присутствуют в list-unit-files и отсутствуют в list-units
+		for _, unitFile := range unitFiles {
+			unitState := unitFile["state"].(string)
+			var unitName string
+			if unitState == "enabled" {
+				unitName = "[" + "\033[31m" + "dead" + "\033[0m" + "/" + "\033[32m" + unitState + "\033[0m" + "] " + unitFile["unit_file"].(string)
+			} else {
+				unitName = "[" + "\033[31m" + "dead" + "\033[0m" + "/" + "\033[31m" + unitState + "\033[0m" + "] " + unitFile["unit_file"].(string)
+			}
+			app.journals = append(app.journals, Journal{
+				name:    unitName,
+				boot_id: unitFile["unit_file"].(string),
+			})
 		}
 	// Audit rules keys from auditd
 	case "auditd":
