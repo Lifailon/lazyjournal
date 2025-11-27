@@ -15,10 +15,21 @@ update:
 run: prep
 	@go run main.go
 
+# Run remote
+
+SSH_OPTIONS := lifailon@192.168.3.101 -p 2121
+GO_PATH := /usr/local/go/bin/go
+
+copy:
+	@tar czf - . | ssh $(SSH_OPTIONS) "mkdir -p docker/lazyjournal && cd docker/lazyjournal && tar xzf -"
+
+run-remote: copy
+	@ssh $(SSH_OPTIONS) -t "cd docker/lazyjournal && $(GO_PATH) run main.go"
+
 # Linters
 
 lint-install:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	go install github.com/go-critic/go-critic/cmd/gocritic@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
 
@@ -117,20 +128,6 @@ install-last-commit:
 
 uninstall:
 	rm -f $(shell which lazyjournal)
-
-# Remote
-
-SSH_OPTIONS := lifailon@192.168.3.101 -p 2121
-GO_PATH := /usr/local/go/bin/go
-
-copy:
-	@tar czf - . | ssh $(SSH_OPTIONS) "mkdir -p docker/lazyjournal && cd docker/lazyjournal && tar xzf -"
-
-run-remote: copy
-	@ssh $(SSH_OPTIONS) -t "cd docker/lazyjournal && $(GO_PATH) run main.go"
-
-test-remote: copy
-	@ssh $(SSH_OPTIONS) "cd docker/lazyjournal && $(GO_PATH) test -v -cover --run TestMockInterface ./..."
 
 # Docker
 
