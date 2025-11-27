@@ -6,7 +6,7 @@ if [ "$TTYD_MODE" = "true" ]; then
     if [ -n "${USERNAME}" ] && [ -n "${PASSWORD}" ]; then
         TTYD_OPTIONS="$TTYD_OPTIONS -c ${USERNAME}:${PASSWORD}"
     fi
-    ttyd $TTYD_OPTIONS lazyjournal
+    ttyd $TTYD_OPTIONS lazyjournal $OPTIONS
 else
-    lazyjournal
+    lazyjournal $OPTIONS
 fi
