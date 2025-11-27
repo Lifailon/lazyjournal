@@ -4451,9 +4451,11 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 		// Перемещение курсора влево
 		case key == gocui.KeyArrowLeft:
 			v.MoveCursor(-1, 0) // удалить 3-й булевой параметр для форка
+			return
 		// Перемещение курсора вправо
 		case key == gocui.KeyArrowRight:
 			v.MoveCursor(1, 0)
+			return
 		}
 		switch window {
 		case "logs":
@@ -4994,7 +4996,7 @@ func (app *App) lineColor(inputLine string) string {
 			colorLine += word
 		}
 	}
-	if app.selectContainerizationSystem == "compose" && containerName != "" {
+	if app.lastContainerizationSystem == "compose" && containerName != "" {
 		// Возвращяем название контейнера с уникальной покраской
 		if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
 			return app.uniquePrefixColorMap[strings.TrimSpace(containerName)] + containerName + " |\033[0m " + colorLine
