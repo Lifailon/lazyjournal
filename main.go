@@ -1623,14 +1623,16 @@ func (app *App) loadServices(journalName string) {
 			// (3) Добавляем статус автозагрузки (symlink в директорию /usr/lib/systemd/system)
 			for i, unitFile := range unitFiles {
 				if unitFileName, ok := unitFile["unit_file"].(string); ok && unitFileName == unitName {
-					if unitFile["state"].(string) == "disabled" {
-						serviceSubStatus = serviceSubStatus + "/" + "\033[31m" + unitFile["state"].(string) + "\033[0m"
-					} else {
-						serviceSubStatus = serviceSubStatus + "/" + "\033[32m" + unitFile["state"].(string) + "\033[0m"
+					unitFileState, ok := unitFile["state"].(string)
+					if ok {
+						if unitFileState == "disabled" {
+							serviceSubStatus = serviceSubStatus + "/" + "\033[31m" + unitFileState + "\033[0m"
+						} else {
+							serviceSubStatus = serviceSubStatus + "/" + "\033[32m" + unitFileState + "\033[0m"
+						}
+						// Удаляем найденный сервис из массива юнит файлов (list-unit-files)
+						unitFiles = append(unitFiles[:i], unitFiles[i+1:]...)
 					}
-					// Удаляем найденный сервис из массива юнит файлов (list-unit-files)
-					unitFiles = append(unitFiles[:i], unitFiles[i+1:]...)
-
 				}
 			}
 			name := "[" + serviceSubStatus + "] " + unitName
@@ -1648,17 +1650,20 @@ func (app *App) loadServices(journalName string) {
 		}
 		// (4) Добавляем выключенные сервисы, которые присутствуют в list-unit-files и отсутствуют в list-units
 		for _, unitFile := range unitFiles {
-			unitState := unitFile["state"].(string)
-			var unitName string
-			if unitState == "enabled" {
-				unitName = "[" + "\033[31m" + "dead" + "\033[0m" + "/" + "\033[32m" + unitState + "\033[0m" + "] " + unitFile["unit_file"].(string)
-			} else {
-				unitName = "[" + "\033[31m" + "dead" + "\033[0m" + "/" + "\033[31m" + unitState + "\033[0m" + "] " + unitFile["unit_file"].(string)
+			unitFileName, okName := unitFile["unit_file"].(string)
+			unitFileState, okState := unitFile["state"].(string)
+			if okName && okState {
+				var unitName string
+				if unitFileState == "enabled" {
+					unitName = "[" + "\033[31m" + "dead" + "\033[0m" + "/" + "\033[32m" + unitFileState + "\033[0m" + "] " + unitFileName
+				} else {
+					unitName = "[" + "\033[31m" + "dead" + "\033[0m" + "/" + "\033[31m" + unitFileState + "\033[0m" + "] " + unitFileName
+				}
+				app.journals = append(app.journals, Journal{
+					name:    unitName,
+					boot_id: unitFileName,
+				})
 			}
-			app.journals = append(app.journals, Journal{
-				name:    unitName,
-				boot_id: unitFile["unit_file"].(string),
-			})
 		}
 	// Audit rules keys from auditd
 	case "auditd":

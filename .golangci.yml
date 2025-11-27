@@ -1,6 +1,8 @@
-# https://golangci-lint.run/usage/linters
+# https://golangci-lint.run/docs/configuration/file
+# https://golangci-lint.run/docs/linters
+version: "2"
 linters:
-  # disable-all: true
+  # default: none
   # enable:
   #   - errcheck
   #   - gosimple
@@ -13,12 +15,13 @@ linters:
   #   - gocritic
   #   - misspell
   #   - perfsprint
-  enable-all: true
+  default: all
   disable:
     - gosec
     - makezero
     - dupl
     - wsl
+    - wsl_v5
     - goconst
     - gocognit
     - gocyclo
@@ -29,7 +32,6 @@ linters:
     - forbidigo
     - funlen
     - godot
-    - gofumpt
     - lll
     - mnd
     - nestif
@@ -40,12 +42,10 @@ linters:
     - wrapcheck
     - ireturn
     - nonamedreturns
-    - stylecheck
     - exhaustruct
     - unconvert
     - copyloopvar
     - intrange
-    - tenv
     - paralleltest
     - gochecknoglobals
     - prealloc
