@@ -14,3 +14,6 @@ lazyjournal
 *report.md
 *.out
 test.log
+
+# Profiling
+*.pprof
