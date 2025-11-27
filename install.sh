@@ -4,8 +4,8 @@ OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
 ARCH=$(uname -m)
 case $ARCH in
-    x86_64|amd64) ARCH="amd64" ;;
-    aarch64) ARCH="arm64" ;;
+    x86_64|amd64)  ARCH="amd64" ;;
+    aarch64|arm64) ARCH="arm64" ;;
     *)
         echo -e "\033[31mError.\033[0m Processor architecture not supported: $ARCH"
         echo -e "Create a request with a \033[31mproblem\033[0m: https://github.com/Lifailon/lazyjournal/issues"
