@@ -1,12 +1,9 @@
 services:
   lazyjournal:
     image: lifailon/lazyjournal:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: lazyjournal
     restart: unless-stopped
-    # Grant read permissions (:ro) from the host system
+    privileged: true
     volumes:
       # Systemd
       - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
@@ -23,15 +20,21 @@ services:
       # Read docker logs from filesystem
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       # Kubernetes configuration for kubectl (cluster address must be accessible to the container)
-      # - ./kubeconfig.yaml:/root/.kube/config:ro
+      # - $HOME/.kube/config:/root/.kube/config:ro
       # Custom lazyjournal configuration (optional)
       # - ./config.yml:/bin/config.yml:ro
-    privileged: true
-    # Remove if not using Web mode
+    environment:
+      # Enable Web mode
+      - TTYD=false
+      - PORT=5555
+      # Credentials for accessing via Web browser (optional)
+      - USERNAME=
+      - PASSWORD=
+      # Custom configuration (using flags without quotes)
+      - OPTIONS=
+    # Web mode
     ports:
-      - "${PORT}:${PORT}"
-    env_file:
-      - .env
-    # Remove if not using TUI mode
+      - 5555:5555
+    # TUI mode
     tty: true
     stdin_open: true
