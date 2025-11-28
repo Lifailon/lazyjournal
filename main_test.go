@@ -216,6 +216,7 @@ func TestUnixFiles(t *testing.T) {
 				dateTimeRegex:        dateTimeRegex,
 				integersInputRegex:   integersInputRegex,
 				syslogUnitRegex:      syslogUnitRegex,
+				customPath:           "/opt",
 			}
 
 			// Пропускаем тесты в macOS/BSD

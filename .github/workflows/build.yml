@@ -29,11 +29,11 @@ on:
         default: false
         type: boolean
       Test:
-        description: 'Unit testing'
+        description: 'Go unit testing'
         default: false
         type: boolean
       Release:
-        description: 'Check release'
+        description: 'Release check'
         default: false
         type: boolean
       Binary:
@@ -41,7 +41,7 @@ on:
         default: false
         type: boolean
       Docker:
-        description: 'Build image and Push to Docker Hub'
+        description: 'Build and publish on Docker Hub'
         default: false
         type: boolean
 
@@ -81,12 +81,12 @@ jobs:
           echo "- **Version**: $version" >> $GITHUB_STEP_SUMMARY
           echo "- **Update dependencies**: ${{ github.event.inputs.Update }}" >> $GITHUB_STEP_SUMMARY
           echo "- **GoLangCI linters check**: ${{ github.event.inputs.GoLangCI }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **GoCritic linters check**: ${{ github.event.inputs.GoCritic }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **GoSec linters check**: ${{ github.event.inputs.GoSec }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Check release**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go critic linters check**: ${{ github.event.inputs.GoCritic }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go security linters check**: ${{ github.event.inputs.GoSec }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release Check**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build binary**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build docker image**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build and publish on Docker Hub**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Update dependencies
         if: ${{ github.event.inputs.Update == 'true' }}
