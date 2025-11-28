@@ -124,7 +124,7 @@ jobs:
           curl -L "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
-          echo -e "TTYD=true\nPORT=5555\nUSERNAME=\nPASSWORD=" | tee .env > /dev/null
+          sed "s/TTYD=false/TTYD=true/" docker-compose-copy.yml -i
           docker-compose up -d
           docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
 
