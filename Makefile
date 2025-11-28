@@ -15,16 +15,26 @@ update:
 run: prep
 	@go run main.go
 
-# Run remote
+# Remote
 
-SSH_OPTIONS := lifailon@192.168.3.101 -p 2121
-GO_PATH := /usr/local/go/bin/go
+SSH_HOST := lifailon@192.168.3.101
+SSH_PORT := 2121
+GO_PATH  := /usr/local/go/bin/go
+DLV_PATH := /home/lifailon/go/bin/dlv
 
 copy:
-	@tar czf - . | ssh $(SSH_OPTIONS) "mkdir -p docker/lazyjournal && cd docker/lazyjournal && tar xzf -"
+	@ssh $(SSH_HOST) -p $(SSH_PORT) "mkdir -p docker/lazyjournal && rm -rf docker/lazyjournal/*"
+# 	@tar czf - . | ssh $(SSH_HOST) -p $(SSH_PORT) "cd docker/lazyjournal && tar xzf -"
+	@scp -r -P $(SSH_PORT) ./* $(SSH_HOST):/home/lifailon/docker/lazyjournal
 
 run-remote: copy
-	@ssh $(SSH_OPTIONS) -t "cd docker/lazyjournal && $(GO_PATH) run main.go"
+	@ssh -t $(SSH_HOST) -p $(SSH_PORT) "cd docker/lazyjournal && $(GO_PATH) run main.go"
+
+build-debug:
+	@ssh $(SSH_HOST) -p $(SSH_PORT) "cd docker/lazyjournal && $(GO_PATH) build -gcflags='all=-N -l' -o bin/debug"
+
+run-debug: copy build-debug
+	@ssh -t $(SSH_HOST) -p $(SSH_PORT) "killall dlv || true && cd docker/lazyjournal && $(DLV_PATH) exec bin/debug --headless --listen=:12345 --api-version=2 --log"
 
 # Linters
 
