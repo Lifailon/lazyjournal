@@ -16,12 +16,16 @@ on:
         description: 'Update dependencies'
         default: false
         type: boolean
-      Linter:
-        description: 'Check linters'
+      GoLangCI:
+        description: 'GoLangCI linters check'
         default: false
         type: boolean
-      LinterAll:
-        description: 'Check all linters'
+      GoCritic:
+        description: 'GoCritic linters check'
+        default: false
+        type: boolean
+      GoSec:
+        description: 'GoSec linters check'
         default: false
         type: boolean
       Test:
@@ -68,6 +72,7 @@ jobs:
           go build -v ./...
 
       - name: Get build information
+        shell: bash
         run: |
           version=$(go run main.go -v)
           echo "## 🚀 Build Information" >> $GITHUB_STEP_SUMMARY
@@ -75,13 +80,13 @@ jobs:
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: $version" >> $GITHUB_STEP_SUMMARY
           echo "- **Update dependencies**: ${{ github.event.inputs.Update }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Check linters**: ${{ github.event.inputs.Linter }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Check all linters**: ${{ github.event.inputs.LinterAll }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **GoLangCI linters check**: ${{ github.event.inputs.GoLangCI }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **GoCritic linters check**: ${{ github.event.inputs.GoCritic }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **GoSec linters check**: ${{ github.event.inputs.GoSec }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Check release**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build binary**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build docker image**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
-        shell: bash
 
       - name: Update dependencies
         if: ${{ github.event.inputs.Update == 'true' }}
@@ -89,30 +94,26 @@ jobs:
 
       # Linters
 
-      - name: Golangci linters check
-        if: ${{ github.event.inputs.Linter == 'true' }}
+      - name: Main linters check
+        if: ${{ github.event.inputs.GoLangCI == 'true' }}
+        continue-on-error: true
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
           golangci-lint run -v ./main.go
 
       - name: Critic linters check
-        if: ${{ github.event.inputs.Linter == 'true' }}
+        if: ${{ github.event.inputs.GoCritic == 'true' }}
+        continue-on-error: true
         run: |
           go install github.com/go-critic/go-critic/cmd/gocritic@latest
           gocritic check -v -enableAll ./main.go
 
       - name: Security linters check
-        if: ${{ github.event.inputs.Linter == 'true' }}
+        if: ${{ github.event.inputs.GoSec == 'true' }}
+        continue-on-error: true
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           gosec -severity=high ./...
-
-      - name: Security linters check
-        if: ${{ github.event.inputs.LinterAll == 'true' }}
-        run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          golangci-lint run -v ./main.go --no-config --enable-all
-        continue-on-error: true
 
       # Linux
 
@@ -149,75 +150,77 @@ jobs:
 
       - name: Unit testing (all functions and mock interface) in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
+        continue-on-error: true
+        timeout-minutes: 10
         run: |
           sudo env "PATH=$PATH" go test -v -cover | tee test.log
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
-        continue-on-error: true
-        timeout-minutes: 10
 
       # + Docker without root
 
       - name: Unit testing for docker without root in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
-        run: env "PATH=$PATH" go test -v -cover --run "TestDockerContainer"
         continue-on-error: true
         timeout-minutes: 5
+        run: env "PATH=$PATH" go test -v -cover --run "TestDockerContainer"
 
       - name: Check cli mode (color and filter) for container
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
+        continue-on-error: true
         run: |
           docker logs lazyjournal | go run main.go -c
           docker logs lazyjournal | go run main.go -f "start"
           docker logs lazyjournal | go run main.go -r "start|close"
-        continue-on-error: true
 
       - name: Create markdown report in Linux
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
-        run: cat test-report.md >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
+        run: cat test-report.md >> $GITHUB_STEP_SUMMARY
 
       # macOS
 
       - name: Unit testing (files, flags, cli and run main interface) in macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: bash
         run: |
           sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" | tee test.log
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
-        continue-on-error: true
-        timeout-minutes: 5
 
       - name: Create markdown report in macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'macos-15' }}
-        run: cat test-report.md >> $GITHUB_STEP_SUMMARY
         continue-on-error: true
+        shell: bash
+        run: cat test-report.md >> $GITHUB_STEP_SUMMARY
 
       # Windows
 
       - name: Create log file for Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
+        continue-on-error: true
+        shell: pwsh
         run: |
           New-Item -Path "$env:APPDATA\test" -Type Directory
           "line test" | Out-File -FilePath "$env:APPDATA\test\test.log"
-        shell: pwsh
-        continue-on-error: true
 
       - name: Unit testing (events, files, flags, cli, main and mock interface) in Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: bash
         run: |
           go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" | tee test.log
           echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
-        shell: bash
-        continue-on-error: true
-        timeout-minutes: 5
 
       - name: Create markdown report in Windows
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'windows-2022' }}
-        run: Get-Content test-report.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
-        shell: pwsh
         continue-on-error: true
+        shell: pwsh
+        run: Get-Content test-report.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
 
       # Release (Flags and TMUX)
 
@@ -378,8 +381,11 @@ jobs:
         # docker build -t lifailon/lazyjournal:latest .
         # docker push lifailon/lazyjournal:latest
         docker buildx build \
-          --platform \
-          linux/amd64,linux/arm64 \
-          -t lifailon/lazyjournal \
+          --platform linux/amd64,linux/arm64 \
+          -t lifailon/lazyjournal:latest \
           --push .
-      continue-on-error: true
+        version=$VERSION
+        docker buildx build \
+          --platform linux/amd64,linux/arm64 \
+          -t lifailon/lazyjournal:$version \
+          --push .
