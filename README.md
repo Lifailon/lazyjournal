@@ -5,6 +5,7 @@
 <p align="center">
     <a href="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml"><img title="Actions Build"src="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml/badge.svg"></a>
     <a href="https://github.com/Lifailon/lazyjournal/wiki"><img title="Go coverage report"src="https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg"></a>
+<a href="https://app.fossa.com/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal.svg?type=shield"/></a>
     <a href="https://goreportcard.com/report/github.com/Lifailon/lazyjournal"><img src="https://goreportcard.com/badge/github.com/Lifailon/lazyjournal" alt="Go Report"></a>
     <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
     <a href="https://github.com/Lifailon/lazyjournal/blob/rsa/LICENSE"><img title="License"src="https://img.shields.io/github/license/Lifailon/lazyjournal?logo=readme&color=white"></a>
@@ -36,6 +37,9 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
     <li>Demo file of built-in output coloring for the log:</li>
     <img src="./img/coloring.jpg" alt="Demo file of built-in output coloring for the log" />
 </details>
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal?ref=badge_large)
 
 ## Features
 
