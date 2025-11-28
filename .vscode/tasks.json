@@ -1,0 +1,9 @@
+{
+  "tasks": [
+    {
+      "label": "Run remote debug",
+      "type": "shell",
+      "command": "wsl make run-debug"
+    }
+  ]
+}

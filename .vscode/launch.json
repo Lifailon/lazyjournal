@@ -1,13 +1,22 @@
 {
   "configurations": [
     {
-      "name": "Default",
+      "name": "Local debug",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
       "args": []
+    },
+    {
+      "name": "Remote debug",
+      "preLaunchTask": "Run remote debug",
+      "type": "go",
+      "request": "attach",
+      "mode": "remote",
+      "host": "192.168.3.101",
+      "port": 12345
     },
     {
       "name": "SSH mode",
@@ -107,6 +116,15 @@
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
       "args": ["-i", "-o"]
-    }
+    },
+    {
+      "name": "Audit",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-a"]
+    },
   ]
 }
