@@ -262,7 +262,7 @@ func TestLinuxJournal(t *testing.T) {
 		name        string
 		journalName string
 	}{
-		{"Unit list", "services"},
+		{"Unit service list", "services"},
 		{"System journals", "UNIT"},
 		{"User journals", "USER_UNIT"},
 		{"Kernel boot", "kernel"},
@@ -725,7 +725,7 @@ func TestCommandFuzzyFilter(t *testing.T) {
 		pw.Close()
 	}()
 
-	var filter string = "success"
+	var filter = "success"
 	app.commandLineFuzzy(filter)
 }
 
@@ -774,7 +774,7 @@ func TestCommandRegexFilter(t *testing.T) {
 		pw.Close()
 	}()
 
-	var filter string = "http|127"
+	var filter = "http|127"
 	filter = "(?i)" + filter
 	regex, err := regexp.Compile(filter)
 	if err != nil {
@@ -828,7 +828,7 @@ func TestMockInterface(t *testing.T) {
 
 	// Отключение tcell для CI
 	g, err = gocui.NewGui(gocui.OutputSimulator, true)
-	var debug bool = true
+	var debug = true
 
 	// Debug mode (включить отображение интерфейса и отключить логирование)
 	// g, err = gocui.NewGui(gocui.OutputNormal, true)
@@ -1054,7 +1054,7 @@ func TestMockInterface(t *testing.T) {
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
-				t.Log("\033[32mPASS\033[0m: Unit list (services)")
+				t.Log("\033[32mPASS\033[0m: Unit service list (services)")
 			}
 			// Влево
 			if debug {
@@ -1083,7 +1083,7 @@ func TestMockInterface(t *testing.T) {
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
-				t.Log("\033[32mPASS\033[0m: Unit list (services)")
+				t.Log("\033[32mPASS\033[0m: Unit service list (services)")
 			}
 		}
 	}

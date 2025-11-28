@@ -6,10 +6,10 @@ prep:
 	@go mod verify
 	@go build -o /dev/null -v ./...
 
-clean:
+clear-cache:
 	go clean -cache -modcache -testcache
 
-update:
+update-dependencies:
 	go get -u ./...
 
 run: prep
@@ -17,24 +17,22 @@ run: prep
 
 # Remote
 
-SSH_HOST := lifailon@192.168.3.101
-SSH_PORT := 2121
-GO_PATH  := /usr/local/go/bin/go
-DLV_PATH := /home/lifailon/go/bin/dlv
+SSH_OPTIONS := lifailon@192.168.3.101 -p 2121
+ROOT_PATH   := docker/lazyjournal
+GO_PATH     := /usr/local/go/bin/go
+DLV_PATH    := /home/lifailon/go/bin/dlv
 
 copy:
-	@ssh $(SSH_HOST) -p $(SSH_PORT) "mkdir -p docker/lazyjournal && rm -rf docker/lazyjournal/*"
-# 	@tar czf - . | ssh $(SSH_HOST) -p $(SSH_PORT) "cd docker/lazyjournal && tar xzf -"
-	@scp -r -P $(SSH_PORT) ./* $(SSH_HOST):/home/lifailon/docker/lazyjournal
+	@tar czf - . | dd status=progress | ssh $(SSH_OPTIONS) "mkdir -p $(ROOT_PATH) && rm -rf $(ROOT_PATH)/* && cd $(ROOT_PATH) && tar xzf -"
 
 run-remote: copy
-	@ssh -t $(SSH_HOST) -p $(SSH_PORT) "cd docker/lazyjournal && $(GO_PATH) run main.go"
+	@ssh -t $(SSH_OPTIONS) "cd $(ROOT_PATH) && $(GO_PATH) run main.go"
 
 build-debug:
-	@ssh $(SSH_HOST) -p $(SSH_PORT) "cd docker/lazyjournal && $(GO_PATH) build -gcflags='all=-N -l' -o bin/debug"
+	@ssh $(SSH_OPTIONS) "cd $(ROOT_PATH) && $(GO_PATH) build -gcflags='all=-N -l' -o bin/debug"
 
 run-debug: copy build-debug
-	@ssh -t $(SSH_HOST) -p $(SSH_PORT) "killall dlv || true && cd docker/lazyjournal && $(DLV_PATH) exec bin/debug --headless --listen=:12345 --api-version=2 --log"
+	@ssh -t $(SSH_OPTIONS) "killall dlv || true && cd $(ROOT_PATH) && $(DLV_PATH) exec bin/debug --headless --listen=:12345 --api-version=2 --log"
 
 # Linters
 
@@ -130,34 +128,22 @@ run-bin: build
 
 BIN_PATH := $(HOME)/.local/bin
 
-install-pre-built: build
+install: build
 	@mkdir -p $(BIN_PATH)
 	@mv ./lazyjournal $(BIN_PATH)/lazyjournal
-
-LAST_COMMIT_HASH := $(shell git ls-remote https://github.com/lifailon/lazyjournal HEAD | awk '{print $$1}')
-
-install-last-commit:
-	@GOBIN=$(BIN_PATH) go install github.com/Lifailon/lazyjournal@$(LAST_COMMIT_HASH)
 
 uninstall:
 	rm -f $(shell which lazyjournal)
 
 # Docker
 
-docker-update:
-	@docker compose pull
+docker-build:
+	@docker build -t lifailon/lazyjournal:latest .
 
-docker-run: docker-update
+compose-up:
 	@docker compose up -d
 	@docker exec -it lazyjournal lazyjournal
 
-docker-remove:
+compose-down:
 	@docker compose down
 	@docker rmi lifailon/lazyjournal
-
-K3S_ADDR := 192.168.3.101
-
-k3s-config-prep:
-	cp /etc/rancher/k3s/k3s.yaml $HOME/.kube/config
-	sed -i "s/127.0.0.1/$(K3S_ADDR)/g" $HOME/.kube/config
-	sed -i "s/# - $HOME\/.kube/- $HOME\/.kube/" docker-compose.yml
