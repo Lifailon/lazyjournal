@@ -553,25 +553,33 @@ func (app *App) showAudit() {
 	)
 	containerizationSystems := []string{
 		"docker",
-		"docker-compose",
+		"compose",
 		"podman",
 		"kubernetes",
 	}
 	for _, cs := range containerizationSystems {
 		auditText = append(auditText, "  - name: "+cs)
 		switch cs {
-		case "docker-compose":
-			cs = "compose"
-			csCheck := exec.Command(app.dockerCompose, "version")
+		case "compose":
+			composeBin := "docker compose"
+			csCheck := exec.Command("docker", "compose", "version")
 			output, err := csCheck.Output()
+			if err != nil {
+				composeBin = "docker-compose"
+				csCheck = exec.Command(composeBin, "version")
+				output, err = csCheck.Output()
+			}
 			if err == nil {
 				auditText = append(auditText, "    installed: true")
 				csVersion := strings.TrimSpace(string(output))
 				csVersion = strings.Split(csVersion, "version v")[1]
 				auditText = append(auditText, "    version: "+csVersion)
-				cmd := exec.Command(
-					app.dockerCompose, "ls", "-a",
-				)
+				var cmd *exec.Cmd
+				if composeBin == "docker compose" {
+					cmd = exec.Command("docker", "compose", "ls", "-a")
+				} else {
+					cmd = exec.Command(composeBin, "ls", "-a")
+				}
 				_, err := cmd.Output()
 				if err == nil {
 					app.loadDockerContainer(cs)
@@ -652,8 +660,7 @@ func (app *App) showAudit() {
 				csVersion = strings.Split(csVersion, ", ")[0]
 				auditText = append(auditText, "    version: "+csVersion)
 				cmd := exec.Command(
-					cs, "ps", "-a", "--context", "default",
-					"--format", "{{.ID}} {{.Names}} {{.State}}",
+					cs, "ps", "-a",
 				)
 				_, err = cmd.Output()
 				if err == nil {
@@ -665,9 +672,7 @@ func (app *App) showAudit() {
 				// docker/podman context
 				auditText = append(auditText, "    context: ")
 				auditText = append(auditText, "      current: "+app.dockerContext)
-				cmd = exec.Command(
-					cs, "context", "ls", "-q",
-				)
+				cmd = exec.Command(cs, "context", "ls", "-q")
 				contexts, err := cmd.Output()
 				if err == nil {
 					auditText = append(auditText, "      count: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(contexts)), "\n"))))
@@ -3683,7 +3688,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			}
 			rawContainerName := containerName
 			if containerizationSystem == "compose" {
-				// Извлекаем количество запущенных контейнров из статуса
+				// Извлекаем количество запущенных контейнеров из статуса
 				var runContainersInt int
 				runContainersArr := strings.Split(composeStatus, "running(")
 				if len(runContainersArr) > 1 {
@@ -3696,8 +3701,9 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 					runContainersArr = []string{"0"}
 					runContainersInt = 0
 				}
-				// Извлекаем количество остановленных контейнров из статуса
+				// Извлекаем количество остановленных и перезапускающихся контейнеров из статуса
 				var exitContainersInt int
+				var restartContainersInt int
 				exitContainersArr := strings.Split(composeStatus, "exited(")
 				if len(exitContainersArr) > 1 {
 					exitContainersArr = strings.Split(exitContainersArr[1], ")")
@@ -3708,7 +3714,17 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 				} else {
 					exitContainersInt = 0
 				}
-				allContainers := strconv.Itoa(runContainersInt + exitContainersInt)
+				restartContainersArr := strings.Split(composeStatus, "restarting(")
+				if len(restartContainersArr) > 1 {
+					restartContainersArr = strings.Split(restartContainersArr[1], ")")
+					restartContainersInt, err = strconv.Atoi(restartContainersArr[0])
+					if err != nil {
+						restartContainersInt = 0
+					}
+				} else {
+					restartContainersInt = 0
+				}
+				allContainers := strconv.Itoa(runContainersInt + exitContainersInt + restartContainersInt)
 				containerName = "[" + runContainersArr[0] + " of " + allContainers + "] " + containerStatus + containerName + "\033[0m"
 			} else {
 				containerName = containerStatus + containerName + "\033[0m"
