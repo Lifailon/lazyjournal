@@ -30,7 +30,7 @@ services:
       # Credentials for accessing via Web browser (optional)
       - USERNAME=
       - PASSWORD=
-      # Custom configuration (using flags without quotes)
+      # Flags used (optional)
       - OPTIONS=
     # Web mode
     ports:

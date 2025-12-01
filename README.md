@@ -5,12 +5,12 @@
 <p align="center">
     <a href="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml"><img title="Actions Build"src="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml/badge.svg"></a>
     <a href="https://github.com/Lifailon/lazyjournal/wiki"><img title="Go coverage report"src="https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg"></a>
-<a href="https://app.fossa.com/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal.svg?type=shield"/></a>
     <a href="https://goreportcard.com/report/github.com/Lifailon/lazyjournal"><img src="https://goreportcard.com/badge/github.com/Lifailon/lazyjournal" alt="Go Report"></a>
-    <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
-    <a href="https://github.com/Lifailon/lazyjournal/blob/rsa/LICENSE"><img title="License"src="https://img.shields.io/github/license/Lifailon/lazyjournal?logo=readme&color=white"></a>
+    <a href="https://app.fossa.com/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal?ref=badge_shield&issueType=security" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal.svg?type=shield&issueType=security"/></a>
     <a href="https://github.com/avelino/awesome-go?tab=readme-ov-file#logging"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a>
+    <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
 <br>
+    <a href="https://github.com/Lifailon/lazyjournal/releases"><img title="GitHub Download" src="https://img.shields.io/github/downloads/lifailon/lazyjournal/total?logo=github&color=green&label=GitHub+Downloads"></a>
     <a href="https://aur.archlinux.org/packages/lazyjournal"><img title="Arch Linux" src="https://img.shields.io/aur/version/lazyjournal?logo=arch-linux&color=blue&label=AUR"></a>
     <a href="https://anaconda.org/conda-forge/lazyjournal"><img title="Conda Forge" src="https://img.shields.io/conda/vn/conda-forge/lazyjournal?logo=anaconda&color=green&label=Conda"></a>
     <a href="https://formulae.brew.sh/formula/lazyjournal"><img title="Homebrew" src="https://img.shields.io/homebrew/v/lazyjournal?logo=homebrew&color=yellow&label=Homebrew"></a>
@@ -38,15 +38,12 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
     <img src="./img/coloring.jpg" alt="Demo file of built-in output coloring for the log" />
 </details>
 
-
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal?ref=badge_large)
-
 ## Features
 
 - Simple installation, to run download one executable file without dependencies and settings.
 - Centralized search for the required journal by filtering all lists (log sources).
 - Streaming output of new events from the selected journal (like `tail`).
-- List of all units (`services`, `sockets`, etc.) with current running status from `systemd` to access their logs.
+- List of all services (including disabled unit files) with current state from `systemd` to access their logs.
 - View all system and user journals via `journalctl` (tool for reading logs from [journald](https://github.com/systemd/systemd/tree/main/src/journal)).
 - List of all system boots for kernel log output.
 - List of audit rules from `auditd` for filtering by keys and viewing in `interpret` format.
@@ -54,14 +51,14 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
 - Lists all log files in users home directories, as well as descriptor log files used by processes.
 - Reading archive logs truncated during rotation (`gz`, `xz` and `bz2` formats) and Packet Capture (`pcap` format).
 - Apple System Logs support (`asl` format).
-- Search and analyze all logs from remote hosts in one interface using [rsyslog](https://www.rsyslog.com) configuration.
 - Docker and Swarm logs from the file system or stream, including build-in timestamps and filtering by stream.
 - Logs of all containers in Docker Compose stacks, sorted by time for all entries.
 - Podman logs, without the need to run a background process (socket).
 - Kubernetes pods logs (you must first configure a connection to the cluster via `kubectl`).
 - Logs of [k3s](https://github.com/k3s-io/k3s) pods and containers from the file system on any nodes (including workers).
 - Windows Event Logs via `PowerShell` and `wevtutil`, as well as application logs from Windows file system.
-- Access to logs on a remote system.
+- Search and analyze all logs from remote hosts in one interface using [rsyslog](https://www.rsyslog.com) configuration.
+- Access to logs on a remote system via ssh protocol.
 
 ### Filtering
 
@@ -129,10 +126,9 @@ curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh 
 If you are using Ubuntu or any other Debian-based system, you can also download the `deb` package to manage installation and removal:
 
 ```bash
-arch=$( [ "$(uname -m)" = "aarch64" ] && echo "arm64" || echo "amd64" )
-version=$(curl -L -sS -H 'Accept: application/json' https://github.com/Lifailon/lazyjournal/releases/latest | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
-curl -L -sS https://github.com/Lifailon/lazyjournal/releases/download/$version/lazyjournal-$version-$arch.deb -o /tmp/lazyjournal.deb
-sudo apt install /tmp/lazyjournal.deb # or sudo dpkg -i /tmp/lazyjournal.deb
+VERSION=$(curl -sSL -H 'Accept: application/json' https://github.com/Lifailon/lazyjournal/releases/latest | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
+curl -L -sS https://github.com/Lifailon/lazyjournal/releases/download/$VERSION/lazyjournal-$VERSION-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
+sudo apt install /tmp/lazyjournal.deb && rm /tmp/lazyjournal.deb
 ```
 
 ### Arch Linux
@@ -171,17 +167,19 @@ brew install lazyjournal
 Download the [docker-compose](/docker-compose.yml) file and run the container using the image from [Docker Hub](https://hub.docker.com/r/lifailon/lazyjournal):
 
 ```shell
-git clone https://github.com/Lifailon/lazyjournal
-cd lazyjournal
+mkdir lazyjournal && cd lazyjournal
+curl https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/docker-compose.yml -o docker-compose.yml
 docker compose up -d
 docker exec -it lazyjournal lazyjournal
 ```
 
-The image is based on Debian with `systemd`, docker cli, compose and kubectl pre-installed. The necessary **read-only** permissions are already preset in `docker-compose` to support all log sources from the host system (review it to customize for your individual use). To access Kubernetes logs, you need to forward the configuration to the container (if you are using a local cluster, then change the IP address of the cluster server in the configuration to the address of the host on the local network).
+The image is based on Debian with systemd, docker cli, compose and kubectl pre-installed. The necessary **read-only** permissions are already preset in `docker-compose` to support all log sources from the host system (review it to customize for your individual use).
+
+To access Kubernetes logs, you need to forward the configuration to the container (if you are using a local cluster, then change the IP address of the cluster server in the configuration to the address of the host on the local network).
 
 ### Web mode
 
-Supports running in a container with a Web interface, using [ttyd](https://github.com/tsl0922/ttyd) to access logs via a browser. To do this, edit the variables in the `.env` file:
+Supports running in a container with a Web interface, using [ttyd](https://github.com/tsl0922/ttyd) to access logs via a browser. To do this, edit the variables:
 
 ```shell
 # Enable Web mode
@@ -190,6 +188,8 @@ PORT=5555
 # Credentials for accessing via Web browser (optional)
 USERNAME=admin
 PASSWORD=admin
+# Flags used (optional)
+OPTIONS=-t 5000 -u 2
 ```
 
 ### Windows
@@ -349,6 +349,7 @@ make test-all
 Check the source code on the base linters using [golangci-lint](https://github.com/golangci/golangci-lint) (including all [critic](https://github.com/go-critic/go-critic) and severity high in [security](https://github.com/securego/gosec)):
 
 ```shell
+make lint-install
 make lint
 ```
 
@@ -367,7 +368,8 @@ You can also upload the package yourself to any package manager you use and make
 
 - [Lnav](https://github.com/tstack/lnav) - The Logfile Navigator is a log file viewer for the terminal.
 - [TooLong](https://github.com/Textualize/toolong) - A terminal application to view, tail, merge, and search log files.
-- [Dozzle](https://github.com/amir20/dozzle) - A small lightweight application with a web based interface to monitor Docker logs.
+- [Gonzo](https://github.com/control-theory/gonzo) - A log analysis terminal UI with beautiful charts and AI-powered insights.
+- [Dozzle](https://github.com/amir20/dozzle) - A small lightweight application with a Web based interface to monitor Docker logs.
 
 ## License
 
