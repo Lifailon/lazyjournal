@@ -251,13 +251,17 @@ Hotkeys and settings values ​​can be overridden using the [config](/config.y
 --disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)
 --disable-color, -d        Disable output coloring
 --disable-mouse, -m        Disable mouse control support
---disable-timestamp, -p    Disable timestamp for docker logs
---only-stream, -o          Force reading of docker container logs in stream mode (by default from the file system)
+--disable-timestamp, -i    Disable timestamp for Docker logs
+--only-stream, -o          Force reading of Docker container logs in stream mode (by default from the file system)
+--docker-context, -C       Use the specified Docker context (default: default)
+--kubernetes-context, -k   Use the specified Kubernetes context (default: default)
+--namespace, -n            Use the specified Kubernetes namespace (default: all)
+--path, -p                 Custom path to logs in the file system (default: /opt)
+--ssh, -s                  Connect to remote host (use standard ssh options, separated by spaces in quotes)
+                           Example: lazyjournal --ssh "lifailon@192.168.3.101 -p 22"
 --command-color, -c        ANSI coloring in command line mode
 --command-fuzzy, -f        Filtering using fuzzy search in command line mode
 --command-regex, -r        Filtering using regular expression (regexp) in command line mode
---ssh, -s                  Connect to remote host (use standard ssh options, separated by spaces in quotes)
-                           Example: lazyjournal --ssh "lifailon@192.168.3.101 -p 22"
 ```
 
 ### Hotkeys
