@@ -152,10 +152,7 @@ type App struct {
 	sshOptions             []string // опции для ssh подключения
 	fastMode               bool     // загрузка журналов в горутине (beta mode)
 	testMode               bool     // исключаем вызовы к gocui при тестирование функций
-	tailSpinMode           bool     // режим покраски через tailspin
-	tailSpinBinName        string   // название исполняемого файла (tailspin/tspin)
-	colorMode              string   // режим покраски (default/datetime/tailspin/bat/disable)
-	colorEnable            bool     // включение/отключение покраски
+	colorMode              string   // режим покраски (default/tailspin/bat/disable)
 	mouseSupport           bool     // включение/отключение поддержки мыши
 	dockerStreamLogs       bool     // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
 	dockerStreamLogsStatus string   // отображаемый режим чтения журнала Docker в статусе Subtitle (в зависимости от прав доступа и флага)
@@ -292,7 +289,7 @@ func showHelp() {
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
 	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
 	fmt.Println("    --path, -p                 Custom path to logs in the file system (default: /opt)")
-	fmt.Println("    --color-mode, -C        	Disable output coloring")
+	fmt.Println("    --color, -C                Color mode (available values: default, tailspin, bat or disable)")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
@@ -802,8 +799,6 @@ func runGoCui(mock bool) {
 		sshMode:                      false,
 		fastMode:                     true,
 		testMode:                     false,
-		tailSpinMode:                 false,
-		colorEnable:                  true,
 		mouseSupport:                 true,
 		dockerStreamLogs:             false,
 		dockerStreamMode:             "stream",
@@ -892,8 +887,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
 	pathFlag := flag.String("path", "/opt", "Custom path to logs in the file system (default: /opt)")
 	flag.StringVar(pathFlag, "p", "/opt", "Custom path to logs in the file system (default: /opt)")
-	colorModeFlag := flag.String("color-mode", "default", "Color mode (available values: default, date, tailspin, bat or disable)")
-	flag.StringVar(colorModeFlag, "C", "default", "Color mode (available values: default, date, tailspin, bat or disable)")
+	colorModeFlag := flag.String("color", "default", "Color mode (available values: default, tailspin, bat or disable)")
+	flag.StringVar(colorModeFlag, "C", "default", "Color mode (available values: default, tailspin, bat or disable)")
 	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
 	flag.BoolVar(commandColor, "c", false, "ANSI coloring in command line mode")
 	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
@@ -1086,20 +1081,15 @@ func runGoCui(mock bool) {
 	}
 
 	// Проверяем значение флага на валидность
-	if *colorModeFlag == "default" || *colorModeFlag == "datetime" || *colorModeFlag == "tailspin" || *colorModeFlag == "bat" || *colorModeFlag == "disable" {
+	if *colorModeFlag == "default" || *colorModeFlag == "tailspin" || *colorModeFlag == "bat" || *colorModeFlag == "disable" {
 		app.colorMode = *colorModeFlag
 	} else {
-		if *tailFlag != config.Settings.TailMode {
-			fmt.Println("Available values for color mode: default, datetime, tailspin, bat or disable")
+		if *colorModeFlag != config.Settings.ColorMode {
+			fmt.Println("Available values for color mode: default, tailspin, bat or disable")
 			os.Exit(1)
 		} else {
 			app.colorMode = "default"
 		}
-	}
-
-	// Отключаем покраску
-	if *colorModeFlag == "disable" {
-		app.colorEnable = false
 	}
 
 	// Извлекаем цвета из конфигурации для покраски интерфейса
@@ -4643,6 +4633,33 @@ func (app *App) applyFilterList() {
 	}
 }
 
+// Функция проверки исполняемого файла
+func (app *App) checkBin(commands []string) (string, error) {
+	var binName string
+	for _, command := range commands {
+		cmd := exec.Command(command, "--version")
+		_, err := cmd.Output()
+		if err == nil {
+			binName = command
+			break
+		}
+	}
+	// Возвращяем название бинарного файла для использования или выводим интерфейс ошибки на 3 секунды
+	if len(binName) > 0 {
+		return binName, nil
+	} else {
+		if !app.testMode {
+			go func() {
+				errorText := strings.Join(commands, " and ") + " not found in environment"
+				app.showInterfaceInfo(g, true, errorText)
+				time.Sleep(3 * time.Second)
+				app.closeInfo(g)
+			}()
+		}
+		return "", fmt.Errorf("binary file not found in environment")
+	}
+}
+
 // Функция для фильтрации записей текущего журнала + покраска
 func (app *App) applyFilter(color bool) {
 	filter := app.filterText
@@ -4733,13 +4750,31 @@ func (app *App) applyFilter(color bool) {
 		} else {
 			app.filteredLogLines = append(app.filteredLogLines, "")
 		}
-		// Отключаем покраску в режиме colorMode == disable
-		if app.colorEnable {
-			// Режим покраски через tailspin
-			if app.tailSpinMode {
-				// cmd := exec.Command(app.tailSpinBinName)
-				// batcat вместо tailspin
-				cmd := exec.Command("batcat",
+		// Определяем режим покраски или пропускаем
+		switch app.colorMode {
+		case "default":
+			app.filteredLogLines = app.mainColor(app.filteredLogLines)
+		case "tailspin":
+			// Проверяем, что tailspin или tspin установлен в системе
+			binName, err := app.checkBin([]string{"tailspin", "tspin"})
+			if err == nil {
+				cmd := exec.Command(binName)
+				logLines := strings.Join(app.filteredLogLines, "\n")
+				// Создаем пайп для передачи данных
+				cmd.Stdin = bytes.NewBufferString(logLines)
+				var out bytes.Buffer
+				cmd.Stdout = &out
+				// Если ошибка, пропускаем покраску
+				if err := cmd.Run(); err == nil {
+					colorLogLines := strings.Split(out.String(), "\n")
+					app.filteredLogLines = colorLogLines
+				}
+			}
+		case "bat":
+			binName, err := app.checkBin([]string{"bat", "batcat"})
+			if err == nil {
+				cmd := exec.Command(
+					binName,
 					"--language=log",
 					"--paging=never",
 					"--style=plain",
@@ -4757,8 +4792,6 @@ func (app *App) applyFilter(color bool) {
 					colorLogLines := strings.Split(out.String(), "\n")
 					app.filteredLogLines = colorLogLines
 				}
-			} else {
-				app.filteredLogLines = app.mainColor(app.filteredLogLines)
 			}
 		}
 		// Debug end time
@@ -7245,14 +7278,18 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// color disable/enable (Ctrl+W)
-	// Выключение/включение встроенной (custom built-in) покраски или через tailspin
+	// color mode - default (custom built-in), tailspin/tspin, bat/batcat or disable (Ctrl+W)
 	customColor := getHotkey(config.Hotkeys.ColorDisable, "ctrl+w")
 	if err := app.gui.SetKeybinding("", customColor, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if app.colorEnable {
-			app.colorEnable = false
-		} else {
-			app.colorEnable = true
+		switch app.colorMode {
+		case "disable":
+			app.colorMode = "default"
+		case "default":
+			app.colorMode = "tailspin"
+		case "tailspin":
+			app.colorMode = "bat"
+		case "bat":
+			app.colorMode = "disable"
 		}
 		if len(app.currentLogLines) != 0 {
 			app.updateLogsView(true)
@@ -7267,44 +7304,6 @@ func (app *App) setupKeybindings() error {
 			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
 			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
 		)
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	// tailspin (Ctrl+N)
-	// Включение/выключение режима покраски через tailspin
-	customTailspin := getHotkey(config.Hotkeys.TailspinEnable, "ctrl+n")
-	if err := app.gui.SetKeybinding("", customTailspin, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if app.tailSpinMode {
-			app.tailSpinMode = false
-		} else {
-			// Проверяем, что tailspin или tspin установлен в системе
-			tsCommands := []string{"tailspin", "tspin"}
-			for _, ts := range tsCommands {
-				cmd := exec.Command(ts, "--version")
-				_, err := cmd.Output()
-				// Если не установлен, выводим интерфейс ошибки на 3 секунды
-				if err != nil {
-					if !app.testMode {
-						go func() {
-							text := "tailspin/tspin not found in environment"
-							app.showInterfaceInfo(g, true, text)
-							time.Sleep(3 * time.Second)
-							app.closeInfo(g)
-						}()
-					}
-				} else {
-					app.tailSpinMode = true
-					app.tailSpinBinName = ts
-				}
-			}
-		}
-		if len(app.currentLogLines) != 0 {
-			app.updateLogsView(true)
-			app.applyFilter(false)
-			app.updateLogOutput(false)
-		}
 		return nil
 	}); err != nil {
 		return err
@@ -7596,7 +7595,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 54
+	width, height := 108, 53
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -7639,8 +7638,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mU\033[0m - disable streaming of new events (log is loaded once without automatic update).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mR\033[0m - update the current log output manually (relevant in disable streaming mode).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mQ\033[0m - update all log lists.")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - enable or disable ANSI coloring for output.")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mN\033[0m - enable or disable coloring via tailspin.")
+	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - switch color mode between default, tailspin, bat or disable.")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change read mode for docker logs (stream only or json from file system).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp and stream type for docker logs.")
