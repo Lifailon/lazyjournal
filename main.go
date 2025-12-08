@@ -288,7 +288,7 @@ func showHelp() {
 	fmt.Println("    --docker-context, -D       Use the specified Docker context (default: default)")
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
 	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
-	fmt.Println("    --path, -p                 Custom path to logs in the file system (default: /opt)")
+	fmt.Println("    --path, -p                 Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
 	fmt.Println("    --color, -C                Color mode (available values: default, tailspin, bat or disable)")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
@@ -885,8 +885,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(kubernetesContextFlag, "K", "default", "Use the specified Kubernetes context (default: default)")
 	kubernetesNamespaceFlag := flag.String("namespace", "all", "Use the specified Kubernetes namespace (default: all)")
 	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
-	pathFlag := flag.String("path", "/opt", "Custom path to logs in the file system (default: /opt)")
-	flag.StringVar(pathFlag, "p", "/opt", "Custom path to logs in the file system (default: /opt)")
+	pathFlag := flag.String("path", "/opt", "Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
+	flag.StringVar(pathFlag, "p", "/opt", "Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
 	colorModeFlag := flag.String("color", "default", "Color mode (available values: default, tailspin, bat or disable)")
 	flag.StringVar(colorModeFlag, "C", "default", "Color mode (available values: default, tailspin, bat or disable)")
 	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
@@ -4986,7 +4986,7 @@ func (app *App) commandLineColor() {
 	}
 }
 
-// Основная функция покраски
+// (1) Основная функция покраски
 func (app *App) mainColor(inputText []string) []string {
 	// Максимальное количество потоков
 	const maxWorkers = 10
@@ -5022,6 +5022,7 @@ func (app *App) mainColor(inputText []string) []string {
 	return colorLogLines
 }
 
+// (2) Функция для покраски строк
 func (app *App) lineColor(inputLine string) string {
 	// Если строка пустая, пропускаем ее сразу
 	if inputLine == "" {
@@ -5044,7 +5045,7 @@ func (app *App) lineColor(inputLine string) string {
 	}
 	// Разбиваем строку по пробелам, сохраняя их
 	words := strings.Split(inputLine, " ")
-	var colorLineSb4984 strings.Builder
+	var colorLineBuilder strings.Builder
 	for i, word := range words {
 		// Исключаем строки с покраской при поиске (Background)
 		if strings.Contains(word, "\x1b[0;44m") {
@@ -5060,12 +5061,16 @@ func (app *App) lineColor(inputLine string) string {
 		}
 		// Добавляем слово обратно с пробелами
 		if i != len(words)-1 {
-			colorLineSb4984.WriteString(word + " ")
+			colorLineBuilder.WriteString(word + " ")
 		} else {
-			colorLineSb4984.WriteString(word)
+			colorLineBuilder.WriteString(word)
 		}
 	}
-	colorLine += colorLineSb4984.String()
+	colorLine += colorLineBuilder.String()
+	// Добавляем покраску кавычек и скобок для JSON строк:
+	colorLine = strings.ReplaceAll(colorLine, "\"", "\033[33m\"\033[0m")
+	colorLine = strings.ReplaceAll(colorLine, "{", "\033[35m{\033[0m")
+	colorLine = strings.ReplaceAll(colorLine, "}", "\033[35m}\033[0m")
 	if app.lastContainerizationSystem == "compose" && containerName != "" {
 		// Возвращяем название контейнера с уникальной покраской
 		if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
@@ -5129,7 +5134,7 @@ func (app *App) urlPathColor(cleanedWord string) string {
 	return sb.String()
 }
 
-// Функция для покраски словосочетаний
+// (3) Функция для покраски словосочетаний
 func (app *App) wordColor(inputWord string) string {
 	// Опускаем регистр слова
 	inputWordLower := strings.ToLower(inputWord)
