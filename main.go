@@ -5076,8 +5076,8 @@ func (app *App) lineColor(inputLine string) string {
 	colorLine = strings.ReplaceAll(colorLine, "Not found", "\033[31mNot found\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "access denied", "\033[31maccess denied\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "Access denied", "\033[31mAccess denied\033[0m")
-	colorLine = strings.ReplaceAll(colorLine, "bad Request", "\033[31mbad Request\033[0m")
-	colorLine = strings.ReplaceAll(colorLine, "Bad Request", "\033[31mBad Request\033[0m")
+	colorLine = strings.ReplaceAll(colorLine, "bad request", "\033[31mbad request\033[0m")
+	colorLine = strings.ReplaceAll(colorLine, "Bad request", "\033[31mBad request\033[0m")
 	if app.lastContainerizationSystem == "compose" && containerName != "" {
 		// Возвращяем название контейнера с уникальной покраской
 		if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
@@ -5194,6 +5194,50 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = app.replaceWordLower(inputWord, "rsyslogd", "\033[36m")
 	case strings.HasPrefix(inputWordLower, "sudo:"):
 		coloredWord = app.replaceWordLower(inputWord, "sudo", "\033[36m")
+	// HTTP methods
+	case strings.Contains(inputWord, "GET"):
+		coloredWord = strings.ReplaceAll(inputWord, "GET", "\033[42m\033[30m GET \033[0m")
+	case strings.Contains(inputWord, "POST"):
+		coloredWord = strings.ReplaceAll(inputWord, "POST", "\033[43m\033[30m POST \033[0m")
+	case strings.Contains(inputWord, "PUT"):
+		coloredWord = strings.ReplaceAll(inputWord, "PUT", "\033[45m\033[30m PUT \033[0m")
+	case strings.Contains(inputWord, "PATCH"):
+		coloredWord = strings.ReplaceAll(inputWord, "PATCH", "\033[45m\033[30m PATCH \033[0m")
+	case strings.Contains(inputWord, "TRACE"):
+		coloredWord = strings.ReplaceAll(inputWord, "TRACE", "\033[45m\033[30m TRACE \033[0m")
+	case strings.Contains(inputWord, "DELETE"):
+		coloredWord = strings.ReplaceAll(inputWord, "DELETE", "\033[41m\033[30m DELETE \033[0m")
+	case strings.Contains(inputWord, "CONNECT"):
+		coloredWord = strings.ReplaceAll(inputWord, "CONNECT", "\033[42m\033[30m CONNECT \033[0m")
+	// Статусы
+	case strings.Contains(inputWord, "OK"):
+		coloredWord = strings.ReplaceAll(inputWord, "OK", "\033[42m\033[30m OK \033[0m")
+	case strings.Contains(inputWord, "DONE"):
+		coloredWord = strings.ReplaceAll(inputWord, "DONE", "\033[42m\033[30m DONE \033[0m")
+	case strings.Contains(inputWord, "DEBUG"):
+		coloredWord = strings.ReplaceAll(inputWord, "DEBUG", "\033[46m\033[30m DEBUG \033[0m")
+	case strings.Contains(inputWord, "INFO"):
+		coloredWord = strings.ReplaceAll(inputWord, "INFO", "\033[46m\033[30m INFO \033[0m")
+	case strings.Contains(inputWord, "NOTICE"):
+		coloredWord = strings.ReplaceAll(inputWord, "NOTICE", "\033[46m\033[30m NOTICE \033[0m")
+	case strings.Contains(inputWord, "WARNING"):
+		coloredWord = strings.ReplaceAll(inputWord, "WARNING", "\033[43m\033[30m WARNING \033[0m")
+	case strings.Contains(inputWord, "WARN"):
+		coloredWord = strings.ReplaceAll(inputWord, "WARN", "\033[43m\033[30m WARN \033[0m")
+	case strings.Contains(inputWord, "ERROR"):
+		coloredWord = strings.ReplaceAll(inputWord, "ERROR", "\033[41m\033[30m ERROR \033[0m")
+	case strings.Contains(inputWord, "ERR"):
+		coloredWord = strings.ReplaceAll(inputWord, "ERR", "\033[41m\033[30m ERR \033[0m")
+	case strings.Contains(inputWord, "CRIT"):
+		coloredWord = strings.ReplaceAll(inputWord, "CRIT", "\033[41m\033[30m CRIT \033[0m")
+	case strings.Contains(inputWord, "ALERT"):
+		coloredWord = strings.ReplaceAll(inputWord, "ALERT", "\033[41m\033[30m ALERT \033[0m")
+	case strings.Contains(inputWord, "EMERG"):
+		coloredWord = strings.ReplaceAll(inputWord, "EMERG", "\033[41m\033[30m EMERG \033[0m")
+	case strings.Contains(inputWord, "FAIL"):
+		coloredWord = strings.ReplaceAll(inputWord, "FAIL", "\033[41m\033[30m FAIL \033[0m")
+	case strings.Contains(inputWord, "FATAL"):
+		coloredWord = strings.ReplaceAll(inputWord, "FATAL", "\033[41m\033[30m FATAL \033[0m")
 	// Желтый [33m]
 	// Известные имена: hostname и username
 	case strings.Contains(inputWord, app.hostName):
@@ -5212,37 +5256,6 @@ func (app *App) wordColor(inputWord string) string {
 				break
 			}
 		}
-	case strings.Contains(inputWordLower, "noti"):
-		words := []string{"notifications", "notification", "notify", "noting", "notice"}
-		for _, word := range words {
-			if strings.Contains(inputWordLower, word) {
-				coloredWord = app.replaceWordLower(inputWord, word, "\033[33m")
-				break
-			}
-		}
-	case strings.Contains(inputWordLower, "alert"):
-		words := []string{"alerting", "alert"}
-		for _, word := range words {
-			if strings.Contains(inputWordLower, word) {
-				coloredWord = app.replaceWordLower(inputWord, word, "\033[33m")
-				break
-			}
-		}
-	// HTTP methods
-	case inputWord == "GET":
-		coloredWord = strings.ReplaceAll(inputWord, "GET", "\033[42m\033[30m GET \033[0m")
-	case inputWord == "POST":
-		coloredWord = strings.ReplaceAll(inputWord, "POST", "\033[43m\033[30m POST \033[0m")
-	case inputWord == "PUT":
-		coloredWord = strings.ReplaceAll(inputWord, "PUT", "\033[45m\033[30m PUT \033[0m")
-	case inputWord == "PATCH":
-		coloredWord = strings.ReplaceAll(inputWord, "PATCH", "\033[45m\033[30m PATCH \033[0m")
-	case inputWord == "TRACE":
-		coloredWord = strings.ReplaceAll(inputWord, "TRACE", "\033[46m\033[30m TRACE \033[0m")
-	case inputWord == "DELETE":
-		coloredWord = strings.ReplaceAll(inputWord, "DELETE", "\033[41m\033[30m DELETE \033[0m")
-	case inputWord == "CONNECT":
-		coloredWord = strings.ReplaceAll(inputWord, "CONNECT", "\033[42m\033[30m CONNECT \033[0m")
 	// Исключения для зеленого
 	case strings.Contains(inputWordLower, "unblock"):
 		words := []string{"unblocking", "unblocked", "unblock"}
@@ -5564,14 +5577,6 @@ func (app *App) wordColor(inputWord string) string {
 				break
 			}
 		}
-	case strings.Contains(inputWordLower, "req"):
-		words := []string{"requested", "requests", "request"}
-		for _, word := range words {
-			if strings.Contains(inputWordLower, word) {
-				coloredWord = app.replaceWordLower(inputWord, word, "\033[36m")
-				break
-			}
-		}
 	case strings.Contains(inputWordLower, "open"):
 		words := []string{"opening", "opened", "open"}
 		for _, word := range words {
@@ -5702,6 +5707,22 @@ func (app *App) wordColor(inputWord string) string {
 		}
 	case strings.Contains(inputWordLower, "norm"):
 		words := []string{"normal", "norm"}
+		for _, word := range words {
+			if strings.Contains(inputWordLower, word) {
+				coloredWord = app.replaceWordLower(inputWord, word, "\033[36m")
+				break
+			}
+		}
+	case strings.Contains(inputWordLower, "alert"):
+		words := []string{"alerting", "alert"}
+		for _, word := range words {
+			if strings.Contains(inputWordLower, word) {
+				coloredWord = app.replaceWordLower(inputWord, word, "\033[36m")
+				break
+			}
+		}
+	case strings.Contains(inputWordLower, "noti"):
+		words := []string{"notifications", "notification", "notify", "noting", "notice"}
 		for _, word := range words {
 			if strings.Contains(inputWordLower, word) {
 				coloredWord = app.replaceWordLower(inputWord, word, "\033[36m")
