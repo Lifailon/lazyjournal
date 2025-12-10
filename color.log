@@ -6,19 +6,39 @@ http://127.0.0.1:8443/api
 https://github.com/Lifailon/lazyjournal
 https://torapi.vercel.app/api/search/title/kinozal?query=The+Rookie&category=0&page=0&year=0&format=0
 
-⎯⎯⎯ Unix file paths ⎯⎯⎯
+⎯⎯⎯ JSON (double quotes and braces) ⎯⎯⎯
 
+{"level":"info","version":"v8.14.6","time":"2025-12-05T03:23:46Z","message":"Dozzle version v8.14.6"}
+{"level":"error","version":"v8.14.6","host":"rpi-106","error":"unexpected EOF","time":"2025-12-06T08:32:37Z","message":"unexpected error while listening to docker events"}
+
+⎯⎯⎯ UNIX file paths ⎯⎯⎯
+
+~/.local/bin/lazyjournal
+./lazyjournal
 /var/log/syslog
-/home/lifailon/lazyjournal
-/dev/null
 
-⎯⎯⎯ Unix processes ⎯⎯⎯
+⎯⎯⎯ UNIX processes ⎯⎯⎯
 
 systemd[1]: system started
 dockerd[123]: container stopped
 kernel: system running
 rsyslogd: rsyslog running
 sudo: service was restarted
+
+⎯⎯⎯ HTTP methods ⎯⎯⎯
+
+GET
+POST
+PUT
+PATCH
+TRACE
+DELETE
+CONNECT
+
+⎯⎯⎯ Statuses ⎯⎯⎯
+
+OK, DONE, DEBUG, INFO, NOTICE, WARN, WARNING
+ERR, ERROR, CRIT, ALERT, EMERG, FAIL, FATAL
 
 ⎯⎯⎯ Numbers ⎯⎯⎯
 
@@ -30,37 +50,36 @@ Time: 11:11, 11:11:11
 MAC address: 11:11:11:11:11:11, 11-11-11-11-11-11
 IP address: 127.0.0.1, 127.0.0.1:8443, 255.255.255.255/24
 Versions: 1.0, 1.0.7
-Percentage: 10%, 50%, 100%
+Percentage: 1%, 50%, 100%
 Integers: 1, 10, 100, (1), [10], {100}, "1000"
 
-⎯⎯⎯ Green (success) ⎯⎯⎯
+⎯⎯⎯ Warnings and known names (yellow) ⎯⎯⎯
 
-unblocking, unblocked, unblock
+lifailon, root, daemon
+warnings, warning, warn
+TCP, UDP, ICMP, IP
+
+⎯⎯⎯ Success (green) ⎯⎯⎯
+
 successfully, successful, succeeded, succeed, success
 completed, completing, completion, completes, complete
 accepted, accepting, acception, acceptance, acceptable, acceptably, accepte, accepts, accept
-connected, connecting, connection, connects, CONNECT
+connected, connecting, connection, connects, connect
 finished, finishing, finish
 started, starting, startup, start
-created, creating, creates, create
 enabled, enables, enable
 allowed, allowing, allow
-posting, posted, postrouting, POST
-prerouting, routing, routes, route
-forwarding, forwards, forward
-passed, passing, password
-running, runs, run
-added, add
-opening, opened, open
-ok, available, accessible, done, true
-True
+passed, passing
+available, accessible, running, installed
+true, ok, done
+unblocking, unblocked, unblock
 
-⎯⎯⎯ Red (errors) ⎯⎯⎯
+⎯⎯⎯ Errors (red) ⎯⎯⎯
 
-stderr, errors, ERROR, erro, erro
+stderr, errors, error, erro, err
 disconnected, disconnection, disconnects, disconnect, disabled, disabling, disable
 crashed, crashing, crash
-deletion, deleted, deleting, deletes, DELETE
+deletion, deleted, deleting, deletes, delete
 removing, removed, removes, remove
 stopping, stopped, stoped, stops, stop
 invalidation, invalidating, invalidated, invalidate, invalid
@@ -70,60 +89,49 @@ inactive, deactivated, deactivating, deactivate
 exited, exiting, exits, exit
 critical, critic, crit
 failed, failure, failing, fails, fail
-rejecting, rejection, rejected, reject
 fatality, fataling, fatals, fatal
 closed, closing, close
 dropped, droping, drops, drop
-killer, killing, kills, kill
-cancellation, cancelation, canceled, cancelling, canceling, cancel
-refusing, refused, refuses, refuse
-restricting, restricted, restriction, restrict
 panicked, panics, panic
-unknown, unavailable, unsuccessful, found, denied, conflict
-false, none, null, not
+emergency, emerg
+rejecting, rejection, rejected, reject
+refusing, refused, refuses, refuse
+unavailable, unknown, unsuccessful, unauthorized, forbidden, conflict, severe
+false, none, null
+Not found
+Access denied
+Bad request
 
-⎯⎯⎯ Blue (statuses) ⎯⎯⎯
+⎯⎯⎯ Actions (blue) ⎯⎯⎯
 
-resolved, resolving, resolve, restarting, restarted, restart
-requested, requests, request
-registered, registeration
-reboot, booting, boot
-stdout, timeout, output
-input, PUT
-getting, GET
-settings, setting, setup, SET
-headers, header, heades, head
+session
 logged, login
+registered, registration
+authenticating, authentication, authenticate, authorization
+listening, listener, listen
+opening, opened, open
+created, creating, creates, create
+resolved, resolving, resolve, restarting, restarted, restart
+reboot, booting, boot
 overloading, overloaded, overload, uploading, uploaded, uploads, upload
 downloading, downloaded, downloads, download, loading, loaded, load
-reading, readed, read
-patching, patched, PATCH
-updates, updated, updating, update, upgrades, upgraded, upgrading, upgrade, backup, up
-listening, listener, listen
+updates, updated, updating, update
+upgrades, upgraded, upgrading, upgrade, setup
 launched, launching, launch
 changed, changing, change
 cleaning, cleaner, clearing, cleared, clear
 skipping, skipped, skip
 missing, missed
 mountpoint, mounted, mounting, mount
-authenticating, authentication, authorization
-configurations, configuration, configuring, configured, configure, config, conf
-OPTIONS, option
+configurations, configuration, configuring, configured, configure, config
+reading, readed, read
 writing, writed, write
 saved, saving, save
 paused, pausing, pause
-filtration, filtr, filtering, filtered, filter
 normal, norm
-notifications, notification, notify, noting, notice
 alerting, alert
-informations, information, informing, informed, INFO
-installation, installed, installing, install, initialization, initial, using
-shutdown, down
-status, used, use
-DEBUG, verbose, TRACE, protocol, level
-
-⎯⎯⎯ Yellow (hostname/username/warnings/tcpdump) ⎯⎯⎯
-
-lifailon, root, daemon
-warnings, warning, WARN
-TCP, UDP, ICMP, IP
+notifications, notification, notify, noting, notice
+informations, information, informing, informed, info
+installation, installing, install, initialization, initial
+debug, verbose, level, status
+shutdown, timeout, protocol
