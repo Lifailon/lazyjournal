@@ -5442,10 +5442,12 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = app.replaceWordLower(inputWord, "severe", "\033[31m")
 	case strings.Contains(inputWordLower, "false"):
 		coloredWord = app.replaceWordLower(inputWord, "false", "\033[31m")
-	case strings.Contains(inputWordLower, "none"):
-		coloredWord = app.replaceWordLower(inputWord, "none", "\033[31m")
 	case strings.Contains(inputWordLower, "null"):
 		coloredWord = app.replaceWordLower(inputWord, "null", "\033[31m")
+	case strings.Contains(inputWordLower, "nil"):
+		coloredWord = app.replaceWordLower(inputWord, "nil", "\033[31m")
+	case strings.Contains(inputWordLower, "none"):
+		coloredWord = app.replaceWordLower(inputWord, "none", "\033[31m")
 	// Исключения для синего
 	case strings.Contains(inputWordLower, "res"):
 		words := []string{"resolved", "resolving", "resolve", "restarting", "restarted", "restart"}
@@ -5569,6 +5571,14 @@ func (app *App) wordColor(inputWord string) string {
 				break
 			}
 		}
+	case strings.Contains(inputWordLower, "return"):
+		words := []string{"returned", "returne", "return"}
+		for _, word := range words {
+			if strings.Contains(inputWordLower, word) {
+				coloredWord = app.replaceWordLower(inputWord, word, "\033[36m")
+				break
+			}
+		}
 	case strings.Contains(inputWordLower, "listen"):
 		words := []string{"listening", "listener", "listen"}
 		for _, word := range words {
@@ -5611,6 +5621,14 @@ func (app *App) wordColor(inputWord string) string {
 		}
 	case strings.Contains(inputWordLower, "up"):
 		words := []string{"updates", "updated", "updating", "update", "upgrades", "upgraded", "upgrading", "upgrade", "setup"}
+		for _, word := range words {
+			if strings.Contains(inputWordLower, word) {
+				coloredWord = app.replaceWordLower(inputWord, word, "\033[36m")
+				break
+			}
+		}
+	case strings.Contains(inputWordLower, "syn"):
+		words := []string{"synchronization", "synchronize", "sync", "syn"}
 		for _, word := range words {
 			if strings.Contains(inputWordLower, word) {
 				coloredWord = app.replaceWordLower(inputWord, word, "\033[36m")
@@ -5824,21 +5842,11 @@ func (app *App) wordColor(inputWord string) string {
 			colored.WriteString("\033[0m")
 		}
 		return colored.String()
-	// tcpdump
-	case strings.Contains(inputWordLower, "tcp"):
-		coloredWord = app.replaceWordLower(inputWord, "tcp", "\033[33m")
-	case strings.Contains(inputWordLower, "udp"):
-		coloredWord = app.replaceWordLower(inputWord, "udp", "\033[33m")
-	case strings.Contains(inputWordLower, "icmp"):
-		coloredWord = app.replaceWordLower(inputWord, "icmp", "\033[33m")
-	case strings.Contains(inputWordLower, "ip"):
-		words := []string{"ip4", "ipv4", "ip6", "ipv6", "ip"}
-		for _, word := range words {
-			if strings.Contains(inputWordLower, word) {
-				coloredWord = app.replaceWordLower(inputWord, word, "\033[33m")
-				break
-			}
-		}
+	// Исключения
+	case strings.Contains(inputWordLower, "yes"):
+		coloredWord = app.replaceWordLower(inputWord, "yes", "\033[32m")
+	case strings.Contains(inputWordLower, "no"):
+		coloredWord = app.replaceWordLower(inputWord, "no", "\033[31m")
 	// Update delimiter
 	case strings.Contains(inputWord, "⎯"):
 		coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[35m"+inputWord+"\033[0m")

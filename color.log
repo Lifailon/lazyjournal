@@ -57,10 +57,10 @@ Integers: 1, 10, 100, (1), [10], {100}, "1000"
 
 lifailon, root, daemon
 warnings, warning, warn
-TCP, UDP, ICMP, IP
 
 ⎯⎯⎯ Success (green) ⎯⎯⎯
 
+unblocking, unblocked, unblock
 successfully, successful, succeeded, succeed, success
 completed, completing, completion, completes, complete
 accepted, accepting, acception, acceptance, acceptable, acceptably, accepte, accepts, accept
@@ -71,8 +71,7 @@ enabled, enables, enable
 allowed, allowing, allow
 passed, passing
 available, accessible, running, installed
-true, ok, done
-unblocking, unblocked, unblock
+true, ok, done, yes
 
 ⎯⎯⎯ Errors (red) ⎯⎯⎯
 
@@ -97,7 +96,7 @@ emergency, emerg
 rejecting, rejection, rejected, reject
 refusing, refused, refuses, refuse
 unavailable, unknown, unsuccessful, unauthorized, forbidden, conflict, severe
-false, none, null
+false, null, nil, none, no
 Not found
 Access denied
 Bad request
@@ -108,6 +107,7 @@ session
 logged, login
 registered, registration
 authenticating, authentication, authenticate, authorization
+return, returne, returned
 listening, listener, listen
 opening, opened, open
 created, creating, creates, create
@@ -117,6 +117,7 @@ overloading, overloaded, overload, uploading, uploaded, uploads, upload
 downloading, downloaded, downloads, download, loading, loaded, load
 updates, updated, updating, update
 upgrades, upgraded, upgrading, upgrade, setup
+synchronization, synchronize, sync, syn
 launched, launching, launch
 changed, changing, change
 cleaning, cleaner, clearing, cleared, clear
