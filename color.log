@@ -70,7 +70,7 @@ started, starting, startup, start
 enabled, enables, enable
 allowed, allowing, allow
 passed, passing
-available, accessible, running, installed
+ready, available, running, installed
 true, ok, done, yes
 
 ⎯⎯⎯ Errors (red) ⎯⎯⎯
@@ -95,10 +95,9 @@ panicked, panics, panic
 emergency, emerg
 rejecting, rejection, rejected, reject
 refusing, refused, refuses, refuse
-unavailable, unknown, unsuccessful, unauthorized, forbidden, conflict, severe
+denied, unavailable, unknown, unsuccessful, unauthorized, forbidden, conflict, severe
 false, null, nil, none, no
 Not found
-Access denied
 Bad request
 
 ⎯⎯⎯ Actions (blue) ⎯⎯⎯
