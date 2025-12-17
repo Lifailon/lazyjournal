@@ -2,8 +2,8 @@
 settings:
   tailMode: 50000
   updateInterval: 5
+  minSymbolFilter: 3
   disableAutoUpdate: false
-  disableColor: false
   disableMouse: false
   disableTimestamp: false
   onlyStream: false
@@ -11,6 +11,7 @@ settings:
   kubernetesContext: default
   kubernetesNamespace: all
   customPath: /opt
+  colorMode: default
   disableFastMode: false
 
 # Available hotkeys:

@@ -43,6 +43,7 @@ type Config struct {
 type Settings struct {
 	TailMode            string `yaml:"tailMode"`
 	UpdateInterval      string `yaml:"updateInterval"`
+	MinSymbolFilter     string `yaml:"minSymbolFilter"`
 	DisableAutoUpdate   string `yaml:"disableAutoUpdate"`
 	DisableMouse        string `yaml:"disableMouse"`
 	DisableTimestamp    string `yaml:"disableTimestamp"`
@@ -170,7 +171,8 @@ type App struct {
 	userNameArray []string // список всех пользователей
 	rootDirArray  []string // список всех корневых каталогов
 
-	customPath string // // пользовательский путь вместо /opt по умолчанию (#31)
+	customPath      string // пользовательский путь вместо /opt по умолчанию (#31)
+	minSymbolFilter int    // минимальное кол-во символов дли фильтрации вывода
 
 	selectUnits                  string // название журнала (UNIT/USER_UNIT/kernel/audit)
 	selectPath                   string // путь к логам (/var/log/)
@@ -281,6 +283,7 @@ func showHelp() {
 	fmt.Println("    --audit, -a                Show audit information")
 	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 50000)")
 	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)")
+	fmt.Println("    --filter-symbols, -F       Minimum number of symbols for filtering output (range: 1-10, default: 3)")
 	fmt.Println("    --disable-autoupdate, -d   Disable streaming of new events (log is loaded once without automatic update)")
 	fmt.Println("    --disable-mouse, -m        Disable mouse control support")
 	fmt.Println("    --disable-timestamp, -i    Disable timestamp for Docker logs")
@@ -318,6 +321,7 @@ func showConfig() {
 	fmt.Println("settings:")
 	fmt.Printf("  tailMode:                 %s\n", config.Settings.TailMode)
 	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
+	fmt.Printf("  minSymbolFilter:          %s\n", config.Settings.MinSymbolFilter)
 	fmt.Printf("  disableAutoUpdate:        %s\n", config.Settings.DisableAutoUpdate)
 	fmt.Printf("  disableMouse:             %s\n", config.Settings.DisableMouse)
 	fmt.Printf("  disableTimestamp:         %s\n", config.Settings.DisableTimestamp)
@@ -871,6 +875,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
+	minSymbolFilterFlag := flag.Int("filter-symbols", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
+	flag.IntVar(minSymbolFilterFlag, "F", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
 	disableScroll := flag.Bool("disable-autoupdate", false, "Disable streaming of new events (log is loaded once without automatic update)")
 	flag.BoolVar(disableScroll, "d", false, "Disable streaming of new events (log is loaded once without automatic update)")
 	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse control support")
@@ -937,6 +943,13 @@ func runGoCui(mock bool) {
 		updateIntervalInt, err := strconv.Atoi(config.Settings.UpdateInterval)
 		if err == nil {
 			updateFlag = &updateIntervalInt
+		}
+	}
+
+	if config.Settings.MinSymbolFilter != "" && *minSymbolFilterFlag == 3 {
+		minSymbolFilterInt, err := strconv.Atoi(config.Settings.MinSymbolFilter)
+		if err == nil {
+			minSymbolFilterFlag = &minSymbolFilterInt
 		}
 	}
 
@@ -1022,6 +1035,18 @@ func runGoCui(mock bool) {
 			os.Exit(1)
 		} else {
 			app.logUpdateSeconds = 5
+		}
+	}
+
+	if *minSymbolFilterFlag >= 1 && *minSymbolFilterFlag <= 10 {
+		app.minSymbolFilter = *minSymbolFilterFlag
+	} else {
+		minSymbolFilterInt, err := strconv.Atoi(config.Settings.MinSymbolFilter)
+		if err == nil && *minSymbolFilterFlag != minSymbolFilterInt {
+			fmt.Println("Valid range: 1-10 (default: 3 symbols)")
+			os.Exit(1)
+		} else {
+			app.minSymbolFilter = 3
 		}
 	}
 
@@ -4694,8 +4719,10 @@ func (app *App) applyFilter(color bool) {
 		// Debug start color time
 		// Фиксируем время начала покраски журнала
 		startTime := time.Now()
-		// Debug: если текст фильтра пустой или равен любому символу для regex, возвращяем вывод без фильтрации
-		if filter == "" || (filter == "." && app.selectFilterMode == "regex") {
+		// Если текст фильтра пустой или равен любому символу для regex, возвращяем вывод без фильтрации
+		if filter == "" || (filter == "." && app.selectFilterMode == "regex") ||
+			// Если длинна текста меньше флага минального кол-ва символов фильтра, пропускаем фильтрацию
+			len(filter) < app.minSymbolFilter {
 			app.filteredLogLines = app.currentLogLines
 		} else {
 			app.filteredLogLines = make([]string, 0)
@@ -5072,12 +5099,10 @@ func (app *App) lineColor(inputLine string) string {
 	colorLine = strings.ReplaceAll(colorLine, "{", "\033[35m{\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "}", "\033[35m}\033[0m")
 	// Словосочетания-исключения для ошибок
-	colorLine = strings.ReplaceAll(colorLine, "not found", "\033[31mnot found\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "Not found", "\033[31mNot found\033[0m")
-	colorLine = strings.ReplaceAll(colorLine, "access denied", "\033[31maccess denied\033[0m")
-	colorLine = strings.ReplaceAll(colorLine, "Access denied", "\033[31mAccess denied\033[0m")
-	colorLine = strings.ReplaceAll(colorLine, "bad request", "\033[31mbad request\033[0m")
+	colorLine = strings.ReplaceAll(colorLine, "not found", "\033[31mnot found\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "Bad request", "\033[31mBad request\033[0m")
+	colorLine = strings.ReplaceAll(colorLine, "bad request", "\033[31mbad request\033[0m")
 	if app.lastContainerizationSystem == "compose" && containerName != "" {
 		// Возвращяем название контейнера с уникальной покраской
 		if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
@@ -5426,6 +5451,8 @@ func (app *App) wordColor(inputWord string) string {
 				break
 			}
 		}
+	case strings.Contains(inputWordLower, "denied"):
+		coloredWord = app.replaceWordLower(inputWord, "denied", "\033[31m")
 	case strings.Contains(inputWordLower, "unavailable"):
 		coloredWord = app.replaceWordLower(inputWord, "unavailable", "\033[31m")
 	case strings.Contains(inputWordLower, "unknown"):
@@ -5530,10 +5557,10 @@ func (app *App) wordColor(inputWord string) string {
 				break
 			}
 		}
+	case strings.Contains(inputWordLower, "ready"):
+		coloredWord = app.replaceWordLower(inputWord, "ready", "\033[32m")
 	case strings.Contains(inputWordLower, "available"):
 		coloredWord = app.replaceWordLower(inputWord, "available", "\033[32m")
-	case strings.Contains(inputWordLower, "accessible"):
-		coloredWord = app.replaceWordLower(inputWord, "accessible", "\033[32m")
 	case strings.Contains(inputWordLower, "running"):
 		coloredWord = app.replaceWordLower(inputWord, "running", "\033[32m")
 	case strings.Contains(inputWordLower, "installed"):
@@ -5544,7 +5571,7 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = app.replaceWordLower(inputWord, "ok", "\033[32m")
 	case strings.Contains(inputWordLower, "done"):
 		coloredWord = app.replaceWordLower(inputWord, "done", "\033[32m")
-	// Действия (статусы) [36m]
+	// Действия [36m]
 	case strings.Contains(inputWordLower, "session"):
 		coloredWord = app.replaceWordLower(inputWord, "session", "\033[36m")
 	case strings.Contains(inputWordLower, "log"):
