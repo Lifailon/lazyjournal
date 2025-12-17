@@ -239,12 +239,14 @@ jobs:
           lazyjournal -g
           echo -e "\n\033[32mAudit:\033[0m\n"
           lazyjournal -a
-          echo -e "\n\033[32mColor:\033[0m\n"
+          echo -e "\n\033[32mColoring:\033[0m\n"
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -c
-          echo -e "\n\033[32mFuzzy:\033[0m\n"
-          curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -f "success"
-          echo -e "\n\033[32mRegex:\033[0m\n"
-          curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -r "http|127"
+          echo -e "\n\033[32mFiltering in fuzzy mode:\033[0m\n"
+          curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -f "error"
+          echo -e "\n\033[32mFiltering in regex mode:\033[0m\n"
+          curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -r "error|fatal|fail|crash"
+          echo -e "\n\033[32mFiltering in regex mode with output coloring:\033[0m\n"
+          curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -r "error|fatal|fail|crash" -c
 
       - name: Check interface in TMUX
         if: ${{ github.event.inputs.Release == 'true' }}

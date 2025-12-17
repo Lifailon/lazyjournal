@@ -133,5 +133,6 @@ alerting, alert
 notifications, notification, notify, noting, notice
 informations, information, informing, informed, info
 installation, installing, install, initialization, initial
+stdout, timeout
 debug, verbose, level, status
-shutdown, timeout, protocol
+shutdown, protocol
