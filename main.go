@@ -1226,16 +1226,9 @@ func runGoCui(mock bool) {
 		}
 	}
 
-	// Обработка покраски вывода в режиме командной строки
-	if *commandColor {
-		app.commandLineColor()
-		os.Exit(0)
-	}
-
 	// Обработка фильтрации с неточным поиском в режиме командной строки
 	if *commandFuzzy != "" {
-		app.commandLineFuzzy(*commandFuzzy)
-		os.Exit(0)
+		app.commandLineFuzzy(*commandFuzzy, *commandColor)
 	}
 
 	// Обработка фильтрации с поддержкой регулярных выражений в режиме командной строки
@@ -1249,7 +1242,15 @@ func runGoCui(mock bool) {
 			fmt.Println("Regular expression syntax error")
 			os.Exit(1)
 		}
-		app.commandLineRegex(regex)
+		app.commandLineRegex(regex, *commandColor)
+	}
+
+	// Обработка покраски вывода в режиме командной строки
+	if *commandColor {
+		app.commandLineColor(false)
+	}
+
+	if *commandColor || *commandFuzzy != "" || *commandRegex != "" {
 		os.Exit(0)
 	}
 
@@ -4910,7 +4911,7 @@ func (app *App) regexFilter(inputLine string, regex *regexp.Regexp) string {
 }
 
 // -f/--command-fuzzy
-func (app *App) commandLineFuzzy(filter string) {
+func (app *App) commandLineFuzzy(filter string, color bool) {
 	stat, err := os.Stdin.Stat()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -4939,13 +4940,18 @@ func (app *App) commandLineFuzzy(filter string) {
 			app.filteredLogLines = append(app.filteredLogLines, outputLine)
 		}
 	}
-	for _, line := range app.filteredLogLines {
-		fmt.Println(line)
+	// Если передан второй параметр (аргумент color), используем функцию покраски
+	if color {
+		app.commandLineColor(true)
+	} else {
+		for _, line := range app.filteredLogLines {
+			fmt.Println(line)
+		}
 	}
 }
 
-// --command-regex/-r
-func (app *App) commandLineRegex(regex *regexp.Regexp) {
+// -r/--command-regex
+func (app *App) commandLineRegex(regex *regexp.Regexp, color bool) {
 	stat, err := os.Stdin.Stat()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -4974,40 +4980,51 @@ func (app *App) commandLineRegex(regex *regexp.Regexp) {
 			app.filteredLogLines = append(app.filteredLogLines, outputLine)
 		}
 	}
-	for _, line := range app.filteredLogLines {
-		fmt.Println(line)
+	if color {
+		app.commandLineColor(true)
+	} else {
+		for _, line := range app.filteredLogLines {
+			fmt.Println(line)
+		}
 	}
 }
 
 // ---------------------------------------- Coloring ----------------------------------------
 
 // Функция для покраски вывода в режиме командной строки
-func (app *App) commandLineColor() {
-	// Проверяем, подключен ли stdin через pipe или перенаправлен
-	stat, err := os.Stdin.Stat()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
+func (app *App) commandLineColor(fromFilter bool) {
+	var inputColoring []string
+	// Извлекаем текст после фильтрации
+	if fromFilter {
+		inputColoring = app.mainColor(app.filteredLogLines)
+	} else {
+		// Проверяем, подключен ли stdin через pipe или перенаправлен
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
+		// Проверяем, пуст ли stdin (например, если нет pipe или перенаправления)
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			fmt.Fprintln(os.Stderr, "No data. Use pipe to transfer data.")
+			return
+		}
+		scanner := bufio.NewScanner(os.Stdin)
+		var inputLines []string
+		for scanner.Scan() {
+			inputLines = append(inputLines, scanner.Text())
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
+		if len(inputLines) == 0 {
+			fmt.Fprintln(os.Stderr)
+			return
+		}
+		inputColoring = app.mainColor(inputLines)
 	}
-	// Проверяем, пуст ли stdin (например, если нет pipe или перенаправления)
-	if (stat.Mode() & os.ModeCharDevice) != 0 {
-		fmt.Fprintln(os.Stderr, "No data. Use pipe to transfer data.")
-		return
-	}
-	scanner := bufio.NewScanner(os.Stdin)
-	var inputLines []string
-	for scanner.Scan() {
-		inputLines = append(inputLines, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	if len(inputLines) == 0 {
-		fmt.Fprintln(os.Stderr)
-		return
-	}
-	inputColoring := app.mainColor(inputLines)
+	// Выводим построчно
 	for _, line := range inputColoring {
 		fmt.Println(line)
 	}
@@ -5782,6 +5799,14 @@ func (app *App) wordColor(inputWord string) string {
 				break
 			}
 		}
+	case strings.Contains(inputWordLower, "out"):
+		words := []string{"timeout", "stdout"}
+		for _, word := range words {
+			if strings.Contains(inputWordLower, word) {
+				coloredWord = app.replaceWordLower(inputWord, word, "\033[36m")
+				break
+			}
+		}
 	case strings.Contains(inputWordLower, "debug"):
 		coloredWord = app.replaceWordLower(inputWord, "debug", "\033[36m")
 	case strings.Contains(inputWordLower, "verbose"):
@@ -5792,8 +5817,6 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = app.replaceWordLower(inputWord, "status", "\033[36m")
 	case strings.Contains(inputWordLower, "shutdown"):
 		coloredWord = app.replaceWordLower(inputWord, "shutdown", "\033[36m")
-	case strings.Contains(inputWordLower, "timeout"):
-		coloredWord = app.replaceWordLower(inputWord, "timeout", "\033[36m")
 	case strings.HasPrefix(inputWordLower, "protocol"):
 		coloredWord = app.replaceWordLower(inputWord, "protocol", "\033[36m")
 	// Голубой (цифры) + пурпурный [34m]
