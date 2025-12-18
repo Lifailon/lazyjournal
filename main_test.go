@@ -444,7 +444,7 @@ func TestColor(t *testing.T) {
 	}
 }
 
-func TestTailSpinColor(t *testing.T) {
+func TestExtColor(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skip unix test")
 	}

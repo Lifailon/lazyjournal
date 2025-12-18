@@ -1417,6 +1417,9 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Highlight = true                      // выделение активного элемента в списке
 		v.Wrap = false                          // отключаем перенос строк
 		v.Autoscroll = true                     // включаем автопрокрутку
+		// Цвет границ и заголовка окна из конфигурации по умолчанию при загрузке интерфейса
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
 		// Цветовая схема из форка awesome-gocui/gocui
 		v.SelFgColor = app.selectedForegroundColor // Цвет текста при выборе в списке
 		v.SelBgColor = app.selectedBackgroundColor // Цвет фона при выборе в списке
@@ -1432,6 +1435,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
 		v.SelFgColor = app.selectedForegroundColor
 		v.SelBgColor = app.selectedBackgroundColor
 		app.updateLogsList()
@@ -1446,6 +1451,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
 		v.SelFgColor = app.selectedForegroundColor
 		v.SelBgColor = app.selectedBackgroundColor
 	}
@@ -1459,6 +1466,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Editable = true                         // включить окно редактируемым для ввода текста
 		v.Editor = app.createFilterEditor("logs") // редактор для обработки ввода
 		v.Wrap = true
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
 	}
 
 	// Интерфейс скролла в окне вывода лога (maxX-3 ширина окна - отступ слева)
@@ -1468,6 +1477,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		}
 		v.Wrap = true
 		v.Autoscroll = false
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
 		// Постоянный цвет стрелочек в окне скролла
 		v.FgColor = app.selectedBackgroundColor
 		// Заполняем окно стрелками
@@ -1487,6 +1498,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Title = "Logs"
 		v.Wrap = true
 		v.Autoscroll = false
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
 		v.Subtitle = fmt.Sprintf(
 			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
 			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
