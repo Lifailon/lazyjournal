@@ -3550,24 +3550,41 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			)
 		}
 	}
-	_, err := cmd.Output()
+	version, err := cmd.Output()
 	if err != nil && !app.testMode {
 		vError, _ := app.gui.View("docker")
 		vError.Clear()
 		app.dockerFrameColor = app.errorColor
 		vError.FrameColor = app.dockerFrameColor
 		vError.Highlight = false
-		if containerizationSystem == "compose" {
+		switch containerizationSystem {
+		case "kubectl":
+			if strings.Contains(string(version), "Version:") {
+				// Проверяем вывод kubectl, может быть ошибка подключения к кластеру
+				cmd = exec.Command("kubectl", "get", "nodes")
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					fmt.Fprintln(vError, "\033[31mError connection to the Kubernetes cluster\033[0m")
+					app.currentLogLines = []string{string(output)}
+					app.applyFilter(false)
+				}
+			} else {
+				fmt.Fprintln(vError, "\033[31m"+containerizationSystem+" not installed (environment not found)\033[0m")
+			}
+		case "compose":
 			fmt.Fprintln(vError, "\033[31m"+app.dockerCompose+" not installed (environment not found)\033[0m")
-		} else {
+		default:
 			fmt.Fprintln(vError, "\033[31m"+containerizationSystem+" not installed (environment not found)\033[0m")
 		}
 		return
 	}
 	if err != nil && app.testMode {
-		if containerizationSystem == "compose" {
+		switch containerizationSystem {
+		case "kubectl":
+			log.Print("Error:", containerizationSystem+" not installed or no connection to the Kubernetes cluster.")
+		case "compose":
 			log.Print("Error:", app.dockerCompose+" not installed (environment not found)")
-		} else {
+		default:
 			log.Print("Error:", containerizationSystem+" not installed (environment not found)")
 		}
 	}
