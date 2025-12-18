@@ -11,9 +11,9 @@
     <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
 <br>
     <a href="https://github.com/Lifailon/lazyjournal/releases"><img title="GitHub Download" src="https://img.shields.io/github/downloads/lifailon/lazyjournal/total?logo=github&color=green&label=GitHub+Downloads"></a>
-    <a href="https://aur.archlinux.org/packages/lazyjournal"><img title="Arch Linux" src="https://img.shields.io/aur/version/lazyjournal?logo=arch-linux&color=blue&label=AUR"></a>
-    <a href="https://anaconda.org/conda-forge/lazyjournal"><img title="Conda Forge" src="https://img.shields.io/conda/vn/conda-forge/lazyjournal?logo=anaconda&color=green&label=Conda"></a>
     <a href="https://formulae.brew.sh/formula/lazyjournal"><img title="Homebrew" src="https://img.shields.io/homebrew/v/lazyjournal?logo=homebrew&color=yellow&label=Homebrew"></a>
+    <a href="https://anaconda.org/conda-forge/lazyjournal"><img title="Conda Forge" src="https://img.shields.io/conda/vn/conda-forge/lazyjournal?logo=anaconda&color=green&label=Conda"></a>
+    <a href="https://aur.archlinux.org/packages/lazyjournal"><img title="Arch Linux" src="https://img.shields.io/aur/version/lazyjournal?logo=arch-linux&color=blue&label=AUR"></a>
     <a href="https://hub.docker.com/r/lifailon/lazyjournal"><img title="Docker Hub" src="https://img.shields.io/docker/image-size/lifailon/lazyjournal/latest?logo=docker&color=blue&label=Docker+Hub"></a>
 </p>
 
@@ -22,7 +22,7 @@ Terminal user interface for reading logs from `journald`, `auditd`, file system,
 This tool is inspired by and with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit). It is also included in [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging), [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
 
 > [!NOTE]
-> You can try it out on the [Killercoda](https://killercoda.com/lazyjournal/scenario/playground) Playground.
+> You can try it out on the [Killercoda](https://killercoda.com/lazyjournal/scenario/playground) playground.
 
 ![Regex filtering](/img/regex.png)
 
@@ -84,13 +84,21 @@ Examples of short format:
 
 ### Coloring
 
-Supported coloring groups for output:
+Several log output coloring modes are supported:
 
-- **Custom** - URLs, file paths and processes in UNIX.
-- **Yellow** - known names (host name and system users) and warnings.
+- **default** - built-in output coloring, requires no dependencies and is several times faster than other tools (including command-line mode).
+- **tailspin** - uses [tailspin](https://github.com/bensadeh/tailspin) (requires the tool to be installed on the system).
+- **bat** - uses [bat](https://github.com/sharkdp/bat) in ansi mode and log language (requires the tool to be installed on the system).
+
+It is also possible to disable coloring, this is useful if your terminal already has output coloring built in, such as [WindTerm](https://github.com/kingToolbox/WindTerm).
+
+The built-in coloring by default supports several color groups:
+
+- **Custom** - URLs, HTTP methods (GET, POST, etc), double quotes and braces for json, file paths and processes in UNIX.
+- **Yellow** - warnings and known names (host name and system users).
 - **Green** - keywords indicating success.
 - **Red** - keywords indicating error.
-- **Blue** - statuses (info, debug, etc), actions (install, update, etc) and HTTP methods (GET, POST, etc).
+- **Blue** - statuses and actions (restart, update, etc).
 - **Light blue** - numbers (date, time, timestamp, bytes, versions, percentage, integers, IP and MAC addresses).
 
 A full list of all keywords can be found in the [color.log](/color.log) file (used for testing only). If you have suggestions for improving coloring (e.g. adding new words), you can open an [issue](https://github.com/Lifailon/lazyjournal/issues) for a new feature. 
@@ -103,12 +111,12 @@ Binaries are available for download on the [releases](https://github.com/Lifailo
 
 List of supported systems and architectures in which functionality is checked: 
 
-| OS        | amd64 | arm64 | Systems                                                                                                                               |
-| -         | -     | -     | -                                                                                                                                     |
-| Linux     | ✔     |  ✔   | Raspberry Pi (`aarch64`), Oracle Linux (RHEL-based in WSL environment), Arch Linux, Rocky Linux, Ubuntu Server 20.04.6 and above.    |
-| Darwin    | ✔     |  ✔   | macOS Sequoia 15.2 `x64` on MacBook and the `arm64` in GitHub Actions.                                                               |
-| BSD       | ✔     |       | OpenBSD 7.6 and FreeBSD 14.2.                                                                                                        |
-| Windows   | ✔     |       | Windows 10 and 11.                                                                                                                   |
+| OS        | amd64 | arm64 | Systems                                                                                                      |
+| -         | -     | -     | -                                                                                                            |
+| Linux     | ✔     |  ✔   | Raspberry Pi (`aarch64`), Oracle Linux (RHEL-based), Arch Linux, Rocky Linux, Ubuntu Server 20.04 and above. |
+| Darwin    | ✔     |  ✔   | macOS Sequoia 15.2 `x64` on MacBook and the `arm64` in GitHub Actions.                                       |
+| BSD       | ✔     |       | OpenBSD 7.6 and FreeBSD 14.2.                                                                                |
+| Windows   | ✔     |       | Windows 10 and 11.                                                                                           |
 
 ### Unix-based
 
@@ -131,12 +139,12 @@ curl -L -sS https://github.com/Lifailon/lazyjournal/releases/download/$VERSION/l
 sudo apt install /tmp/lazyjournal.deb && rm /tmp/lazyjournal.deb
 ```
 
-### Arch Linux
+### Homebrew (macOS / Linux)
 
-If you an Arch Linux user you can also install from the [AUR](https://aur.archlinux.org/packages/lazyjournal):
+Use the following command to install `lazyjournal` using [Homebrew](https://formulae.brew.sh/formula/lazyjournal):
 
 ```shell
-paru -S lazyjournal
+brew install lazyjournal
 ```
 
 ### Conda / mamba / pixi (Linux / macOS / Windows)
@@ -154,12 +162,12 @@ You can install `lazyjournal` user-globally using [pixi](https://prefix.dev):
 pixi global install lazyjournal
 ```
 
-### Homebrew (macOS / Linux)
+### Arch Linux
 
-Use the following command to install `lazyjournal` using [Homebrew](https://formulae.brew.sh/formula/lazyjournal):
+If you an Arch Linux user you can also install from the [AUR](https://aur.archlinux.org/packages/lazyjournal):
 
 ```shell
-brew install lazyjournal
+paru -S lazyjournal
 ```
 
 ### Docker (Debian-based)
@@ -173,15 +181,15 @@ docker compose up -d
 docker exec -it lazyjournal lazyjournal
 ```
 
-The image is based on Debian with systemd, docker cli, compose and kubectl pre-installed. The necessary **read-only** permissions are already preset in `docker-compose` to support all log sources from the host system (review it to customize for your individual use).
+The image is based on Debian with `systemd`, docker cli, `docker-compose` and `kubectl` pre-installed. The necessary permissions are already pre-set in the file to support all log sources from the host system.
 
-To access Kubernetes logs, you need to forward the configuration to the container (if you are using a local cluster, then change the IP address of the cluster server in the configuration to the address of the host on the local network).
+To access Kubernetes logs, you need to forward the configuration to the container. If you're using a local cluster (e.g., k3s), change the cluster server address in the configuration to the host address on the local network.
 
 ### Web mode
 
 Supports running in a container with a Web interface, using [ttyd](https://github.com/tsl0922/ttyd) to access logs via a browser. To do this, edit the variables:
 
-```shell
+```env
 # Enable Web mode
 TTYD=true
 PORT=5555
@@ -248,20 +256,21 @@ Hotkeys and settings values ​​can be overridden using the [config](/config.y
 --audit, -a                Show audit information
 --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 50000)
 --update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)
---disable-autoupdate, -e   Disable streaming of new events (log is loaded once without automatic update)
---disable-color, -d        Disable output coloring
+--filter-symbols, -F       Minimum number of symbols for filtering output (range: 1-10, default: 3)
+--disable-autoupdate, -d   Disable streaming of new events (log is loaded once without automatic update)
 --disable-mouse, -m        Disable mouse control support
 --disable-timestamp, -i    Disable timestamp for Docker logs
 --only-stream, -o          Force reading of Docker container logs in stream mode (by default from the file system)
---docker-context, -C       Use the specified Docker context (default: default)
---kubernetes-context, -k   Use the specified Kubernetes context (default: default)
+--docker-context, -D       Use the specified Docker context (default: default)
+--kubernetes-context, -K   Use the specified Kubernetes context (default: default)
 --namespace, -n            Use the specified Kubernetes namespace (default: all)
---path, -p                 Custom path to logs in the file system (default: /opt)
---ssh, -s                  Connect to remote host (use standard ssh options, separated by spaces in quotes)
-                           Example: lazyjournal --ssh "lifailon@192.168.3.101 -p 22"
+--path, -p                 Custom path to logs in the file system (e.g. "$(pwd)", default: /opt)
+--color, -C                Color mode (available values: default, tailspin, bat or disable)
 --command-color, -c        ANSI coloring in command line mode
 --command-fuzzy, -f        Filtering using fuzzy search in command line mode
 --command-regex, -r        Filtering using regular expression (regexp) in command line mode
+--ssh, -s                  Connect to remote host (use standard ssh options, separated by spaces in quotes)
+                           Example: lazyjournal --ssh "lifailon@192.168.3.101 -p 22"
 ```
 
 ### Hotkeys
@@ -284,8 +293,7 @@ List of all used keys and hotkeys (default values):
 - `Ctrl`+`U` - disable streaming of new events (log is loaded once without automatic update).
 - `Ctrl`+`R` - update the current log output manually (relevant in disable streaming mode).
 - `Ctrl`+`Q` - update all log lists.
-- `Ctrl`+`W` - enable or disable ANSI coloring for output.
-- `Ctrl`+`N` - enable or disable coloring via [tailspin](https://github.com/bensadeh/tailspin).
+- `Ctrl`+`W` - switch color mode between `default`, `tailspin`, `bat` or `disable`.
 - `Ctrl`+`D` - change read mode for docker logs (stream only or json from file system).
 - `Ctrl`+`S` - change stream display mode for docker logs (all, stdout or stderr only).
 - `Ctrl`+`T` - enable or disable built-in timestamp and stream type for docker logs.
@@ -297,12 +305,14 @@ Mouse control is supported (but can also be disabled with the `-m` flag or confi
 
 Supports access to logs on a remote system (no client installation required).
 
-Standard `ssh` options are used to configure the connection (passed as a single argument in quotes), for example:
+Standard `ssh` arguments are used to configure the connection (passed as a single argument in quotes), for example:
 
 ```bash
-lazyjournal --ssh "lifailon@192.168.3.101 -p 22"
+lazyjournal --ssh "lifailon@192.168.3.101"
+# Passing arguments
+lazyjournal --ssh "lifailon@192.168.3.101 -p 21 -o Compression=yes"
 # If sudo is supported without entering a password
-lazyjournal --ssh "lifailon@192.168.3.101 -p 22 sudo"
+lazyjournal --ssh "lifailon@192.168.3.101 sudo"
 ```
 
 > [!IMPORTANT]
@@ -310,7 +320,7 @@ lazyjournal --ssh "lifailon@192.168.3.101 -p 22 sudo"
 
 ### Command-line mode
 
-Coloring and filtering of output is supported in command-line mode:
+Coloring and/or filtering of output is supported in command line mode:
 
 ```shell
 alias lj=lazyjournal # >> $HOME/.bashrc
@@ -318,9 +328,14 @@ alias lj=lazyjournal # >> $HOME/.bashrc
 # Coloring the output from stdin
 cat /var/log/syslog | lj -c
 
-# Filtering output in fuzzy search and regular expression mode
+# Filtering in fuzzy search
 cat /var/log/syslog | lj -f "error"
-cat /var/log/syslog | lj -r "failed|fatal|crash"
+
+# Filtering using regular expressions
+cat /var/log/syslog | lj -r "error|fatal|fail|crash"
+
+# Filtering with subsequent coloring of the output
+cat /var/log/syslog | lj -r "error|fatal|fail|crash" -c
 ```
 
 ## Build
@@ -371,7 +386,8 @@ You can also upload the package yourself to any package manager you use and make
 ## Alternatives
 
 - [Lnav](https://github.com/tstack/lnav) - The Logfile Navigator is a log file viewer for the terminal.
-- [TooLong](https://github.com/Textualize/toolong) - A terminal application to view, tail, merge, and search log files.
+- [Toolong](https://github.com/Textualize/toolong) - A terminal application to view, tail, merge, and search log files.
+- [Nerdlog](https://github.com/dimonomid/nerdlog) - A remote, multi-host TUI syslog viewer with timeline histogram and no central server.
 - [Gonzo](https://github.com/control-theory/gonzo) - A log analysis terminal UI with beautiful charts and AI-powered insights.
 - [Dozzle](https://github.com/amir20/dozzle) - A small lightweight application with a Web based interface to monitor Docker logs.
 
