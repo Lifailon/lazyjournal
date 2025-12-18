@@ -53,8 +53,6 @@ func TestWinFiles(t *testing.T) {
 			app := &App{
 				selectPath:       tc.selectPath,
 				testMode:         true,
-				colorMode:        true,
-				tailSpinMode:     false,
 				logViewCount:     "50000",
 				logUpdateSeconds: 5,
 				getOS:            "windows",
@@ -132,8 +130,6 @@ func TestWinEvents(t *testing.T) {
 
 	app := &App{
 		testMode:             true,
-		colorMode:            true,
-		tailSpinMode:         false,
 		logViewCount:         "50000",
 		logUpdateSeconds:     5,
 		getOS:                "windows",
@@ -200,8 +196,6 @@ func TestUnixFiles(t *testing.T) {
 			app := &App{
 				selectPath:           tc.selectPath,
 				testMode:             true,
-				colorMode:            true,
-				tailSpinMode:         false,
 				logViewCount:         "50000",
 				logUpdateSeconds:     5,
 				getOS:                "linux",
@@ -274,8 +268,6 @@ func TestLinuxJournal(t *testing.T) {
 			app := &App{
 				selectUnits:          tc.journalName,
 				testMode:             true,
-				colorMode:            true,
-				tailSpinMode:         false,
 				logViewCount:         "50000",
 				logUpdateSeconds:     5,
 				getOS:                "linux",
@@ -342,8 +334,6 @@ func TestDockerContainer(t *testing.T) {
 			app := &App{
 				selectContainerizationSystem: tc.selectContainerizationSystem,
 				testMode:                     true,
-				colorMode:                    true,
-				tailSpinMode:                 false,
 				logViewCount:                 "50000",
 				logUpdateSeconds:             5,
 				selectFilterMode:             "fuzzy",
@@ -390,8 +380,6 @@ func TestColor(t *testing.T) {
 
 	app := &App{
 		testMode:             true,
-		colorMode:            true,
-		tailSpinMode:         false,
 		logViewCount:         "50000",
 		logUpdateSeconds:     5,
 		selectPath:           "/home/",
@@ -463,8 +451,7 @@ func TestTailSpinColor(t *testing.T) {
 
 	app := &App{
 		testMode:         true,
-		colorMode:        true,
-		tailSpinMode:     true,
+		colorMode:        "tailspin",
 		logViewCount:     "50000",
 		logUpdateSeconds: 5,
 		selectPath:       "/home/",
@@ -490,6 +477,13 @@ func TestTailSpinColor(t *testing.T) {
 	for _, line := range app.filteredLogLines {
 		t.Log(line)
 	}
+
+	app.colorMode = "bat"
+	app.applyFilter(true)
+	t.Log("Lines: ", len(app.filteredLogLines))
+	for _, line := range app.filteredLogLines {
+		t.Log(line)
+	}
 }
 
 func TestFilter(t *testing.T) {
@@ -509,8 +503,6 @@ func TestFilter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app := &App{
 				testMode:             true,
-				colorMode:            true,
-				tailSpinMode:         false,
 				logViewCount:         "50000",
 				logUpdateSeconds:     5,
 				selectPath:           "/home/",
@@ -590,8 +582,6 @@ func TestFlags(t *testing.T) {
 func TestCommandColor(t *testing.T) {
 	app := &App{
 		testMode:                     false,
-		colorMode:                    true,
-		tailSpinMode:                 false,
 		startServices:                0,
 		selectedJournal:              0,
 		startFiles:                   0,
@@ -676,7 +666,7 @@ func TestCommandColor(t *testing.T) {
 		}
 	}
 
-	app.commandLineColor()
+	app.commandLineColor(false)
 	// Восстанавливаем оригинальный stdin
 	os.Stdin = originalStdin
 }
@@ -684,8 +674,6 @@ func TestCommandColor(t *testing.T) {
 func TestCommandFuzzyFilter(t *testing.T) {
 	app := &App{
 		testMode:                     false,
-		colorMode:                    true,
-		tailSpinMode:                 false,
 		startServices:                0,
 		selectedJournal:              0,
 		startFiles:                   0,
@@ -727,14 +715,13 @@ func TestCommandFuzzyFilter(t *testing.T) {
 	}()
 
 	var filter = "success"
-	app.commandLineFuzzy(filter)
+	app.commandLineFuzzy(filter, false)
+	app.commandLineFuzzy(filter, true)
 }
 
 func TestCommandRegexFilter(t *testing.T) {
 	app := &App{
 		testMode:                     false,
-		colorMode:                    true,
-		tailSpinMode:                 false,
 		startServices:                0,
 		selectedJournal:              0,
 		startFiles:                   0,
@@ -781,7 +768,8 @@ func TestCommandRegexFilter(t *testing.T) {
 	if err != nil {
 		fmt.Println("Regular expression syntax error")
 	}
-	app.commandLineRegex(regex)
+	app.commandLineRegex(regex, false)
+	app.commandLineRegex(regex, true)
 }
 
 func TestMainInterface(t *testing.T) {
@@ -792,8 +780,6 @@ func TestMainInterface(t *testing.T) {
 func TestMockInterface(t *testing.T) {
 	app := &App{
 		testMode:                     false,
-		colorMode:                    true,
-		tailSpinMode:                 false,
 		startServices:                0,
 		selectedJournal:              0,
 		startFiles:                   0,

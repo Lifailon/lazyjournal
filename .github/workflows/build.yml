@@ -137,9 +137,11 @@ jobs:
           gzip -c test.pcapng > test.pcapng.gz
           ls -lh
 
-      - name: Install tailspin
+      - name: Install bat and tailspin
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: |
+          sudo apt install bat
+          bat --version || batcat --version || true
           version=$(curl -s https://api.github.com/repos/bensadeh/tailspin/releases/latest | jq -r .tag_name)
           curl -L "https://github.com/bensadeh/tailspin/releases/download/$version/tailspin-$(uname -m)-unknown-$(uname -s | tr '[:upper:]' '[:lower:]')-musl.tar.gz" -o /usr/local/bin/tailspin.tar.gz
           tar -xzf /usr/local/bin/tailspin.tar.gz -C /usr/local/bin
@@ -243,6 +245,8 @@ jobs:
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -c
           echo -e "\n\033[32mFiltering in fuzzy mode:\033[0m\n"
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -f "error"
+          echo -e "\n\033[32mFiltering in fuzzy mode with output coloring:\033[0m\n"
+          curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -f "error" -c
           echo -e "\n\033[32mFiltering in regex mode:\033[0m\n"
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -r "error|fatal|fail|crash"
           echo -e "\n\033[32mFiltering in regex mode with output coloring:\033[0m\n"
