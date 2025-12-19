@@ -199,11 +199,14 @@ type App struct {
 	selectedDockerContainer    int
 
 	// Фильтрация по времени
-	timestampFilterView      bool   // отображение окон
-	sinceTimestampFilterMode bool   // использовать режим фильтрации для since
-	untilTimestampFilterMode bool   // использовать режим фильтрации для until
-	sinceFilterText          string // начало отрезка времени
-	untilFilterText          string // конец отрезка времени
+	timestampFilterView      bool      // отображение окон
+	sinceTimestampFilterMode bool      // использовать режим фильтрации для since
+	untilTimestampFilterMode bool      // использовать режим фильтрации для until
+	sinceFilterText          string    // начало отрезка времени
+	sinceFilterDate          time.Time // начало отрезка времени в формате time для проверки
+	untilFilterText          string    // конец отрезка времени
+	untilFilterDate          time.Time // конец отрезка времени в формате time для проверки
+	limitFilterDate          time.Time // предельное значение для проверки untilFilterDate
 
 	// Текст для фильтрации список журналов
 	filterListText string
@@ -749,8 +752,6 @@ var (
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
 	// Замена пробелов на T для фильтрации по дате+время
 	reSpace = regexp.MustCompile(`\s+`)
-	// Проверка формата времени (короткий формат)
-	filterTimeRegex = regexp.MustCompile(`^[+-]\d+[smhd]$`)
 )
 
 // Ошибки
@@ -824,6 +825,9 @@ func runGoCui(mock bool) {
 		timestampFilterView:          false,
 		sinceTimestampFilterMode:     false,
 		untilTimestampFilterMode:     false,
+		sinceFilterDate:              time.Now(),
+		untilFilterDate:              time.Now(),
+		limitFilterDate:              time.Now(),
 		autoScroll:                   true,
 		trimHttpRegex:                trimHttpRegex,
 		trimHttpsRegex:               trimHttpsRegex,
@@ -841,6 +845,10 @@ func runGoCui(mock bool) {
 		dockerCompose:                "docker compose",
 		uniquePrefixColorMap:         make(map[string]string),
 	}
+
+	// Форматируем даты фильтров в текст
+	app.sinceFilterText = app.sinceFilterDate.Format("2006-01-02")
+	app.untilFilterText = app.untilFilterDate.Format("2006-01-02")
 
 	// Определяем используемую ОС (linux/darwin/*bsd/windows) и архитектуру
 	app.getOS = runtime.GOOS
@@ -4543,82 +4551,76 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 	})
 }
 
-// Функция для обработки фильтрации по временной метке
+// Функция для обработки фильтрации по временной метке (timestamp)
 func (app *App) timestampFilterEditor(window string) gocui.Editor {
 	return gocui.EditorFunc(func(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
-		switch {
-		// Пропускаем только цифры (0-9)
-		case ch >= '0' && ch <= '9':
-			v.EditWrite(ch)
-		// Пропускаем ":" для времени, "-" для даты, а также [+-] и [smh] для сокращенного формата
-		case ch == ':' || ch == '-' || ch == '+' || ch == 's' || ch == 'm' || ch == 'h' || ch == 'd':
-			v.EditWrite(ch)
-		// Пропускаем пробел (работает в journalctl для разделения времени, но необходимо обновить в docker logs на T)
-		case key == gocui.KeySpace:
-			v.EditWrite(' ')
-		case key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
-			v.EditDelete(true)
-		case key == gocui.KeyDelete:
-			v.EditDelete(false)
-		case key == gocui.KeyArrowLeft:
-			v.MoveCursor(-1, 0)
-		case key == gocui.KeyArrowRight:
-			v.MoveCursor(1, 0)
-		}
+		var filterDate time.Time
+		var filterText string
 		switch window {
 		case "sinceFilter":
-			// Обновляем текст в буфере
-			app.sinceFilterText = strings.TrimSpace(v.Buffer())
-			// Если фильтр пустой, отключаем фильтрацию
 			switch {
-			case strings.TrimSpace(v.Buffer()) == "":
-				v.FrameColor = app.selectedFrameColor
+			// Пропускаем Right/+
+			case key == gocui.KeyArrowRight || ch == '+':
+				filterDate, filterText = app.switchDate(app.sinceFilterDate, true)
+			// Пропускаем Left/-
+			case key == gocui.KeyArrowLeft || ch == '-':
+				filterDate, filterText = app.switchDate(app.sinceFilterDate, false)
+			// На Del или Backspace - отключаем фильтрацию и выходим из функции
+			case key == gocui.KeyDelete || key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
 				app.sinceTimestampFilterMode = false
-				// Проверяем формат и активируем фильтрацию
-			case app.timestampCheckFormat(strings.TrimSpace(v.Buffer())):
-				v.FrameColor = app.selectedFrameColor
-				app.sinceTimestampFilterMode = true
-			default:
 				v.FrameColor = app.errorColor
-				app.sinceTimestampFilterMode = false
+				return
+			// Игнорируем другие символы
+			default:
+				return
 			}
+			// Проверяем дату (значение ДО не может быть больше/после текущей даты или значения ПОСЛЕ)
+			if filterDate.After(app.limitFilterDate) || filterDate.After(app.untilFilterDate) {
+				return
+			}
+			// Изменяем значения в переменных и интерфейсе, включаем режим фильтрации и красим в зеленый
+			app.sinceFilterDate = filterDate
+			app.sinceFilterText = filterText
+			v.Clear()
+			fmt.Fprint(v, app.sinceFilterText)
+			app.sinceTimestampFilterMode = true
+			v.FrameColor = app.selectedFrameColor
 		case "untilFilter":
-			app.untilFilterText = strings.TrimSpace(v.Buffer())
 			switch {
-			case strings.TrimSpace(v.Buffer()) == "":
-				v.FrameColor = app.selectedFrameColor
-				app.untilTimestampFilterMode = false
-				// Проверяем формат и активируем фильтрацию
-			case app.timestampCheckFormat(strings.TrimSpace(v.Buffer())):
-				v.FrameColor = app.selectedFrameColor
-				app.untilTimestampFilterMode = true
-			default:
+			case key == gocui.KeyArrowRight || ch == '+':
+				filterDate, filterText = app.switchDate(app.untilFilterDate, true)
+			case key == gocui.KeyArrowLeft || ch == '-':
+				filterDate, filterText = app.switchDate(app.untilFilterDate, false)
+			case key == gocui.KeyDelete || key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
+				app.sinceTimestampFilterMode = false
 				v.FrameColor = app.errorColor
-				app.untilTimestampFilterMode = false
+				return
+			default:
+				return
 			}
+			// Проверяем дату (значение ПОСЛЕ не может быть больше текущей даты ИЛИ меньше значения ДО)
+			if filterDate.After(app.limitFilterDate) || filterDate.Before(app.sinceFilterDate) {
+				return
+			}
+			app.untilFilterDate = filterDate
+			app.untilFilterText = filterText
+			v.Clear()
+			fmt.Fprint(v, app.untilFilterText)
+			app.sinceTimestampFilterMode = true
+			v.FrameColor = app.selectedFrameColor
 		}
 	})
 }
 
-// Функция проверки формата времени для фильтрации
-func (app *App) timestampCheckFormat(input string) bool {
-	formats := []string{
-		"15:04",               // 00:00
-		"15:04:05",            // 00:00:00
-		"2006-01-02",          // 2025-04-14
-		"2006-01-02 15:04",    // 2025-04-14 00:00
-		"2006-01-02 15:04:05", // 2025-04-14 00:00:00
-	}
-	if filterTimeRegex.MatchString(input) {
-		return true
+// Функция для изменения даты
+func (app *App) switchDate(inputDate time.Time, up bool) (time.Time, string) {
+	var outDate time.Time
+	if up {
+		outDate = inputDate.AddDate(0, 0, 1)
 	} else {
-		for _, layout := range formats {
-			if _, err := time.Parse(layout, input); err == nil {
-				return true
-			}
-		}
+		outDate = inputDate.AddDate(0, 0, -1)
 	}
-	return false
+	return outDate, outDate.Format("2006-01-02")
 }
 
 // Функция для фильтрации всех списоков журналов
