@@ -4584,7 +4584,6 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 	return gocui.EditorFunc(func(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
 		var filterDate time.Time
 		var filterText string
-		skip := false
 		switch window {
 		case "sinceFilter":
 			switch {
@@ -4600,24 +4599,24 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				v.FrameColor = app.errorColor
 				v.Clear()
 				fmt.Fprint(v, "⎯")
-				skip = true
+				app.updateStatus()
+				return
 			// Игнорируем другие символы
 			default:
 				return
 			}
-			if !skip {
-				// Проверяем дату (значение ДО не может быть больше/после текущей даты или значения ПОСЛЕ)
-				if filterDate.After(app.limitFilterDate) || filterDate.After(app.untilFilterDate) {
-					return
-				}
-				// Изменяем значения в переменных и интерфейсе, включаем режим фильтрации и красим в зеленый
-				app.sinceFilterDate = filterDate
-				app.sinceFilterText = filterText
-				v.Clear()
-				fmt.Fprint(v, app.sinceFilterText)
-				app.sinceDateFilterMode = true
-				v.FrameColor = app.selectedFrameColor
+			// Проверяем дату (значение ДО не может быть больше/после текущей даты или значения ПОСЛЕ)
+			if filterDate.After(app.limitFilterDate) || filterDate.After(app.untilFilterDate) {
+				return
 			}
+			// Изменяем значения в переменных и интерфейсе, включаем режим фильтрации и красим в зеленый
+			app.sinceFilterDate = filterDate
+			app.sinceFilterText = filterText
+			v.Clear()
+			fmt.Fprint(v, app.sinceFilterText)
+			app.sinceDateFilterMode = true
+			v.FrameColor = app.selectedFrameColor
+			app.updateStatus()
 		case "untilFilter":
 			switch {
 			case key == gocui.KeyArrowRight || ch == '+':
@@ -4629,40 +4628,23 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				v.FrameColor = app.errorColor
 				v.Clear()
 				fmt.Fprint(v, "⎯")
-				skip = true
+				app.updateStatus()
+				return
 			default:
 				return
 			}
-			if !skip {
-				// Проверяем дату (значение ПОСЛЕ не может быть больше текущей даты ИЛИ меньше значения ДО)
-				if filterDate.After(app.limitFilterDate) || filterDate.Before(app.sinceFilterDate) {
-					return
-				}
-				app.untilFilterDate = filterDate
-				app.untilFilterText = filterText
-				v.Clear()
-				fmt.Fprint(v, app.untilFilterText)
-				app.untilDateFilterMode = true
-				v.FrameColor = app.selectedFrameColor
+			// Проверяем дату (значение ПОСЛЕ не может быть больше текущей даты ИЛИ меньше значения ДО)
+			if filterDate.After(app.limitFilterDate) || filterDate.Before(app.sinceFilterDate) {
+				return
 			}
+			app.untilFilterDate = filterDate
+			app.untilFilterText = filterText
+			v.Clear()
+			fmt.Fprint(v, app.untilFilterText)
+			app.untilDateFilterMode = true
+			v.FrameColor = app.selectedFrameColor
+			app.updateStatus()
 		}
-		// Обновляем статус
-		switch {
-		case app.sinceDateFilterMode && !app.untilDateFilterMode:
-			app.filterByDateStatus = "since only"
-		case !app.sinceDateFilterMode && app.untilDateFilterMode:
-			app.filterByDateStatus = "until only"
-		case app.sinceDateFilterMode && app.untilDateFilterMode:
-			app.filterByDateStatus = "since and until"
-		case !app.sinceDateFilterMode && !app.untilDateFilterMode:
-			app.filterByDateStatus = "false"
-		}
-		vLog, _ := app.gui.View("logs")
-		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
-		)
-		app.updateLogsView(false)
 	})
 }
 
@@ -4675,6 +4657,29 @@ func (app *App) switchDate(inputDate time.Time, up bool) (time.Time, string) {
 		outDate = inputDate.AddDate(0, 0, -1)
 	}
 	return outDate, outDate.Format("2006-01-02")
+}
+
+// Функция для обновления статуса работы фильтра по дате
+func (app *App) updateStatus() {
+	switch {
+	case app.sinceDateFilterMode && !app.untilDateFilterMode:
+		app.filterByDateStatus = "since only"
+	case !app.sinceDateFilterMode && app.untilDateFilterMode:
+		app.filterByDateStatus = "until only"
+	case app.sinceDateFilterMode && app.untilDateFilterMode:
+		app.filterByDateStatus = "since and until"
+	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
+		app.filterByDateStatus = "false"
+	}
+	vLog, err := app.gui.View("logs")
+	if err != nil {
+		return
+	}
+	vLog.Subtitle = fmt.Sprintf(
+		"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+		app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+	)
+	app.updateLogsView(false)
 }
 
 // Функция для фильтрации всех списоков журналов
@@ -7523,6 +7528,7 @@ func (app *App) setupKeybindings() error {
 			v.FrameColor = app.errorColor
 			v.Clear()
 			fmt.Fprint(v, "⎯")
+			app.updateStatus()
 			return nil
 		}
 	}); err != nil {
@@ -7536,6 +7542,7 @@ func (app *App) setupKeybindings() error {
 			v.FrameColor = app.errorColor
 			v.Clear()
 			fmt.Fprint(v, "⎯")
+			app.updateStatus()
 			return nil
 		}
 	}); err != nil {
