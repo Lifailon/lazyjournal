@@ -12,6 +12,9 @@ settings:
   kubernetesNamespace: all
   customPath: /opt
   colorMode: default
+  colorActionsDisable: false
+  sinceDateFilterMode: false
+  untilDateFilterMode: false
   disableFastMode: false
 
 # Available hotkeys:
