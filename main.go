@@ -53,6 +53,7 @@ type Settings struct {
 	KubernetesNamespace string `yaml:"kubernetesNamespace"`
 	CustomPath          string `yaml:"customPath"`
 	ColorMode           string `yaml:"colorMode"`
+	ColorActionsDisable string `yaml:"colorActionsDisable"`
 	SinceDateFilterMode string `yaml:"sinceDateFilterMode"`
 	UntilDateFilterMode string `yaml:"untilDateFilterMode"`
 	DisableFastMode     string `yaml:"disableFastMode"`
@@ -156,6 +157,7 @@ type App struct {
 	fastMode               bool     // загрузка журналов в горутине (beta mode)
 	testMode               bool     // исключаем вызовы к gocui при тестирование функций
 	colorMode              string   // режим покраски (default/tailspin/bat/disable)
+	colorActionsDisable    bool     // отключить покраску для действий
 	mouseSupport           bool     // включение/отключение поддержки мыши
 	dockerStreamLogs       bool     // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
 	dockerStreamLogsStatus string   // отображаемый режим чтения журнала Docker в статусе Subtitle (в зависимости от прав доступа и флага)
@@ -337,6 +339,7 @@ func showConfig() {
 	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
 	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
+	fmt.Printf("  colorActionsDisable:      %s\n", config.Settings.ColorActionsDisable)
 	fmt.Printf("  sinceDateFilterMode:      %s\n", config.Settings.SinceDateFilterMode)
 	fmt.Printf("  untilDateFilterMode:      %s\n", config.Settings.UntilDateFilterMode)
 	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
@@ -1035,6 +1038,12 @@ func runGoCui(mock bool) {
 		app.filterByDateStatus = "since and until"
 	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
 		app.filterByDateStatus = "false"
+	}
+
+	if config.Settings.ColorActionsDisable != "" {
+		if strings.EqualFold(config.Settings.ColorActionsDisable, "true") {
+			app.colorActionsDisable = true
+		}
 	}
 
 	if config.Settings.DisableFastMode != "" {
@@ -5202,10 +5211,10 @@ func (app *App) lineColor(inputLine string) string {
 		}
 	}
 	colorLine += colorLineBuilder.String()
-	// (2.1) Добавляем пурпурную покраску для JSON строк (двойные кавычки и фигурные скобок)
-	colorLine = strings.ReplaceAll(colorLine, "\"", "\033[35m\"\033[0m")
-	colorLine = strings.ReplaceAll(colorLine, "{", "\033[35m{\033[0m")
-	colorLine = strings.ReplaceAll(colorLine, "}", "\033[35m}\033[0m")
+	// (2.1) Добавляем желтую покраску для JSON строк (двойные кавычки и фигурные скобок)
+	colorLine = strings.ReplaceAll(colorLine, "\"", "\033[33m\"\033[0m")
+	colorLine = strings.ReplaceAll(colorLine, "{", "\033[33m{\033[0m")
+	colorLine = strings.ReplaceAll(colorLine, "}", "\033[33m}\033[0m")
 	// Словосочетания-исключения для ошибок
 	colorLine = strings.ReplaceAll(colorLine, "Not found", "\033[31mNot found\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "not found", "\033[31mnot found\033[0m")
@@ -5343,20 +5352,18 @@ func (app *App) wordColor(inputWord string) string {
 	case strings.Contains(inputWord, "CONNECT"):
 		coloredWord = strings.ReplaceAll(inputWord, "CONNECT", "\033[42m\033[30m CONNECT \033[0m")
 	// Статусы
-	case strings.Contains(inputWord, "OK"):
-		coloredWord = strings.ReplaceAll(inputWord, "OK", "\033[42m\033[30m OK \033[0m")
 	case strings.Contains(inputWord, "DONE"):
 		coloredWord = strings.ReplaceAll(inputWord, "DONE", "\033[42m\033[30m DONE \033[0m")
+	case strings.Contains(inputWord, "WARNING"):
+		coloredWord = strings.ReplaceAll(inputWord, "WARNING", "\033[43m\033[30m WARNING \033[0m")
+	case strings.Contains(inputWord, "WARN"):
+		coloredWord = strings.ReplaceAll(inputWord, "WARN", "\033[43m\033[30m WARN \033[0m")
 	case strings.Contains(inputWord, "DEBUG"):
 		coloredWord = strings.ReplaceAll(inputWord, "DEBUG", "\033[46m\033[30m DEBUG \033[0m")
 	case strings.Contains(inputWord, "INFO"):
 		coloredWord = strings.ReplaceAll(inputWord, "INFO", "\033[46m\033[30m INFO \033[0m")
 	case strings.Contains(inputWord, "NOTICE"):
 		coloredWord = strings.ReplaceAll(inputWord, "NOTICE", "\033[46m\033[30m NOTICE \033[0m")
-	case strings.Contains(inputWord, "WARNING"):
-		coloredWord = strings.ReplaceAll(inputWord, "WARNING", "\033[43m\033[30m WARNING \033[0m")
-	case strings.Contains(inputWord, "WARN"):
-		coloredWord = strings.ReplaceAll(inputWord, "WARN", "\033[43m\033[30m WARN \033[0m")
 	case strings.Contains(inputWord, "ERROR"):
 		coloredWord = strings.ReplaceAll(inputWord, "ERROR", "\033[41m\033[30m ERROR \033[0m")
 	case strings.Contains(inputWord, "ERR"):
@@ -5389,6 +5396,9 @@ func (app *App) wordColor(inputWord string) string {
 				break
 			}
 		}
+	// Update delimiter
+	case strings.Contains(inputWord, "⎯"):
+		coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[35m"+inputWord+"\033[0m")
 	// Исключения для зеленого
 	case strings.Contains(inputWordLower, "unblock"):
 		words := []string{"unblocking", "unblocked", "unblock"}
@@ -5584,7 +5594,7 @@ func (app *App) wordColor(inputWord string) string {
 	case strings.Contains(inputWordLower, "none"):
 		coloredWord = app.replaceWordLower(inputWord, "none", "\033[31m")
 	// Исключения для синего
-	case strings.Contains(inputWordLower, "res"):
+	case strings.Contains(inputWordLower, "res") && !app.colorActionsDisable:
 		words := []string{"resolved", "resolving", "resolve", "restarting", "restarted", "restart"}
 		for _, word := range words {
 			if strings.Contains(inputWordLower, word) {
@@ -5675,10 +5685,84 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = app.replaceWordLower(inputWord, "installed", "\033[32m")
 	case strings.Contains(inputWordLower, "true"):
 		coloredWord = app.replaceWordLower(inputWord, "true", "\033[32m")
-	case strings.Contains(inputWordLower, "ok"):
-		coloredWord = app.replaceWordLower(inputWord, "ok", "\033[32m")
 	case strings.Contains(inputWordLower, "done"):
 		coloredWord = app.replaceWordLower(inputWord, "done", "\033[32m")
+	// Голубой (цифры) + пурпурный [34m]
+	// Byte (0x04)
+	case app.hexByteRegex.MatchString(inputWord):
+		coloredWord = app.hexByteRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
+			colored := ""
+			var coloredSb5765 strings.Builder
+			for _, char := range match {
+				if char == 'x' {
+					coloredSb5765.WriteString("\033[35m" + string(char) + "\033[0m")
+				} else {
+					coloredSb5765.WriteString("\033[34m" + string(char) + "\033[0m")
+				}
+			}
+			colored += coloredSb5765.String()
+			return colored
+		})
+	// DateTime
+	case app.dateTimeRegex.MatchString(inputWord):
+		coloredWord = app.dateTimeRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
+			colored := ""
+			var coloredSb5778 strings.Builder
+			for _, char := range match {
+				if char == '-' || char == '.' || char == ':' || char == '+' || char == 'T' || char == 'Z' {
+					// Пурпурный для символов
+					coloredSb5778.WriteString("\033[35m" + string(char) + "\033[0m")
+				} else {
+					// Синий для цифр
+					coloredSb5778.WriteString("\033[34m" + string(char) + "\033[0m")
+				}
+			}
+			colored += coloredSb5778.String()
+			return colored
+		})
+	// Integers
+	case app.integersInputRegex.MatchString(inputWord):
+		var colored strings.Builder
+		// Флаги, для фиксации нахождения внутри числа/символа или нет
+		inNumber := false
+		inSymbol := false
+		for _, char := range inputWord {
+			switch {
+			case char >= '0' && char <= '9':
+				// Если это цифра и мы еще не в числе, открываем цвет
+				if !inNumber {
+					colored.WriteString("\033[34m")
+					inNumber = true
+				}
+			case char == '/' || char == ':' || char == '.' || char == '-' || char == '+' || char == '%':
+				// Красим символы
+				colored.WriteString("\033[35m")
+				inSymbol = true
+				inNumber = false
+			default:
+				// Если это не цифра и до этого было число, закрываем цвет
+				if inNumber {
+					inNumber = false
+				}
+				// Для всех других символов
+				colored.WriteString("\033[0m")
+			}
+			// Добавляем символ в результат
+			colored.WriteRune(char)
+			// Закрываем цвет для символа
+			if inSymbol {
+				colored.WriteString("\033[0m")
+				inSymbol = false
+			}
+		}
+		// Закрываем цвет, если строка закончилась на числе
+		if inNumber {
+			colored.WriteString("\033[0m")
+		}
+		return colored.String()
+	// Отключаем покраску действий
+	case app.colorActionsDisable:
+		break
 	// Действия [36m]
 	case strings.Contains(inputWordLower, "session"):
 		coloredWord = app.replaceWordLower(inputWord, "session", "\033[36m")
@@ -5908,89 +5992,6 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = app.replaceWordLower(inputWord, "status", "\033[36m")
 	case strings.Contains(inputWordLower, "shutdown"):
 		coloredWord = app.replaceWordLower(inputWord, "shutdown", "\033[36m")
-	case strings.HasPrefix(inputWordLower, "protocol"):
-		coloredWord = app.replaceWordLower(inputWord, "protocol", "\033[36m")
-	// Голубой (цифры) + пурпурный [34m]
-	// Byte (0x04)
-	case app.hexByteRegex.MatchString(inputWord):
-		coloredWord = app.hexByteRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
-			colored := ""
-			var coloredSb5765 strings.Builder
-			for _, char := range match {
-				if char == 'x' {
-					coloredSb5765.WriteString("\033[35m" + string(char) + "\033[0m")
-				} else {
-					coloredSb5765.WriteString("\033[34m" + string(char) + "\033[0m")
-				}
-			}
-			colored += coloredSb5765.String()
-			return colored
-		})
-	// DateTime
-	case app.dateTimeRegex.MatchString(inputWord):
-		coloredWord = app.dateTimeRegex.ReplaceAllStringFunc(inputWord, func(match string) string {
-			colored := ""
-			var coloredSb5778 strings.Builder
-			for _, char := range match {
-				if char == '-' || char == '.' || char == ':' || char == '+' || char == 'T' || char == 'Z' {
-					// Пурпурный для символов
-					coloredSb5778.WriteString("\033[35m" + string(char) + "\033[0m")
-				} else {
-					// Синий для цифр
-					coloredSb5778.WriteString("\033[34m" + string(char) + "\033[0m")
-				}
-			}
-			colored += coloredSb5778.String()
-			return colored
-		})
-	// Integers
-	case app.integersInputRegex.MatchString(inputWord):
-		var colored strings.Builder
-		// Флаги, для фиксации нахождения внутри числа/символа или нет
-		inNumber := false
-		inSymbol := false
-		for _, char := range inputWord {
-			switch {
-			case char >= '0' && char <= '9':
-				// Если это цифра и мы еще не в числе, открываем цвет
-				if !inNumber {
-					colored.WriteString("\033[34m")
-					inNumber = true
-				}
-			case char == '/' || char == ':' || char == '.' || char == '-' || char == '+' || char == '%':
-				// Красим символы
-				colored.WriteString("\033[35m")
-				inSymbol = true
-				inNumber = false
-			default:
-				// Если это не цифра и до этого было число, закрываем цвет
-				if inNumber {
-					inNumber = false
-				}
-				// Для всех других символов
-				colored.WriteString("\033[0m")
-			}
-			// Добавляем символ в результат
-			colored.WriteRune(char)
-			// Закрываем цвет для символа
-			if inSymbol {
-				colored.WriteString("\033[0m")
-				inSymbol = false
-			}
-		}
-		// Закрываем цвет, если строка закончилась на числе
-		if inNumber {
-			colored.WriteString("\033[0m")
-		}
-		return colored.String()
-	// Исключения
-	case strings.Contains(inputWordLower, "yes"):
-		coloredWord = app.replaceWordLower(inputWord, "yes", "\033[32m")
-	case strings.Contains(inputWordLower, "no"):
-		coloredWord = app.replaceWordLower(inputWord, "no", "\033[31m")
-	// Update delimiter
-	case strings.Contains(inputWord, "⎯"):
-		coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[35m"+inputWord+"\033[0m")
 	}
 	return coloredWord
 }
