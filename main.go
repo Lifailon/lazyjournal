@@ -53,6 +53,8 @@ type Settings struct {
 	KubernetesNamespace string `yaml:"kubernetesNamespace"`
 	CustomPath          string `yaml:"customPath"`
 	ColorMode           string `yaml:"colorMode"`
+	SinceDateFilterMode string `yaml:"sinceDateFilterMode"`
+	UntilDateFilterMode string `yaml:"untilDateFilterMode"`
 	DisableFastMode     string `yaml:"disableFastMode"`
 }
 
@@ -198,15 +200,16 @@ type App struct {
 	startDockerContainers      int
 	selectedDockerContainer    int
 
-	// Фильтрация по времени
-	timestampFilterView      bool      // отображение окон
-	sinceTimestampFilterMode bool      // использовать режим фильтрации для since
-	untilTimestampFilterMode bool      // использовать режим фильтрации для until
-	sinceFilterText          string    // начало отрезка времени
-	sinceFilterDate          time.Time // начало отрезка времени в формате time для проверки
-	untilFilterText          string    // конец отрезка времени
-	untilFilterDate          time.Time // конец отрезка времени в формате time для проверки
-	limitFilterDate          time.Time // предельное значение для проверки untilFilterDate
+	// Фильтрация по дате
+	timestampFilterView bool      // отображение окон
+	sinceDateFilterMode bool      // использовать режим фильтрации для since
+	untilDateFilterMode bool      // использовать режим фильтрации для until
+	sinceFilterText     string    // начало отрезка времени
+	sinceFilterDate     time.Time // начало отрезка времени в формате time для проверки
+	untilFilterText     string    // конец отрезка времени
+	untilFilterDate     time.Time // конец отрезка времени в формате time для проверки
+	limitFilterDate     time.Time // предельное значение для проверки untilFilterDate
+	filterByDateStatus  string    // текстовое значение режима работы фильтра для статуса в subtitle
 
 	// Текст для фильтрации список журналов
 	filterListText string
@@ -334,6 +337,8 @@ func showConfig() {
 	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
 	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
+	fmt.Printf("  sinceDateFilterMode:      %s\n", config.Settings.SinceDateFilterMode)
+	fmt.Printf("  untilDateFilterMode:      %s\n", config.Settings.UntilDateFilterMode)
 	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
 
 	fmt.Println("hotkeys:")
@@ -823,8 +828,8 @@ func runGoCui(mock bool) {
 		selectContainerizationSystem: "docker",    // "compose" || "podman" || "kubernetes"
 		selectFilterMode:             "default",   // "fuzzy" || "regex" || "timestamp"
 		timestampFilterView:          false,
-		sinceTimestampFilterMode:     false,
-		untilTimestampFilterMode:     false,
+		sinceDateFilterMode:          false,
+		untilDateFilterMode:          false,
 		sinceFilterDate:              time.Now(),
 		untilFilterDate:              time.Now(),
 		limitFilterDate:              time.Now(),
@@ -1007,6 +1012,29 @@ func runGoCui(mock bool) {
 
 	if config.Settings.ColorMode != "" && *colorModeFlag == "default" {
 		colorModeFlag = &config.Settings.ColorMode
+	}
+
+	if config.Settings.SinceDateFilterMode != "" {
+		if strings.EqualFold(config.Settings.SinceDateFilterMode, "true") {
+			app.sinceDateFilterMode = true
+		}
+	}
+
+	if config.Settings.UntilDateFilterMode != "" {
+		if strings.EqualFold(config.Settings.UntilDateFilterMode, "true") {
+			app.untilDateFilterMode = true
+		}
+	}
+
+	switch {
+	case app.sinceDateFilterMode && !app.untilDateFilterMode:
+		app.filterByDateStatus = "since only"
+	case !app.sinceDateFilterMode && app.untilDateFilterMode:
+		app.filterByDateStatus = "until only"
+	case app.sinceDateFilterMode && app.untilDateFilterMode:
+		app.filterByDateStatus = "since and until"
+	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
+		app.filterByDateStatus = "false"
 	}
 
 	if config.Settings.DisableFastMode != "" {
@@ -1509,8 +1537,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.FrameColor = app.frameColor
 		v.TitleColor = app.titleColor
 		v.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 		)
 	}
 
@@ -2225,22 +2253,22 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		var cmd *exec.Cmd
 		if app.sshMode {
 			switch {
-			case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+			case app.sinceDateFilterMode && app.untilDateFilterMode:
 				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)...)
-			case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+			case app.sinceDateFilterMode && !app.untilDateFilterMode:
 				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)...)
-			case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+			case !app.sinceDateFilterMode && app.untilDateFilterMode:
 				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)...)
 			default:
 				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)...)
 			}
 		} else {
 			switch {
-			case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+			case app.sinceDateFilterMode && app.untilDateFilterMode:
 				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)
-			case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+			case app.sinceDateFilterMode && !app.untilDateFilterMode:
 				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)
-			case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+			case !app.sinceDateFilterMode && app.untilDateFilterMode:
 				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)
 			default:
 				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)
@@ -4123,7 +4151,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			if app.sshMode {
 				if app.dockerCompose == "docker compose" {
 					switch {
-					case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					case app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.Command(
 							"ssh", append(app.sshOptions,
 								"docker", "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
@@ -4132,7 +4160,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 								"--tail", app.logViewCount,
 							)...,
 						)
-					case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+					case app.sinceDateFilterMode && !app.untilDateFilterMode:
 						cmd = exec.Command(
 							"ssh", append(app.sshOptions,
 								"docker", "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
@@ -4140,7 +4168,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 								"--tail", app.logViewCount,
 							)...,
 						)
-					case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					case !app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.Command(
 							"ssh", append(app.sshOptions,
 								"docker", "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
@@ -4158,7 +4186,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					}
 				} else {
 					switch {
-					case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					case app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.Command(
 							"ssh", append(app.sshOptions,
 								app.dockerCompose, "--project-name", containerId, "logs", "--timestamps", "--no-color",
@@ -4167,7 +4195,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 								"--tail", app.logViewCount,
 							)...,
 						)
-					case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+					case app.sinceDateFilterMode && !app.untilDateFilterMode:
 						cmd = exec.Command(
 							"ssh", append(app.sshOptions,
 								app.dockerCompose, "--project-name", containerId, "logs", "--timestamps", "--no-color",
@@ -4175,7 +4203,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 								"--tail", app.logViewCount,
 							)...,
 						)
-					case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					case !app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.Command(
 							"ssh", append(app.sshOptions,
 								app.dockerCompose, "--project-name", containerId, "logs", "--timestamps", "--no-color",
@@ -4195,20 +4223,20 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			} else {
 				if app.dockerCompose == "docker compose" {
 					switch {
-					case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					case app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.Command(
 							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
 							"--since", sinceFilterTextNotSpace,
 							"--until", untilFilterTextNotSpace,
 							"--tail", app.logViewCount,
 						)
-					case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+					case app.sinceDateFilterMode && !app.untilDateFilterMode:
 						cmd = exec.Command(
 							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
 							"--since", sinceFilterTextNotSpace,
 							"--tail", app.logViewCount,
 						)
-					case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					case !app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.Command(
 							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
 							"--until", untilFilterTextNotSpace,
@@ -4222,20 +4250,20 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					}
 				} else {
 					switch {
-					case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					case app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.Command(
 							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
 							"--since", sinceFilterTextNotSpace,
 							"--until", untilFilterTextNotSpace,
 							"--tail", app.logViewCount,
 						)
-					case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+					case app.sinceDateFilterMode && !app.untilDateFilterMode:
 						cmd = exec.Command(
 							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
 							"--since", sinceFilterTextNotSpace,
 							"--tail", app.logViewCount,
 						)
-					case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+					case !app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.Command(
 							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
 							"--until", untilFilterTextNotSpace,
@@ -4255,7 +4283,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			untilFilterTextNotSpace := reSpace.ReplaceAllString(app.untilFilterText, "T")
 			if app.sshMode {
 				switch {
-				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+				case app.sinceDateFilterMode && app.untilDateFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
 							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
@@ -4264,7 +4292,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 							containerId,
 						)...,
 					)
-				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+				case app.sinceDateFilterMode && !app.untilDateFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
 							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
@@ -4272,7 +4300,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 							containerId,
 						)...,
 					)
-				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+				case !app.sinceDateFilterMode && app.untilDateFilterMode:
 					cmd = exec.Command(
 						"ssh", append(app.sshOptions,
 							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
@@ -4290,20 +4318,20 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				}
 			} else {
 				switch {
-				case app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+				case app.sinceDateFilterMode && app.untilDateFilterMode:
 					cmd = exec.Command(
 						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 						"--since", sinceFilterTextNotSpace,
 						"--until", untilFilterTextNotSpace,
 						containerId,
 					)
-				case app.sinceTimestampFilterMode && !app.untilTimestampFilterMode:
+				case app.sinceDateFilterMode && !app.untilDateFilterMode:
 					cmd = exec.Command(
 						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 						"--since", sinceFilterTextNotSpace,
 						containerId,
 					)
-				case !app.sinceTimestampFilterMode && app.untilTimestampFilterMode:
+				case !app.sinceDateFilterMode && app.untilDateFilterMode:
 					cmd = exec.Command(
 						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 						"--until", untilFilterTextNotSpace,
@@ -4551,40 +4579,45 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 	})
 }
 
-// Функция для обработки фильтрации по временной метке (timestamp)
+// Функция для фильтрации по дате
 func (app *App) timestampFilterEditor(window string) gocui.Editor {
 	return gocui.EditorFunc(func(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
 		var filterDate time.Time
 		var filterText string
+		skip := false
 		switch window {
 		case "sinceFilter":
 			switch {
-			// Пропускаем Right/+
-			case key == gocui.KeyArrowRight || ch == '+':
+			// Пропускаем только Right/l для увеличения даты
+			case key == gocui.KeyArrowRight || key == 'l':
 				filterDate, filterText = app.switchDate(app.sinceFilterDate, true)
-			// Пропускаем Left/-
-			case key == gocui.KeyArrowLeft || ch == '-':
+			// Пропускаем только Left/h для уменьшения даты
+			case key == gocui.KeyArrowLeft || key == 'h':
 				filterDate, filterText = app.switchDate(app.sinceFilterDate, false)
-			// На Del или Backspace - отключаем фильтрацию и выходим из функции
+			// На Del или Backspace отключаем фильтрацию
 			case key == gocui.KeyDelete || key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
-				app.sinceTimestampFilterMode = false
+				app.sinceDateFilterMode = false
 				v.FrameColor = app.errorColor
-				return
+				v.Clear()
+				fmt.Fprint(v, "⎯")
+				skip = true
 			// Игнорируем другие символы
 			default:
 				return
 			}
-			// Проверяем дату (значение ДО не может быть больше/после текущей даты или значения ПОСЛЕ)
-			if filterDate.After(app.limitFilterDate) || filterDate.After(app.untilFilterDate) {
-				return
+			if !skip {
+				// Проверяем дату (значение ДО не может быть больше/после текущей даты или значения ПОСЛЕ)
+				if filterDate.After(app.limitFilterDate) || filterDate.After(app.untilFilterDate) {
+					return
+				}
+				// Изменяем значения в переменных и интерфейсе, включаем режим фильтрации и красим в зеленый
+				app.sinceFilterDate = filterDate
+				app.sinceFilterText = filterText
+				v.Clear()
+				fmt.Fprint(v, app.sinceFilterText)
+				app.sinceDateFilterMode = true
+				v.FrameColor = app.selectedFrameColor
 			}
-			// Изменяем значения в переменных и интерфейсе, включаем режим фильтрации и красим в зеленый
-			app.sinceFilterDate = filterDate
-			app.sinceFilterText = filterText
-			v.Clear()
-			fmt.Fprint(v, app.sinceFilterText)
-			app.sinceTimestampFilterMode = true
-			v.FrameColor = app.selectedFrameColor
 		case "untilFilter":
 			switch {
 			case key == gocui.KeyArrowRight || ch == '+':
@@ -4592,23 +4625,44 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			case key == gocui.KeyArrowLeft || ch == '-':
 				filterDate, filterText = app.switchDate(app.untilFilterDate, false)
 			case key == gocui.KeyDelete || key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
-				app.sinceTimestampFilterMode = false
+				app.untilDateFilterMode = false
 				v.FrameColor = app.errorColor
-				return
+				v.Clear()
+				fmt.Fprint(v, "⎯")
+				skip = true
 			default:
 				return
 			}
-			// Проверяем дату (значение ПОСЛЕ не может быть больше текущей даты ИЛИ меньше значения ДО)
-			if filterDate.After(app.limitFilterDate) || filterDate.Before(app.sinceFilterDate) {
-				return
+			if !skip {
+				// Проверяем дату (значение ПОСЛЕ не может быть больше текущей даты ИЛИ меньше значения ДО)
+				if filterDate.After(app.limitFilterDate) || filterDate.Before(app.sinceFilterDate) {
+					return
+				}
+				app.untilFilterDate = filterDate
+				app.untilFilterText = filterText
+				v.Clear()
+				fmt.Fprint(v, app.untilFilterText)
+				app.untilDateFilterMode = true
+				v.FrameColor = app.selectedFrameColor
 			}
-			app.untilFilterDate = filterDate
-			app.untilFilterText = filterText
-			v.Clear()
-			fmt.Fprint(v, app.untilFilterText)
-			app.sinceTimestampFilterMode = true
-			v.FrameColor = app.selectedFrameColor
 		}
+		// Обновляем статус
+		switch {
+		case app.sinceDateFilterMode && !app.untilDateFilterMode:
+			app.filterByDateStatus = "since only"
+		case !app.sinceDateFilterMode && app.untilDateFilterMode:
+			app.filterByDateStatus = "until only"
+		case app.sinceDateFilterMode && app.untilDateFilterMode:
+			app.filterByDateStatus = "since and until"
+		case !app.sinceDateFilterMode && !app.untilDateFilterMode:
+			app.filterByDateStatus = "false"
+		}
+		vLog, _ := app.gui.View("logs")
+		vLog.Subtitle = fmt.Sprintf(
+			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+		)
+		app.updateLogsView(false)
 	})
 }
 
@@ -4873,8 +4927,8 @@ func (app *App) applyFilter(color bool) {
 		}
 		vLog, _ := app.gui.View("logs")
 		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 		)
 		app.logScrollPos = 0
 		app.updateLogsView(true)
@@ -6090,8 +6144,8 @@ func (app *App) scrollDownLogs(step int) error {
 					return err
 				}
 				vLog.Subtitle = fmt.Sprintf(
-					"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-					app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+					"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+					app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 				)
 			}
 		}
@@ -6115,8 +6169,8 @@ func (app *App) scrollUpLogs(step int) error {
 			return err
 		}
 		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 		)
 	}
 	app.updateLogsView(false)
@@ -6130,8 +6184,8 @@ func (app *App) pageUpLogs() {
 	if !app.testMode {
 		vLog, _ := app.gui.View("logs")
 		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 		)
 	}
 	app.updateLogsView(false)
@@ -6178,8 +6232,8 @@ func (app *App) updateLogOutput(newUpdate bool) {
 				return err
 			}
 			vLog.Subtitle = fmt.Sprintf(
-				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 			)
 		}
 		switch app.lastWindow {
@@ -6332,8 +6386,8 @@ func (app *App) updateDelimiter(newUpdate bool) {
 		if !app.testMode {
 			vLog, _ := app.gui.View("logs")
 			vLog.Subtitle = fmt.Sprintf(
-				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 			)
 		}
 		// Фиксируем новое время загрузки журнала
@@ -7066,7 +7120,7 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("docker", customEnter, gocui.ModNone, app.selectDocker); err != nil {
 		return err
 	}
-	// Enter для загрузки журнала из фильтра по времени
+	// Enter для загрузки журнала из фильтра по дате
 	if err := app.gui.SetKeybinding("sinceFilter", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		app.updateLogOutput(true)
 		return nil
@@ -7149,8 +7203,8 @@ func (app *App) setupKeybindings() error {
 			return err
 		}
 		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 		)
 		app.updateLogsView(true)
 		return nil
@@ -7169,8 +7223,8 @@ func (app *App) setupKeybindings() error {
 			return err
 		}
 		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 		)
 		app.updateLogsView(true)
 		return nil
@@ -7218,8 +7272,8 @@ func (app *App) setupKeybindings() error {
 			}
 			app.secondsChan <- app.logUpdateSeconds
 			v.Subtitle = fmt.Sprintf(
-				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 			)
 		}
 		return nil
@@ -7236,8 +7290,8 @@ func (app *App) setupKeybindings() error {
 			// Изменяем интервал в горутине
 			app.secondsChan <- app.logUpdateSeconds
 			v.Subtitle = fmt.Sprintf(
-				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 			)
 		}
 		return nil
@@ -7261,8 +7315,8 @@ func (app *App) setupKeybindings() error {
 			return err
 		}
 		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 		)
 		app.updateLogOutput(false)
 		return nil
@@ -7320,8 +7374,8 @@ func (app *App) setupKeybindings() error {
 			return err
 		}
 		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 		)
 		return nil
 	}); err != nil {
@@ -7460,28 +7514,28 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	// Очистка поля ввода для фильтрации по времени
+	// Очистка поля ввода для фильтрации по дате
 	if err := app.gui.SetKeybinding("sinceFilter", customExit, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if app.sinceFilterText == "" {
+		if v.Buffer() == "⎯" {
 			return quit(g, v)
 		} else {
+			app.sinceDateFilterMode = false
+			v.FrameColor = app.errorColor
 			v.Clear()
-			app.sinceFilterText = strings.TrimSpace(v.Buffer())
-			v.FrameColor = app.selectedFrameColor
-			app.sinceTimestampFilterMode = false
+			fmt.Fprint(v, "⎯")
 			return nil
 		}
 	}); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("untilFilter", customExit, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if app.untilFilterText == "" {
+		if v.Buffer() == "⎯" {
 			return quit(g, v)
 		} else {
+			app.untilDateFilterMode = false
+			v.FrameColor = app.errorColor
 			v.Clear()
-			app.untilFilterText = strings.TrimSpace(v.Buffer())
-			v.FrameColor = app.selectedFrameColor
-			app.untilTimestampFilterMode = false
+			fmt.Fprint(v, "⎯")
 			return nil
 		}
 	}); err != nil {
@@ -7614,7 +7668,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 53
+	width, height := 108, 42
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -7640,14 +7694,16 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "                  \033[32m                    |___/\033[0m")
 	fmt.Fprintln(helpView, "\n    Version: "+app.wordColor(programVersion))
 	fmt.Fprintln(helpView, "\n    Hotkeys description (default values):")
-	fmt.Fprintln(helpView, "\n      \033[32mUp\033[0m/\033[32mPgUp\033[0m/\033[32mk\033[0m and \033[32mDown\033[0m/\033[32mPgDown\033[0m/\033[32mj\033[0m - move up and down through all journal lists and log output,")
+	fmt.Fprintln(helpView, "\n      \033[32mTab\033[0m - switch to next window.")
+	fmt.Fprintln(helpView, "      \033[32mShift\033[0m+\033[32mTab\033[0m - return to previous window.")
+	fmt.Fprintln(helpView, "      \033[32mUp\033[0m/\033[32mPgUp\033[0m/\033[32mk\033[0m and \033[32mDown\033[0m/\033[32mPgDown\033[0m/\033[32mj\033[0m - move up and down through all journal lists and log output,")
 	fmt.Fprintln(helpView, "      as well as changing the filtering mode in the filter window.")
 	fmt.Fprintln(helpView, "      \033[32mShift\033[0m/\033[32mAlt\033[0m+\033[32mUp\033[0m/\033[32mDown\033[0m - quickly move up and down through all journal lists and log output")
 	fmt.Fprintln(helpView, "      every 10 or 100 lines (500 for log output).")
 	fmt.Fprintln(helpView, "      \033[32mShift\033[0m/\033[32mCtrl\033[0m+\033[32mk\033[0m/\033[32mj\033[0m - quickly move up and down (like Vim and alternative for macOS from config).")
-	fmt.Fprintln(helpView, "      \033[32mLeft\033[0m/\033[32m[\033[0m/\033[32mh\033[0m and \033[32mRight\033[0m/\033[32m]\033[0m/\033[32ml\033[0m - switch between journal lists in the selected window.")
-	fmt.Fprintln(helpView, "      \033[32mTab\033[0m - switch to next window.")
-	fmt.Fprintln(helpView, "      \033[32mShift\033[0m+\033[32mTab\033[0m - return to previous window.")
+	fmt.Fprintln(helpView, "      \033[32mLeft\033[0m/\033[32mh\033[0m and \033[32mRight\033[0m/\033[32ml\033[0m - switch between journal lists in the selected window and change the date")
+	fmt.Fprintln(helpView, "      in the filter window.")
+	fmt.Fprintln(helpView, "      \033[32mDel\033[0m/\033[32mBackspace\033[0m - disable filtering by date.")
 	fmt.Fprintln(helpView, "      \033[32mEnter\033[0m - load a log from the list window or return to the previous window from the filter window.")
 	fmt.Fprintln(helpView, "      \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
 	fmt.Fprintln(helpView, "      \033[32mEnd\033[0m/\033[32mCtrl\033[0m+\033[32mE\033[0m - go to the end of the log.")
@@ -7662,15 +7718,6 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp and stream type for docker logs.")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mC\033[0m - clear input text in the filter window or exit.")
-	fmt.Fprintln(helpView, "\n    Supported formats for filtering by timestamp:")
-	fmt.Fprintln(helpView, "\n      "+app.wordColor("00:00"))
-	fmt.Fprintln(helpView, "      "+app.wordColor("00:00:00"))
-	fmt.Fprintln(helpView, "      "+app.wordColor("2025-04-14"))
-	fmt.Fprintln(helpView, "      "+app.wordColor("2025-04-14 00:00"))
-	fmt.Fprintln(helpView, "      "+app.wordColor("2025-04-14 00:00:00"))
-	fmt.Fprintln(helpView, "\n    Examples of short format:")
-	fmt.Fprintln(helpView, "\n      Since \033[35m-\033[34m48h\033[0m until \033[35m-\033[34m24h\033[0m for container logs from journald (logs for the previous day).")
-	fmt.Fprintln(helpView, "      Since \033[35m+\033[34m1h\033[0m until \033[35m+\033[34m30m\033[0m for system journals from docker or podman.")
 	fmt.Fprintln(helpView, "\n    Source code: "+app.wordColor("https://github.com/Lifailon/lazyjournal"))
 }
 
@@ -7747,8 +7794,8 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 		return err
 	}
 	vLog.Subtitle = fmt.Sprintf(
-		"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-		app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+		"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+		app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 	)
 	return nil
 }
@@ -7784,8 +7831,8 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 		return err
 	}
 	vLog.Subtitle = fmt.Sprintf(
-		"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s]",
-		app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus,
+		"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
+		app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
 	)
 	return nil
 }
@@ -7812,7 +7859,7 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 		leftPanelWidth := maxX / 4
 		filterWidth := (maxX - leftPanelWidth - 1) / 2
 		if v, err := g.SetView("sinceFilter", leftPanelWidth+1, 0, leftPanelWidth+1+filterWidth, 2, 0); err != nil {
-			v.Title = "Since timestamp"
+			v.Title = "Since date"
 			v.Editable = true
 			v.Wrap = true
 			// Обработка времени и даты
@@ -7832,7 +7879,7 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 			}
 		}
 		if v2, err := g.SetView("untilFilter", leftPanelWidth+1+filterWidth+1, 0, maxX-1, 2, 0); err != nil {
-			v2.Title = "Until timestamp"
+			v2.Title = "Until date"
 			v2.Editable = true
 			v2.Wrap = true
 			v2.Editor = app.timestampFilterEditor("untilFilter")
@@ -7879,7 +7926,7 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 		leftPanelWidth := maxX / 4
 		filterWidth := (maxX - leftPanelWidth - 1) / 2
 		if v, err := g.SetView("sinceFilter", leftPanelWidth+1, 0, leftPanelWidth+1+filterWidth, 2, 0); err != nil {
-			v.Title = "Since timestamp"
+			v.Title = "Since date"
 			v.Editable = true
 			v.Wrap = true
 			v.Editor = app.timestampFilterEditor("sinceFilter")
@@ -7894,7 +7941,7 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 			}
 		}
 		if v2, err := g.SetView("untilFilter", leftPanelWidth+1+filterWidth+1, 0, maxX-1, 2, 0); err != nil {
-			v2.Title = "Until timestamp"
+			v2.Title = "Until date"
 			v2.Editable = true
 			v2.Wrap = true
 			v2.Editor = app.timestampFilterEditor("untilFilter")
