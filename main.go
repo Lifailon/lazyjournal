@@ -22,11 +22,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/awesome-gocui/gocui"
 	"golang.org/x/text/encoding/charmap"
-	"golang.org/x/text/encoding/unicode"
+	winUnicode "golang.org/x/text/encoding/unicode"
 	"gopkg.in/yaml.v3"
 )
 
@@ -803,6 +804,8 @@ func remoteGetOS(sshOptions []string) (string, error) {
 	}
 }
 
+// ---------------------------------------- gocui ----------------------------------------
+
 // Объявляем GUI
 var g *gocui.Gui
 
@@ -835,7 +838,7 @@ func runGoCui(mock bool) {
 		untilDateFilterMode:          false,
 		sinceFilterDate:              time.Now(),
 		untilFilterDate:              time.Now(),
-		limitFilterDate:              time.Now(),
+		limitFilterDate:              time.Now().AddDate(0, 0, 1),
 		autoScroll:                   true,
 		trimHttpRegex:                trimHttpRegex,
 		trimHttpsRegex:               trimHttpsRegex,
@@ -854,7 +857,7 @@ func runGoCui(mock bool) {
 		uniquePrefixColorMap:         make(map[string]string),
 	}
 
-	// Форматируем даты фильтров в текст
+	// Фиксируем дату для фильтрации
 	app.sinceFilterText = app.sinceFilterDate.Format("2006-01-02")
 	app.untilFilterText = app.untilFilterDate.Format("2006-01-02")
 
@@ -3545,13 +3548,13 @@ func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors str
 	switch {
 	case utf16withBOM(buffer):
 		// Декодируем UTF-16 с BOM
-		decodedOutput, err = unicode.UTF16(unicode.LittleEndian, unicode.ExpectBOM).NewDecoder().Bytes(buffer)
+		decodedOutput, err = winUnicode.UTF16(winUnicode.LittleEndian, winUnicode.ExpectBOM).NewDecoder().Bytes(buffer)
 		if err != nil {
 			return nil, fmt.Sprintf("decoding from UTF-16 with BOM: %v", err)
 		}
 	case utf16withoutBOM(buffer):
 		// Декодируем UTF-16 LE без BOM
-		decodedOutput, err = unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewDecoder().Bytes(buffer)
+		decodedOutput, err = winUnicode.UTF16(winUnicode.LittleEndian, winUnicode.IgnoreBOM).NewDecoder().Bytes(buffer)
 		if err != nil {
 			return nil, fmt.Sprintf("decoding from UTF-16 LE without BOM: %v", err)
 		}
@@ -5283,6 +5286,64 @@ func (app *App) urlPathColor(cleanedWord string) string {
 	return sb.String()
 }
 
+func (app *App) intColor(inputString string) string {
+	var colored strings.Builder
+	// Флаги, для фиксации нахождения внутри числа/символа или нет
+	inNumber := false
+	inSymbol := false
+	for _, char := range inputString {
+		switch {
+		case char >= '0' && char <= '9':
+			// Если это цифра и мы еще не в числе, открываем цвет
+			if !inNumber {
+				colored.WriteString("\033[34m")
+				inNumber = true
+			}
+		case char == '/' || char == ':' || char == '.' || char == '-' || char == '+' || char == '%':
+			// Красим символы
+			colored.WriteString("\033[35m")
+			inSymbol = true
+			inNumber = false
+		default:
+			// Если это не цифра и до этого было число, закрываем цвет
+			if inNumber {
+				inNumber = false
+			}
+			// Для всех других символов
+			colored.WriteString("\033[0m")
+		}
+		// Добавляем символ в результат
+		colored.WriteRune(char)
+		// Закрываем цвет для символа
+		if inSymbol {
+			colored.WriteString("\033[0m")
+			inSymbol = false
+		}
+	}
+	// Закрываем цвет, если строка закончилась на числе
+	if inNumber {
+		colored.WriteString("\033[0m")
+	}
+	return colored.String()
+}
+
+// Проверка string на int и конвертация в int
+func parseStringToInt(s string) (int, bool) {
+	if len(s) == 0 {
+		return 0, false
+	}
+	for _, r := range s {
+		if !unicode.IsDigit(r) {
+			return 0, false
+		}
+	}
+	num, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, false
+	}
+	return num, true
+}
+
 // (3) Функция для покраски словосочетаний
 func (app *App) wordColor(inputWord string) string {
 	// Опускаем регистр слова
@@ -5290,6 +5351,28 @@ func (app *App) wordColor(inputWord string) string {
 	// Значение по умолчанию
 	var coloredWord = inputWord
 	switch {
+	// Сначала проверяем длинну символов и HTTP response status codes
+	case len(inputWord) <= 3:
+		// Проверяем вхождение символов на цифры
+		inputInt, isInt := parseStringToInt(inputWord)
+		if isInt {
+			// Проверяем статусы ответа по стандарту Mozilla (mdn)
+			switch {
+			case inputInt >= 200 && inputInt <= 208:
+				coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[42m\033[30m "+inputWord+" \033[0m")
+			case inputInt >= 300 && inputInt <= 308:
+				coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[43m\033[30m "+inputWord+" \033[0m")
+			case inputInt >= 400 && inputInt <= 431 || inputInt >= 500 && inputInt <= 511:
+				coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[41m\033[30m "+inputWord+" \033[0m")
+			default:
+				// Красим цифры стандартно
+				coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[34m"+inputWord+"\033[0m")
+			}
+		} else if app.integersInputRegex.MatchString(inputWord) {
+			// Красим цифры по функции
+			coloredWord = app.intColor(inputWord)
+			return coloredWord
+		}
 	// URL
 	case strings.Contains(inputWord, "http://"):
 		cleanedWord := app.trimHttpRegex.ReplaceAllString(inputWord, "")
@@ -5336,7 +5419,7 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = app.replaceWordLower(inputWord, "rsyslogd", "\033[36m")
 	case strings.HasPrefix(inputWordLower, "sudo:"):
 		coloredWord = app.replaceWordLower(inputWord, "sudo", "\033[36m")
-	// HTTP methods
+	// HTTP request methods
 	case strings.Contains(inputWord, "GET"):
 		coloredWord = strings.ReplaceAll(inputWord, "GET", "\033[42m\033[30m GET \033[0m")
 	case strings.Contains(inputWord, "POST"):
@@ -5347,6 +5430,8 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = strings.ReplaceAll(inputWord, "PATCH", "\033[45m\033[30m PATCH \033[0m")
 	case strings.Contains(inputWord, "TRACE"):
 		coloredWord = strings.ReplaceAll(inputWord, "TRACE", "\033[45m\033[30m TRACE \033[0m")
+	case strings.Contains(inputWord, "OPTIONS"):
+		coloredWord = strings.ReplaceAll(inputWord, "OPTIONS", "\033[45m\033[30m OPTIONS \033[0m")
 	case strings.Contains(inputWord, "DELETE"):
 		coloredWord = strings.ReplaceAll(inputWord, "DELETE", "\033[41m\033[30m DELETE \033[0m")
 	case strings.Contains(inputWord, "CONNECT"):
@@ -5722,44 +5807,8 @@ func (app *App) wordColor(inputWord string) string {
 		})
 	// Integers
 	case app.integersInputRegex.MatchString(inputWord):
-		var colored strings.Builder
-		// Флаги, для фиксации нахождения внутри числа/символа или нет
-		inNumber := false
-		inSymbol := false
-		for _, char := range inputWord {
-			switch {
-			case char >= '0' && char <= '9':
-				// Если это цифра и мы еще не в числе, открываем цвет
-				if !inNumber {
-					colored.WriteString("\033[34m")
-					inNumber = true
-				}
-			case char == '/' || char == ':' || char == '.' || char == '-' || char == '+' || char == '%':
-				// Красим символы
-				colored.WriteString("\033[35m")
-				inSymbol = true
-				inNumber = false
-			default:
-				// Если это не цифра и до этого было число, закрываем цвет
-				if inNumber {
-					inNumber = false
-				}
-				// Для всех других символов
-				colored.WriteString("\033[0m")
-			}
-			// Добавляем символ в результат
-			colored.WriteRune(char)
-			// Закрываем цвет для символа
-			if inSymbol {
-				colored.WriteString("\033[0m")
-				inSymbol = false
-			}
-		}
-		// Закрываем цвет, если строка закончилась на числе
-		if inNumber {
-			colored.WriteString("\033[0m")
-		}
-		return colored.String()
+		coloredWord = app.intColor(inputWord)
+		return coloredWord
 	// Отключаем покраску действий
 	case app.colorActionsDisable:
 		break
@@ -5774,7 +5823,7 @@ func (app *App) wordColor(inputWord string) string {
 				break
 			}
 		}
-	case strings.Contains(inputWordLower, "reg"):
+	case strings.Contains(inputWordLower, "regi"):
 		words := []string{"registered", "registration"}
 		for _, word := range words {
 			if strings.Contains(inputWordLower, word) {
@@ -5846,8 +5895,8 @@ func (app *App) wordColor(inputWord string) string {
 				break
 			}
 		}
-	case strings.Contains(inputWordLower, "syn"):
-		words := []string{"synchronization", "synchronize", "sync", "syn"}
+	case strings.Contains(inputWordLower, "sync"):
+		words := []string{"synchronization", "synchronize", "sync"}
 		for _, word := range words {
 			if strings.Contains(inputWordLower, word) {
 				coloredWord = app.replaceWordLower(inputWord, word, "\033[36m")

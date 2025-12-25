@@ -25,19 +25,17 @@ kernel: system running
 rsyslogd: rsyslog running
 sudo: service was restarted
 
-⎯⎯⎯ HTTP methods ⎯⎯⎯
+⎯⎯⎯ HTTP status codes and methods ⎯⎯⎯
 
-GET
-POST
-PUT
-PATCH
-TRACE
-DELETE
-CONNECT
+200 201 302 304 
+400 401 404 502 
+
+GET, POST, DELETE, CONNECT
+PUT, PATCH, TRACE, OPTIONS
 
 ⎯⎯⎯ Statuses ⎯⎯⎯
 
-OK, DONE, DEBUG, INFO, NOTICE, WARN, WARNING
+DONE, WARN, WARNING, DEBUG, INFO, NOTICE
 ERR, ERROR, CRIT, ALERT, EMERG, FAIL, FATAL
 
 ⎯⎯⎯ Numbers ⎯⎯⎯
@@ -55,8 +53,8 @@ Integers: 1, 10, 100, (1), [10], {100}, "1000"
 
 ⎯⎯⎯ Warnings and known names (yellow) ⎯⎯⎯
 
-lifailon, root, daemon
 warnings, warning, warn
+lifailon, root, daemon
 
 ⎯⎯⎯ Success (green) ⎯⎯⎯
 
@@ -71,7 +69,7 @@ enabled, enables, enable
 allowed, allowing, allow
 passed, passing
 ready, available, running, installed
-true, ok, done, yes
+true, done
 
 ⎯⎯⎯ Errors (red) ⎯⎯⎯
 
@@ -96,7 +94,7 @@ emergency, emerg
 rejecting, rejection, rejected, reject
 refusing, refused, refuses, refuse
 denied, unavailable, unknown, unsuccessful, unauthorized, forbidden, conflict, severe
-false, null, nil, none, no
+false, null, nil, none
 Not found
 Bad request
 
@@ -116,7 +114,7 @@ overloading, overloaded, overload, uploading, uploaded, uploads, upload
 downloading, downloaded, downloads, download, loading, loaded, load
 updates, updated, updating, update
 upgrades, upgraded, upgrading, upgrade, setup
-synchronization, synchronize, sync, syn
+synchronization, synchronize, sync
 launched, launching, launch
 changed, changing, change
 cleaning, cleaner, clearing, cleared, clear
@@ -134,5 +132,4 @@ notifications, notification, notify, noting, notice
 informations, information, informing, informed, info
 installation, installing, install, initialization, initial
 stdout, timeout
-debug, verbose, level, status
-shutdown, protocol
+debug, verbose, level, status, shutdown
