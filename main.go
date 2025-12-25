@@ -63,6 +63,8 @@ type Settings struct {
 // Структура доступных сочетаний клавиш для переопределения (#23)
 type Hotkeys struct {
 	Help                 string `yaml:"help"`
+	SwitchWindow         string `yaml:"switchWindow"`
+	BackSwitchWindows    string `yaml:"backSwitchWindows"`
 	Up                   string `yaml:"up"`
 	QuickUp              string `yaml:"quickUp"`
 	VeryQuickUp          string `yaml:"veryQuickUp"`
@@ -73,8 +75,7 @@ type Hotkeys struct {
 	BackSwitchFilterMode string `yaml:"backSwitchFilterMode"`
 	Left                 string `yaml:"left"`
 	Right                string `yaml:"right"`
-	SwitchWindow         string `yaml:"switchWindow"`
-	BackSwitchWindows    string `yaml:"backSwitchWindows"`
+	DisableFilterByDate  string `yaml:"disableFilterByDate"`
 	LoadJournal          string `yaml:"loadJournal"`
 	GoToFilter           string `yaml:"goToFilter"`
 	GoToEnd              string `yaml:"goToEnd"`
@@ -86,8 +87,7 @@ type Hotkeys struct {
 	AutoUpdateJournal    string `yaml:"autoUpdateJournal"`
 	UpdateJournal        string `yaml:"updateJournal"`
 	UpdateLists          string `yaml:"updateLists"`
-	ColorDisable         string `yaml:"colorDisable"`
-	TailspinEnable       string `yaml:"tailspinEnable"`
+	SwitchColorMode      string `yaml:"switchColorMode"`
 	SwitchDockerMode     string `yaml:"switchDockerMode"`
 	SwitchStreamMode     string `yaml:"switchStreamMode"`
 	TimestampShow        string `yaml:"timestampShow"`
@@ -344,6 +344,8 @@ func showConfig() {
 
 	fmt.Println("hotkeys:")
 	fmt.Printf("  help:                     %s\n", config.Hotkeys.Help)
+	fmt.Printf("  switchWindow:             %s\n", config.Hotkeys.SwitchWindow)
+	fmt.Printf("  backSwitchWindows:        %s\n", config.Hotkeys.BackSwitchWindows)
 	fmt.Printf("  up:                       %s\n", config.Hotkeys.Up)
 	fmt.Printf("  quickUp:                  %s\n", config.Hotkeys.QuickUp)
 	fmt.Printf("  veryQuickUp:              %s\n", config.Hotkeys.VeryQuickUp)
@@ -354,8 +356,7 @@ func showConfig() {
 	fmt.Printf("  backSwitchFilterMode:     %s\n", config.Hotkeys.BackSwitchFilterMode)
 	fmt.Printf("  left:                     %s\n", config.Hotkeys.Left)
 	fmt.Printf("  right:                    %s\n", config.Hotkeys.Right)
-	fmt.Printf("  switchWindow:             %s\n", config.Hotkeys.SwitchWindow)
-	fmt.Printf("  backSwitchWindows:        %s\n", config.Hotkeys.BackSwitchWindows)
+	fmt.Printf("  disableFilterByDate:      %s\n", config.Hotkeys.DisableFilterByDate)
 	fmt.Printf("  loadJournal:              %s\n", config.Hotkeys.LoadJournal)
 	fmt.Printf("  goToFilter:               %s\n", config.Hotkeys.GoToFilter)
 	fmt.Printf("  goToEnd:                  %s\n", config.Hotkeys.GoToEnd)
@@ -367,8 +368,7 @@ func showConfig() {
 	fmt.Printf("  autoUpdateJournal:        %s\n", config.Hotkeys.AutoUpdateJournal)
 	fmt.Printf("  updateJournal:            %s\n", config.Hotkeys.UpdateJournal)
 	fmt.Printf("  updateLists:              %s\n", config.Hotkeys.UpdateLists)
-	fmt.Printf("  colorDisable:             %s\n", config.Hotkeys.ColorDisable)
-	fmt.Printf("  tailspinEnable:           %s\n", config.Hotkeys.TailspinEnable)
+	fmt.Printf("  switchColorMode:          %s\n", config.Hotkeys.SwitchColorMode)
 	fmt.Printf("  switchDockerMode:         %s\n", config.Hotkeys.SwitchDockerMode)
 	fmt.Printf("  switchStreamMode:         %s\n", config.Hotkeys.SwitchStreamMode)
 	fmt.Printf("  timestampShow:            %s\n", config.Hotkeys.TimestampShow)
@@ -4578,19 +4578,22 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 // Функция для фильтрации по дате
 func (app *App) timestampFilterEditor(window string) gocui.Editor {
 	return gocui.EditorFunc(func(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
+		customLeft := getHotkey(config.Hotkeys.Left, "h")
+		customRight := getHotkey(config.Hotkeys.Right, "l")
+		disableFilterByDate := getHotkey(config.Hotkeys.DisableFilterByDate, "delete")
 		var filterDate time.Time
 		var filterText string
 		switch window {
 		case "sinceFilter":
 			switch {
 			// Пропускаем только Right/l для увеличения даты
-			case key == gocui.KeyArrowRight || key == 'l':
+			case key == gocui.KeyArrowRight || ch == customRight:
 				filterDate, filterText = app.switchDate(app.sinceFilterDate, true)
 			// Пропускаем только Left/h для уменьшения даты
-			case key == gocui.KeyArrowLeft || key == 'h':
+			case key == gocui.KeyArrowLeft || ch == customLeft:
 				filterDate, filterText = app.switchDate(app.sinceFilterDate, false)
 			// На Del или Backspace отключаем фильтрацию
-			case key == gocui.KeyDelete || key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
+			case key == disableFilterByDate || key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
 				app.sinceDateFilterMode = false
 				v.FrameColor = app.errorColor
 				v.Clear()
@@ -4615,11 +4618,11 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			app.updateStatus()
 		case "untilFilter":
 			switch {
-			case key == gocui.KeyArrowRight || ch == '+':
+			case key == gocui.KeyArrowRight || ch == customRight:
 				filterDate, filterText = app.switchDate(app.untilFilterDate, true)
-			case key == gocui.KeyArrowLeft || ch == '-':
+			case key == gocui.KeyArrowLeft || ch == customLeft:
 				filterDate, filterText = app.switchDate(app.untilFilterDate, false)
-			case key == gocui.KeyDelete || key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
+			case key == disableFilterByDate || key == gocui.KeyBackspace || key == gocui.KeyBackspace2:
 				app.untilDateFilterMode = false
 				v.FrameColor = app.errorColor
 				v.Clear()
@@ -6491,7 +6494,9 @@ var keyMap = map[string]gocui.Key{
 	"enter":     gocui.KeyEnter,
 	"space":     gocui.KeySpace,
 	"backspace": gocui.KeyBackspace,
+	"del":       gocui.KeyDelete,
 	"delete":    gocui.KeyDelete,
+	"esc":       gocui.KeyEsc,
 	"escape":    gocui.KeyEsc,
 }
 
@@ -6923,14 +6928,7 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.SetKeybinding("services", gocui.KeyArrowRight, gocui.ModNone, app.setUnitListRight); err != nil {
 			return err
 		}
-		// [/]
-		if err := app.gui.SetKeybinding("services", '[', gocui.ModNone, app.setUnitListLeft); err != nil {
-			return err
-		}
-		if err := app.gui.SetKeybinding("services", ']', gocui.ModNone, app.setUnitListRight); err != nil {
-			return err
-		}
-		// Default: h/l (100)
+		// Custom by default: h/l (100)
 		if err := app.gui.SetKeybinding("services", customLeft, gocui.ModNone, app.setUnitListLeft); err != nil {
 			return err
 		}
@@ -6947,12 +6945,6 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.SetKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone, app.setLogFilesListRight); err != nil {
 			return err
 		}
-		if err := app.gui.SetKeybinding("varLogs", '[', gocui.ModNone, app.setLogFilesListLeft); err != nil {
-			return err
-		}
-		if err := app.gui.SetKeybinding("varLogs", ']', gocui.ModNone, app.setLogFilesListRight); err != nil {
-			return err
-		}
 		if err := app.gui.SetKeybinding("varLogs", customLeft, gocui.ModNone, app.setLogFilesListLeft); err != nil {
 			return err
 		}
@@ -6967,12 +6959,6 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.DeleteKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone); err != nil {
 			return err
 		}
-		if err := app.gui.DeleteKeybinding("varLogs", '[', gocui.ModNone); err != nil {
-			return err
-		}
-		if err := app.gui.DeleteKeybinding("varLogs", ']', gocui.ModNone); err != nil {
-			return err
-		}
 		if err := app.gui.DeleteKeybinding("varLogs", customLeft, gocui.ModNone); err != nil {
 			return err
 		}
@@ -6985,12 +6971,6 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	if err := app.gui.SetKeybinding("docker", gocui.KeyArrowRight, gocui.ModNone, app.setContainersListRight); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("docker", '[', gocui.ModNone, app.setContainersListLeft); err != nil {
-		return err
-	}
-	if err := app.gui.SetKeybinding("docker", ']', gocui.ModNone, app.setContainersListRight); err != nil {
 		return err
 	}
 	if err := app.gui.SetKeybinding("docker", customLeft, gocui.ModNone, app.setContainersListLeft); err != nil {
@@ -7375,8 +7355,8 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// color mode - default (custom built-in), tailspin/tspin, bat/batcat or disable (Ctrl+W)
-	customColor := getHotkey(config.Hotkeys.ColorDisable, "ctrl+w")
+	// switch color mode - default (custom built-in), tailspin/tspin, bat/batcat or disable (Ctrl+W)
+	customColor := getHotkey(config.Hotkeys.SwitchColorMode, "ctrl+w")
 	if err := app.gui.SetKeybinding("", customColor, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		switch app.colorMode {
 		case "disable":
