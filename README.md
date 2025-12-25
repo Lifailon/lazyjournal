@@ -24,7 +24,9 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
 > [!NOTE]
 > You can try it out on the [Killercoda](https://killercoda.com/lazyjournal/scenario/playground) playground.
 
-![Regex filtering](/img/regex.png)
+![Regex filtering](/img/fuzzy.png)
+
+<!--
 
 <details>
     <summary>Screenshots</summary>
@@ -37,6 +39,8 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
     <li>Demo file of built-in output coloring for the log:</li>
     <img src="./img/coloring.jpg" alt="Demo file of built-in output coloring for the log" />
 </details>
+
+-->
 
 ## Features
 
@@ -67,34 +71,21 @@ Supports 4 filtering modes:
 - **Default** - case sensitive exact search.
 - **Fuzzy** (like `fzf`) - custom inexact case-insensitive search (searches for all phrases separated by a space anywhere on a line).
 - **Regex** (like `grep`) - search with regular expression support, based on the built-in [regexp](https://pkg.go.dev/regexp) library, case-insensitive by default (in case a regular expression syntax error occurs, the input field will be highlighted in red).
-- **Timestamp** - filter `since` and/or `until` by date and time for `journald` and docker or podman logs (only in stream mode). This mode affects the loading of the log (thereby increasing performance) and can be used in conjunction with other filtering modes, so the current log should be reloaded by pressing `Enter` in the current input field.
-
-Supported formats for filtering by timestamp:
-
-- `00:00`
-- `00:00:00`
-- `2025-04-14`
-- `2025-04-14 00:00`
-- `2025-04-14 00:00:00`
-
-Examples of short format:
-
-- Since `-48h` until `-24h` for container logs from journald (logs for the previous day).
-- Since `+1h` until `+30m` for system journals from docker or podman.
+- **Date** - filtering by date (`since` and/or `until`) for journald logs, as well as Docker or Podman containers (only supported in streaming mode) using the left and right arrow keys. This mode affects log loading (this is especially relevant for large logs, thereby increasing performance) and can be used in combination with other filtering modes.
 
 ### Coloring
 
 Several log output coloring modes are supported:
 
-- **default** - built-in output coloring, requires no dependencies and is several times faster than other tools (including command-line mode).
-- **tailspin** - uses [tailspin](https://github.com/bensadeh/tailspin) (requires the tool to be installed on the system).
-- **bat** - uses [bat](https://github.com/sharkdp/bat) in ansi mode and log language (requires the tool to be installed on the system).
+- **default** - built-in log highlighter by default, requires no dependencies and is several times faster than other tools (including in command-line mode).
+- **tailspin** - uses [tailspins](https://github.com/bensadeh/tailspin).
+- **bat** - uses [bat](https://github.com/sharkdp/bat) in ansi mode and log language.
 
-It is also possible to disable coloring, this is useful if your terminal already has output coloring built in, such as [WindTerm](https://github.com/kingToolbox/WindTerm).
+When using external tools, they are required to be already installed on your system. It is also possible to disable coloring, this is useful if your terminal already has output coloring built in, such as [WindTerm](https://github.com/kingToolbox/WindTerm).
 
 The built-in coloring by default supports several color groups:
 
-- **Custom** - URLs, HTTP methods (GET, POST, etc), double quotes and braces for json, file paths and processes in UNIX.
+- **Custom** - URLs, HTTP request methods and response status codes, double quotes and braces for json, file paths and processes in UNIX.
 - **Yellow** - warnings and known names (host name and system users).
 - **Green** - keywords indicating success.
 - **Red** - keywords indicating error.
@@ -126,8 +117,7 @@ Run the command in the console to quickly install or update the stable version f
 curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh | bash
 ```
 
-> [!NOTE]
-> This command will run a script that will download the latest executable binary (auto-detect OS and arch) from the GitHub repository to your home directory along with other executables (default path is `~/.local/bin/`) and configurations (`~/.config/lazyjournal/`) for the current user, and also grant execute permission.
+This command will run a script that will download the latest binary (auto-detect OS and arch) from the GitHub repository to your home directory along with other executables (default path is `~/.local/bin/lazyjournal`) and configurations (`~/.config/lazyjournal/config.yml`) for the current user, and also grant execute permission.
 
 ### Debian-based
 
@@ -232,20 +222,7 @@ go install github.com/Lifailon/lazyjournal@latest
 
 ## Usage
 
-You can run the interface from anywhere: `lazyjournal`
-
-Access to all system logs and containers may require elevated privileges for the current user. For example, if a user does not have read permission to the directory `/var/lib/docker/containers`, he will not be able to access all archived logs from the moment the container is started, but only from the moment the containerization system is started, so the process of reading logs is different. However, reading in streaming mode is faster than parsing json logs from the file system.
-
-Information in the subtitle of the `Logs` window (overridden by flags and hotkeys):
-
-- `tail` - maximum number of log lines to output (affects log loading performance).
-- `auto-update (interval)` - current mode of operation for automatic display of new events (disabled by manually scrolling the log output or using the `Ctrl+U` keyboard shortcut) and update interval (file logs are updated only when there are changes).
-- `docker` - displays the current mode for loading the container log (stream mode from the docker api or in json format from the file system) and stream display mode (all, stdout or stderr only).
-- `color` - displays the status (enabled or disabled) of the output coloring for the log.
-
-Hotkeys and settings values ​​can be overridden using the [config](/config.yml) file (see issue [#23](https://github.com/Lifailon/lazyjournal/issues/23) and [#27](https://github.com/Lifailon/lazyjournal/issues/27)), which can be in `~/.config/lazydocker/config.yml`, as well as next to the executable or in the current startup directory (has high priority).
-
-### Flags
+You can run the interface from anywhere:
 
 `lazyjournal -h`
 
@@ -273,17 +250,22 @@ Hotkeys and settings values ​​can be overridden using the [config](/config.y
                            Example: lazyjournal --ssh "lifailon@192.168.3.101 -p 22"
 ```
 
+Access to all system logs and containers may require elevated privileges for the current user. For example, if a user does not have read permission to the directory `/var/lib/docker/containers`, he will not be able to access all archived logs from the moment the container is started, but only from the moment the containerization system is started, so the process of reading logs is different. However, reading in streaming mode is faster than parsing json logs from the file system.
+
+Hotkeys and settings values ​​can be overridden using the [config](/config.yml) file (see issue [#23](https://github.com/Lifailon/lazyjournal/issues/23) and [#27](https://github.com/Lifailon/lazyjournal/issues/27)), which can be in `~/.config/lazydocker/config.yml`, as well as next to the executable or in the current startup directory (has high priority).
+
 ### Hotkeys
 
 List of all used keys and hotkeys (default values):
 
 - `F1` - show help on hotkeys.
+- `Tab` - switch to next window.
+- `Shift+Tab` - return to previous window.
 - `Up`/`PgUp`/`k` and `Down`/`PgDown`/`j` - move up and down through all journal lists and log output,  as well as changing the filtering mode in the filter window.
 - `Shift`/`Alt`+`Up`/`Down` - quickly move up and down through all journal lists and log output every `10` or `100` lines (`500` for log output).
 - `Shift`/`Ctrl`+`k`/`j` - quickly move up and down (like Vim and alternative for macOS from config).
-- `Left`/`[`/`h` and `Right`/`]`/`l` - switch between journal lists in the selected window.
-- `Tab` - switch to next window.
-- `Shift+Tab` - return to previous window.
+- `Left`/`h` and `Right`/`l` - switch between journal lists in the selected window and change the date in the filter window.
+- `Del`/`Backspace` - disable filtering by date.
 - `Enter` - load a log from the list window or return to the previous window from the filter window.
 - `/` - go to the filter window from the current list window or logs window.
 - `End`/`Ctrl+E` - go to the end of the log.
@@ -365,12 +347,16 @@ make test-all
 > [!NOTE]
 > A detailed report on test coverage using CI Actions for Linux, macOS and Windows systems is available on the [Wiki](https://github.com/Lifailon/lazyjournal/wiki) page.
 
+<!--
+
 Check the source code on the base linters using [golangci-lint](https://github.com/golangci/golangci-lint) (including all [critic](https://github.com/go-critic/go-critic) and severity high in [security](https://github.com/securego/gosec)):
 
 ```shell
 make lint-install
 make lint
 ```
+
+-->
 
 ## Contributing
 
