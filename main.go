@@ -4604,8 +4604,8 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			default:
 				return
 			}
-			// Проверяем дату (значение ДО не может быть больше/после текущей даты или значения ПОСЛЕ)
-			if filterDate.After(app.limitFilterDate) || filterDate.After(app.untilFilterDate) {
+			// Проверяем дату - значение ДО не может быть больше или равно текущей дате или значению ПОСЛЕ
+			if filterDate.After(app.limitFilterDate.AddDate(0, 0, -1)) || filterDate.After(app.untilFilterDate.AddDate(0, 0, -1)) {
 				return
 			}
 			// Изменяем значения в переменных и интерфейсе, включаем режим фильтрации и красим в зеленый
@@ -4632,8 +4632,8 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			default:
 				return
 			}
-			// Проверяем дату (значение ПОСЛЕ не может быть больше текущей даты ИЛИ меньше значения ДО)
-			if filterDate.After(app.limitFilterDate) || filterDate.Before(app.sinceFilterDate) {
+			// Проверяем дату - значение ПОСЛЕ не может быть больше текущей даты ИЛИ меньше значения ДО
+			if filterDate.After(app.limitFilterDate) || filterDate.Before(app.sinceFilterDate.AddDate(0, 0, 1)) {
 				return
 			}
 			app.untilFilterDate = filterDate
