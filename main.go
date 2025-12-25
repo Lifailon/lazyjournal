@@ -174,7 +174,6 @@ type App struct {
 	userName      string   // текущее имя пользователя
 	systemDisk    string   // порядковая буква системного диска для Windows
 	userNameArray []string // список всех пользователей
-	rootDirArray  []string // список всех корневых каталогов
 
 	customPath      string // пользовательский путь вместо /opt по умолчанию (#31)
 	minSymbolFilter int    // минимальное кол-во символов дли фильтрации вывода
@@ -264,14 +263,12 @@ type App struct {
 	streamTypeDocker bool
 
 	// Регулярные выражения для покраски строк
-	trimHttpRegex        *regexp.Regexp
-	trimHttpsRegex       *regexp.Regexp
-	trimPrefixPathRegex  *regexp.Regexp
-	trimPostfixPathRegex *regexp.Regexp
-	hexByteRegex         *regexp.Regexp
-	dateTimeRegex        *regexp.Regexp
-	integersInputRegex   *regexp.Regexp
-	syslogUnitRegex      *regexp.Regexp
+	trimHttpRegex      *regexp.Regexp
+	trimHttpsRegex     *regexp.Regexp
+	hexByteRegex       *regexp.Regexp
+	dateTimeRegex      *regexp.Regexp
+	integersInputRegex *regexp.Regexp
+	syslogUnitRegex    *regexp.Regexp
 
 	lastCurrentView string // фиксируем последнее используемое окно для Esc после /
 	backCurrentView bool   // отключаем/ключаем возврат
@@ -747,10 +744,6 @@ var (
 	trimHttpRegex = regexp.MustCompile(`^.*http://|([^a-zA-Z0-9:/._?&=+-].*)$`)
 	// И после любого символа, который не может содержать в себе url
 	trimHttpsRegex = regexp.MustCompile(`^.*https://|([^a-zA-Z0-9:/._?&=+-].*)$`)
-	// Иключаем все до первого символа слэша (не включительно)
-	trimPrefixPathRegex = regexp.MustCompile(`^[^/]+`)
-	// Исключаем все после первого символа, который не должен (но может) содержаться в пути
-	trimPostfixPathRegex = regexp.MustCompile(`[=:'"(){}\[\]]+.*$`)
 	// Байты или числа в шестнадцатеричном формате: 0x2 || 0xc0000001
 	hexByteRegex = regexp.MustCompile(`\b0x[0-9A-Fa-f]+\b`)
 	// DateTime: YYYY-MM-DDTHH:MM:SS.MS+HH:MM || YYYY-MM-DDTHH:MM:SS.MSZ
@@ -837,13 +830,11 @@ func runGoCui(mock bool) {
 		sinceDateFilterMode:          false,
 		untilDateFilterMode:          false,
 		sinceFilterDate:              time.Now(),
-		untilFilterDate:              time.Now(),
+		untilFilterDate:              time.Now().AddDate(0, 0, 1),
 		limitFilterDate:              time.Now().AddDate(0, 0, 1),
 		autoScroll:                   true,
 		trimHttpRegex:                trimHttpRegex,
 		trimHttpsRegex:               trimHttpsRegex,
-		trimPrefixPathRegex:          trimPrefixPathRegex,
-		trimPostfixPathRegex:         trimPostfixPathRegex,
 		hexByteRegex:                 hexByteRegex,
 		dateTimeRegex:                dateTimeRegex,
 		integersInputRegex:           integersInputRegex,
@@ -1264,13 +1255,6 @@ func runGoCui(mock bool) {
 		userName := strings.Split(line, ":")
 		if len(userName) > 0 {
 			app.userNameArray = append(app.userNameArray, userName[0])
-		}
-	}
-	// Список корневых каталогов (ls -d /*/) с приставкой "/"
-	files, _ := os.ReadDir("/")
-	for _, file := range files {
-		if file.IsDir() {
-			app.rootDirArray = append(app.rootDirArray, "/"+file.Name())
 		}
 	}
 
@@ -5248,16 +5232,6 @@ func (app *App) containsUser(searchWord string) bool {
 	return slices.Contains(app.userNameArray, searchWord)
 }
 
-// Поиск корневых директорий
-func (app *App) containsPath(searchWord string) bool {
-	for _, dir := range app.rootDirArray {
-		if strings.Contains(searchWord, dir) {
-			return true
-		}
-	}
-	return false
-}
-
 // Покраска url путей
 func (app *App) urlPathColor(cleanedWord string) string {
 	// Используем Builder для объединения строк
@@ -5351,12 +5325,17 @@ func (app *App) wordColor(inputWord string) string {
 	// Значение по умолчанию
 	var coloredWord = inputWord
 	switch {
-	// Сначала проверяем длинну символов и HTTP response status codes
+	// Исключения для HTTP методов длинной в 3 символа
+	case strings.Contains(inputWord, "GET"):
+		coloredWord = strings.ReplaceAll(inputWord, "GET", "\033[42m\033[30m GET \033[0m")
+	case strings.Contains(inputWord, "PUT"):
+		coloredWord = strings.ReplaceAll(inputWord, "PUT", "\033[45m\033[30m PUT \033[0m")
+	// Сначала проверяем длинну символов и HTTP статусы ответов по стандарту Mozilla
 	case len(inputWord) <= 3:
 		// Проверяем вхождение символов на цифры
 		inputInt, isInt := parseStringToInt(inputWord)
 		if isInt {
-			// Проверяем статусы ответа по стандарту Mozilla (mdn)
+			// HTTP response status codes
 			switch {
 			case inputInt >= 200 && inputInt <= 208:
 				coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[42m\033[30m "+inputWord+" \033[0m")
@@ -5384,23 +5363,19 @@ func (app *App) wordColor(inputWord string) string {
 		coloredChars := app.urlPathColor(cleanedWord)
 		// Зеленый для https
 		coloredWord = strings.ReplaceAll(inputWord, "https://"+cleanedWord, "\033[32mhttps\033[35m://"+coloredChars)
-	// UNIX file paths
-	case app.containsPath(inputWord) || strings.HasPrefix(inputWord, "~/") || strings.HasPrefix(inputWord, "./"):
-		cleanedWord := app.trimPrefixPathRegex.ReplaceAllString(inputWord, "")
-		cleanedWord = app.trimPostfixPathRegex.ReplaceAllString(cleanedWord, "")
-		// Начинаем с желтого цвета
-		coloredChars := "\033[33m"
-		var coloredCharsBuilder strings.Builder
-		for _, char := range cleanedWord {
-			// Красим символы разделителя путей в пурпурный и возвращяем цвет
-			if char == '/' {
-				coloredCharsBuilder.WriteString("\033[35m" + string(char) + "\033[33m")
-			} else {
-				coloredCharsBuilder.WriteRune(char)
-			}
-		}
-		coloredChars += coloredCharsBuilder.String()
-		coloredWord = strings.ReplaceAll(inputWord, cleanedWord, "\033[35m"+coloredChars+"\033[0m")
+	// UNIX file paths and HTTP endpoints
+	case strings.HasPrefix(inputWord, "/") || strings.HasPrefix(inputWord, "\"/") || strings.HasPrefix(inputWord, "~/") || strings.HasPrefix(inputWord, "./"):
+		// Красим символы разделителя путей в пурпурный и возвращяем цвет
+		coloredWord = strings.ReplaceAll(inputWord, "/", "\033[35m"+"/"+"\033[33m")
+		// Начало query параметров для HTTP путей
+		coloredWord = strings.ReplaceAll(coloredWord, "?", "\033[35m"+"?"+"\033[33m")
+		// Разделитель параметров
+		coloredWord = strings.ReplaceAll(coloredWord, "&", "\033[35m"+"&"+"\033[33m")
+		// Разделитель для ключей и их значений в параметрах
+		coloredWord = strings.ReplaceAll(coloredWord, "=", "\033[35m"+"="+"\033[33m")
+		// Закрываем цвет
+		coloredWord += "\033[0m"
+		// Красим префиксы
 		switch {
 		case strings.HasPrefix(inputWord, "~/"):
 			coloredWord = strings.Replace(coloredWord, "~", "\033[33m~\033[0m", 1)
@@ -5420,22 +5395,18 @@ func (app *App) wordColor(inputWord string) string {
 	case strings.HasPrefix(inputWordLower, "sudo:"):
 		coloredWord = app.replaceWordLower(inputWord, "sudo", "\033[36m")
 	// HTTP request methods
-	case strings.Contains(inputWord, "GET"):
-		coloredWord = strings.ReplaceAll(inputWord, "GET", "\033[42m\033[30m GET \033[0m")
 	case strings.Contains(inputWord, "POST"):
 		coloredWord = strings.ReplaceAll(inputWord, "POST", "\033[43m\033[30m POST \033[0m")
-	case strings.Contains(inputWord, "PUT"):
-		coloredWord = strings.ReplaceAll(inputWord, "PUT", "\033[45m\033[30m PUT \033[0m")
 	case strings.Contains(inputWord, "PATCH"):
 		coloredWord = strings.ReplaceAll(inputWord, "PATCH", "\033[45m\033[30m PATCH \033[0m")
 	case strings.Contains(inputWord, "TRACE"):
 		coloredWord = strings.ReplaceAll(inputWord, "TRACE", "\033[45m\033[30m TRACE \033[0m")
 	case strings.Contains(inputWord, "OPTIONS"):
 		coloredWord = strings.ReplaceAll(inputWord, "OPTIONS", "\033[45m\033[30m OPTIONS \033[0m")
-	case strings.Contains(inputWord, "DELETE"):
-		coloredWord = strings.ReplaceAll(inputWord, "DELETE", "\033[41m\033[30m DELETE \033[0m")
 	case strings.Contains(inputWord, "CONNECT"):
 		coloredWord = strings.ReplaceAll(inputWord, "CONNECT", "\033[42m\033[30m CONNECT \033[0m")
+	case strings.Contains(inputWord, "DELETE"):
+		coloredWord = strings.ReplaceAll(inputWord, "DELETE", "\033[41m\033[30m DELETE \033[0m")
 	// Статусы
 	case strings.Contains(inputWord, "DONE"):
 		coloredWord = strings.ReplaceAll(inputWord, "DONE", "\033[42m\033[30m DONE \033[0m")
@@ -5451,8 +5422,6 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = strings.ReplaceAll(inputWord, "NOTICE", "\033[46m\033[30m NOTICE \033[0m")
 	case strings.Contains(inputWord, "ERROR"):
 		coloredWord = strings.ReplaceAll(inputWord, "ERROR", "\033[41m\033[30m ERROR \033[0m")
-	case strings.Contains(inputWord, "ERR"):
-		coloredWord = strings.ReplaceAll(inputWord, "ERR", "\033[41m\033[30m ERR \033[0m")
 	case strings.Contains(inputWord, "CRIT"):
 		coloredWord = strings.ReplaceAll(inputWord, "CRIT", "\033[41m\033[30m CRIT \033[0m")
 	case strings.Contains(inputWord, "ALERT"):

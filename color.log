@@ -6,16 +6,17 @@ http://127.0.0.1:8443/api
 https://github.com/Lifailon/lazyjournal
 https://torapi.vercel.app/api/search/title/kinozal?query=The+Rookie&category=0&page=0&year=0&format=0
 
+⎯⎯⎯ URL and UNIX paths ⎯⎯⎯
+
+/api/v1/notifications?access_token=123&debug=true
+/var/log/syslog
+./lazyjournal
+~/.local/bin/lazyjournal
+
 ⎯⎯⎯ JSON (double quotes and braces) ⎯⎯⎯
 
 {"level":"info","version":"v8.14.6","time":"2025-12-05T03:23:46Z","message":"Dozzle version v8.14.6"}
 {"level":"error","version":"v8.14.6","host":"rpi-106","error":"unexpected EOF","time":"2025-12-06T08:32:37Z","message":"unexpected error while listening to docker events"}
-
-⎯⎯⎯ UNIX file paths ⎯⎯⎯
-
-~/.local/bin/lazyjournal
-./lazyjournal
-/var/log/syslog
 
 ⎯⎯⎯ UNIX processes ⎯⎯⎯
 
@@ -30,13 +31,19 @@ sudo: service was restarted
 200 201 302 304 
 400 401 404 502 
 
-GET, POST, DELETE, CONNECT
-PUT, PATCH, TRACE, OPTIONS
+GET
+POST
+PUT
+PATCH
+TRACE
+OPTIONS
+CONNECT
+DELETE
 
 ⎯⎯⎯ Statuses ⎯⎯⎯
 
-DONE, WARN, WARNING, DEBUG, INFO, NOTICE
-ERR, ERROR, CRIT, ALERT, EMERG, FAIL, FATAL
+DONE, WARNING, WARN, DEBUG, INFO, NOTICE
+ERROR, CRIT, ALERT, EMERG, FAIL, FATAL
 
 ⎯⎯⎯ Numbers ⎯⎯⎯
 

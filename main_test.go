@@ -60,14 +60,12 @@ func TestWinFiles(t *testing.T) {
 				selectFilterMode: "fuzzy",
 				filterText:       "",
 				// Инициализируем переменные с регулярными выражениями
-				trimHttpRegex:        trimHttpRegex,
-				trimHttpsRegex:       trimHttpsRegex,
-				trimPrefixPathRegex:  trimPrefixPathRegex,
-				trimPostfixPathRegex: trimPostfixPathRegex,
-				hexByteRegex:         hexByteRegex,
-				dateTimeRegex:        dateTimeRegex,
-				integersInputRegex:   integersInputRegex,
-				syslogUnitRegex:      syslogUnitRegex,
+				trimHttpRegex:      trimHttpRegex,
+				trimHttpsRegex:     trimHttpsRegex,
+				hexByteRegex:       hexByteRegex,
+				dateTimeRegex:      dateTimeRegex,
+				integersInputRegex: integersInputRegex,
+				syslogUnitRegex:    syslogUnitRegex,
 			}
 
 			currentUser, _ := user.Current()
@@ -129,22 +127,20 @@ func TestWinEvents(t *testing.T) {
 	file.WriteString("|-------|------|-------|------------|\n")
 
 	app := &App{
-		testMode:             true,
-		logViewCount:         "50000",
-		logUpdateSeconds:     5,
-		getOS:                "windows",
-		systemDisk:           "C",
-		userName:             "lifailon",
-		selectFilterMode:     "fuzzy",
-		filterText:           "",
-		trimHttpRegex:        trimHttpRegex,
-		trimHttpsRegex:       trimHttpsRegex,
-		trimPrefixPathRegex:  trimPrefixPathRegex,
-		trimPostfixPathRegex: trimPostfixPathRegex,
-		hexByteRegex:         hexByteRegex,
-		dateTimeRegex:        dateTimeRegex,
-		integersInputRegex:   integersInputRegex,
-		syslogUnitRegex:      syslogUnitRegex,
+		testMode:           true,
+		logViewCount:       "50000",
+		logUpdateSeconds:   5,
+		getOS:              "windows",
+		systemDisk:         "C",
+		userName:           "lifailon",
+		selectFilterMode:   "fuzzy",
+		filterText:         "",
+		trimHttpRegex:      trimHttpRegex,
+		trimHttpsRegex:     trimHttpsRegex,
+		hexByteRegex:       hexByteRegex,
+		dateTimeRegex:      dateTimeRegex,
+		integersInputRegex: integersInputRegex,
+		syslogUnitRegex:    syslogUnitRegex,
 	}
 
 	app.loadWinEvents()
@@ -194,23 +190,21 @@ func TestUnixFiles(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			app := &App{
-				selectPath:           tc.selectPath,
-				testMode:             true,
-				logViewCount:         "50000",
-				logUpdateSeconds:     5,
-				getOS:                "linux",
-				userName:             "lifailon",
-				selectFilterMode:     "fuzzy",
-				filterText:           "",
-				trimHttpRegex:        trimHttpRegex,
-				trimHttpsRegex:       trimHttpsRegex,
-				trimPrefixPathRegex:  trimPrefixPathRegex,
-				trimPostfixPathRegex: trimPostfixPathRegex,
-				hexByteRegex:         hexByteRegex,
-				dateTimeRegex:        dateTimeRegex,
-				integersInputRegex:   integersInputRegex,
-				syslogUnitRegex:      syslogUnitRegex,
-				customPath:           "/opt",
+				selectPath:         tc.selectPath,
+				testMode:           true,
+				logViewCount:       "50000",
+				logUpdateSeconds:   5,
+				getOS:              "linux",
+				userName:           "lifailon",
+				selectFilterMode:   "fuzzy",
+				filterText:         "",
+				trimHttpRegex:      trimHttpRegex,
+				trimHttpsRegex:     trimHttpsRegex,
+				hexByteRegex:       hexByteRegex,
+				dateTimeRegex:      dateTimeRegex,
+				integersInputRegex: integersInputRegex,
+				syslogUnitRegex:    syslogUnitRegex,
+				customPath:         "/opt",
 			}
 
 			// Пропускаем тесты в macOS/BSD
@@ -266,21 +260,19 @@ func TestLinuxJournal(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			app := &App{
-				selectUnits:          tc.journalName,
-				testMode:             true,
-				logViewCount:         "50000",
-				logUpdateSeconds:     5,
-				getOS:                "linux",
-				selectFilterMode:     "fuzzy",
-				filterText:           "",
-				trimHttpRegex:        trimHttpRegex,
-				trimHttpsRegex:       trimHttpsRegex,
-				trimPrefixPathRegex:  trimPrefixPathRegex,
-				trimPostfixPathRegex: trimPostfixPathRegex,
-				hexByteRegex:         hexByteRegex,
-				dateTimeRegex:        dateTimeRegex,
-				integersInputRegex:   integersInputRegex,
-				syslogUnitRegex:      syslogUnitRegex,
+				selectUnits:        tc.journalName,
+				testMode:           true,
+				logViewCount:       "50000",
+				logUpdateSeconds:   5,
+				getOS:              "linux",
+				selectFilterMode:   "fuzzy",
+				filterText:         "",
+				trimHttpRegex:      trimHttpRegex,
+				trimHttpsRegex:     trimHttpsRegex,
+				hexByteRegex:       hexByteRegex,
+				dateTimeRegex:      dateTimeRegex,
+				integersInputRegex: integersInputRegex,
+				syslogUnitRegex:    syslogUnitRegex,
 			}
 
 			app.loadServices(app.selectUnits)
@@ -340,8 +332,6 @@ func TestDockerContainer(t *testing.T) {
 				filterText:                   "",
 				trimHttpRegex:                trimHttpRegex,
 				trimHttpsRegex:               trimHttpsRegex,
-				trimPrefixPathRegex:          trimPrefixPathRegex,
-				trimPostfixPathRegex:         trimPostfixPathRegex,
 				hexByteRegex:                 hexByteRegex,
 				dateTimeRegex:                dateTimeRegex,
 				integersInputRegex:           integersInputRegex,
@@ -379,19 +369,17 @@ func TestColor(t *testing.T) {
 	}
 
 	app := &App{
-		testMode:             true,
-		logViewCount:         "50000",
-		logUpdateSeconds:     5,
-		selectPath:           "/home/",
-		filterListText:       "color",
-		trimHttpRegex:        trimHttpRegex,
-		trimHttpsRegex:       trimHttpsRegex,
-		trimPrefixPathRegex:  trimPrefixPathRegex,
-		trimPostfixPathRegex: trimPostfixPathRegex,
-		hexByteRegex:         hexByteRegex,
-		dateTimeRegex:        dateTimeRegex,
-		integersInputRegex:   integersInputRegex,
-		syslogUnitRegex:      syslogUnitRegex,
+		testMode:           true,
+		logViewCount:       "50000",
+		logUpdateSeconds:   5,
+		selectPath:         "/home/",
+		filterListText:     "color",
+		trimHttpRegex:      trimHttpRegex,
+		trimHttpsRegex:     trimHttpsRegex,
+		hexByteRegex:       hexByteRegex,
+		dateTimeRegex:      dateTimeRegex,
+		integersInputRegex: integersInputRegex,
+		syslogUnitRegex:    syslogUnitRegex,
 	}
 
 	// Определяем переменные для покраски
@@ -411,12 +399,6 @@ func TestColor(t *testing.T) {
 		userName := strings.Split(line, ":")
 		if len(userName) > 0 {
 			app.userNameArray = append(app.userNameArray, userName[0])
-		}
-	}
-	files, _ := os.ReadDir("/")
-	for _, file := range files {
-		if file.IsDir() {
-			app.rootDirArray = append(app.rootDirArray, "/"+file.Name())
 		}
 	}
 
@@ -502,21 +484,19 @@ func TestFilter(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			app := &App{
-				testMode:             true,
-				logViewCount:         "50000",
-				logUpdateSeconds:     5,
-				selectPath:           "/home/",
-				filterListText:       "color",
-				selectFilterMode:     tc.selectFilterMode,
-				filterText:           "true",
-				trimHttpRegex:        trimHttpRegex,
-				trimHttpsRegex:       trimHttpsRegex,
-				trimPrefixPathRegex:  trimPrefixPathRegex,
-				trimPostfixPathRegex: trimPostfixPathRegex,
-				hexByteRegex:         hexByteRegex,
-				dateTimeRegex:        dateTimeRegex,
-				integersInputRegex:   integersInputRegex,
-				syslogUnitRegex:      syslogUnitRegex,
+				testMode:           true,
+				logViewCount:       "50000",
+				logUpdateSeconds:   5,
+				selectPath:         "/home/",
+				filterListText:     "color",
+				selectFilterMode:   tc.selectFilterMode,
+				filterText:         "true",
+				trimHttpRegex:      trimHttpRegex,
+				trimHttpsRegex:     trimHttpsRegex,
+				hexByteRegex:       hexByteRegex,
+				dateTimeRegex:      dateTimeRegex,
+				integersInputRegex: integersInputRegex,
+				syslogUnitRegex:    syslogUnitRegex,
 			}
 
 			if tc.selectFilterMode == "regex" {
@@ -539,12 +519,6 @@ func TestFilter(t *testing.T) {
 				userName := strings.Split(line, ":")
 				if len(userName) > 0 {
 					app.userNameArray = append(app.userNameArray, userName[0])
-				}
-			}
-			files, _ := os.ReadDir("/")
-			for _, file := range files {
-				if file.IsDir() {
-					app.rootDirArray = append(app.rootDirArray, "/"+file.Name())
 				}
 			}
 
@@ -600,8 +574,6 @@ func TestCommandColor(t *testing.T) {
 		autoScroll:                   true,
 		trimHttpRegex:                trimHttpRegex,
 		trimHttpsRegex:               trimHttpsRegex,
-		trimPrefixPathRegex:          trimPrefixPathRegex,
-		trimPostfixPathRegex:         trimPostfixPathRegex,
 		hexByteRegex:                 hexByteRegex,
 		dateTimeRegex:                dateTimeRegex,
 		integersInputRegex:           integersInputRegex,
@@ -658,13 +630,6 @@ func TestCommandColor(t *testing.T) {
 			app.userNameArray = append(app.userNameArray, userName[0])
 		}
 	}
-	// Список корневых каталогов (ls -d /*/) с приставкой "/"
-	files, _ := os.ReadDir("/")
-	for _, file := range files {
-		if file.IsDir() {
-			app.rootDirArray = append(app.rootDirArray, "/"+file.Name())
-		}
-	}
 
 	app.commandLineColor(false)
 	// Восстанавливаем оригинальный stdin
@@ -692,8 +657,6 @@ func TestCommandFuzzyFilter(t *testing.T) {
 		autoScroll:                   true,
 		trimHttpRegex:                trimHttpRegex,
 		trimHttpsRegex:               trimHttpsRegex,
-		trimPrefixPathRegex:          trimPrefixPathRegex,
-		trimPostfixPathRegex:         trimPostfixPathRegex,
 		hexByteRegex:                 hexByteRegex,
 		dateTimeRegex:                dateTimeRegex,
 		integersInputRegex:           integersInputRegex,
@@ -740,8 +703,6 @@ func TestCommandRegexFilter(t *testing.T) {
 		autoScroll:                   true,
 		trimHttpRegex:                trimHttpRegex,
 		trimHttpsRegex:               trimHttpsRegex,
-		trimPrefixPathRegex:          trimPrefixPathRegex,
-		trimPostfixPathRegex:         trimPostfixPathRegex,
 		hexByteRegex:                 hexByteRegex,
 		dateTimeRegex:                dateTimeRegex,
 		integersInputRegex:           integersInputRegex,
@@ -798,8 +759,6 @@ func TestMockInterface(t *testing.T) {
 		autoScroll:                   true,
 		trimHttpRegex:                trimHttpRegex,
 		trimHttpsRegex:               trimHttpsRegex,
-		trimPrefixPathRegex:          trimPrefixPathRegex,
-		trimPostfixPathRegex:         trimPostfixPathRegex,
 		hexByteRegex:                 hexByteRegex,
 		dateTimeRegex:                dateTimeRegex,
 		integersInputRegex:           integersInputRegex,
@@ -862,12 +821,6 @@ func TestMockInterface(t *testing.T) {
 		userName := strings.Split(line, ":")
 		if len(userName) > 0 {
 			app.userNameArray = append(app.userNameArray, userName[0])
-		}
-	}
-	files, _ := os.ReadDir("/")
-	for _, file := range files {
-		if file.IsDir() {
-			app.rootDirArray = append(app.rootDirArray, file.Name())
 		}
 	}
 
