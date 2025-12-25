@@ -26,22 +26,6 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
 
 ![Regex filtering](/img/fuzzy.png)
 
-<!--
-
-<details>
-    <summary>Screenshots</summary>
-    <li>Filtering the file log using fuzzy search:</li>
-    <img src="./img/fuzzy.jpg" alt="Filtering the file log using fuzzy search">
-    <li>Filtering by timestamp for ssh log from systemd:</li>
-    <img src="./img/timestamp.jpg" alt="Filtering by timestamp for ssh log from systemd" />
-    <li>Disabling built-in timestamp in docker logs and filtering by stream:</li>
-    <img src="./img/docker.jpg" alt="Disabling built-in timestamp in docker logs and filtering by stream" />
-    <li>Demo file of built-in output coloring for the log:</li>
-    <img src="./img/coloring.jpg" alt="Demo file of built-in output coloring for the log" />
-</details>
-
--->
-
 ## Features
 
 - Simple installation, to run download one executable file without dependencies and settings.
