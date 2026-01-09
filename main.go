@@ -1475,7 +1475,7 @@ func (app *App) layout(g *gocui.Gui) error {
 	}
 
 	// Окно для списка контейнеров Docker и Podman
-	if v, err := g.SetView("docker", 0, inputHeight+2*panelHeight, leftPanelWidth-1, maxY-1, 0); err != nil {
+	if v, err := g.SetView("docker", 0, inputHeight+2*panelHeight, leftPanelWidth-1, maxY-1-1, 0); err != nil {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
@@ -1503,7 +1503,7 @@ func (app *App) layout(g *gocui.Gui) error {
 	}
 
 	// Интерфейс скролла в окне вывода лога (maxX-3 ширина окна - отступ слева)
-	if v, err := g.SetView("scrollLogs", maxX-3, 3, maxX-1, maxY-1, 0); err != nil {
+	if v, err := g.SetView("scrollLogs", maxX-3, 3, maxX-1, maxY-1-1, 0); err != nil {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
@@ -1523,7 +1523,7 @@ func (app *App) layout(g *gocui.Gui) error {
 	}
 
 	// Окно для вывода записей выбранного журнала (maxX-2 для отступа скролла и 8 для продолжения углов)
-	if v, err := g.SetView("logs", leftPanelWidth+1, 3, maxX-1-2, maxY-1, 8); err != nil {
+	if v, err := g.SetView("logs", leftPanelWidth+1, 3, maxX-1-2, maxY-1-1, 8); err != nil {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
@@ -1532,9 +1532,23 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Autoscroll = false
 		v.FrameColor = app.frameColor
 		v.TitleColor = app.titleColor
-		v.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+	}
+
+	// Окно статуса внизу интерфейса вместо Subtitle
+	if v, err := g.SetView("status", -1, maxY-2, maxX, maxY, 8); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Frame = false // Отключаем рамку для статуса
+		v.FgColor = app.statusColor
+		fmt.Fprintf(v,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			app.logViewCount,
+			app.autoScroll,
+			app.logUpdateSeconds,
+			app.colorMode,
+			app.dockerStreamLogsStatus,
+			app.filterByDateStatus,
 		)
 	}
 
@@ -4688,13 +4702,19 @@ func (app *App) updateStatus() {
 	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
 		app.filterByDateStatus = "false"
 	}
-	vLog, err := app.gui.View("logs")
+	vStatus, err := app.gui.View("status")
 	if err != nil {
 		return
 	}
-	vLog.Subtitle = fmt.Sprintf(
-		"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-		app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+	vStatus.Clear()
+	fmt.Fprintf(vStatus,
+		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+		app.logViewCount,
+		app.autoScroll,
+		app.logUpdateSeconds,
+		app.colorMode,
+		app.dockerStreamLogsStatus,
+		app.filterByDateStatus,
 	)
 	app.updateLogsView(false)
 }
@@ -4947,10 +4967,16 @@ func (app *App) applyFilter(color bool) {
 		} else {
 			app.autoScroll = false
 		}
-		vLog, _ := app.gui.View("logs")
-		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+		vStatus, _ := app.gui.View("status")
+		vStatus.Clear()
+		fmt.Fprintf(vStatus,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			app.logViewCount,
+			app.autoScroll,
+			app.logUpdateSeconds,
+			app.colorMode,
+			app.dockerStreamLogsStatus,
+			app.filterByDateStatus,
 		)
 		app.logScrollPos = 0
 		app.updateLogsView(true)
@@ -6116,7 +6142,7 @@ func (app *App) updateLogsView(lowerDown bool) {
 	} else {
 		v.Title = "Logs: 0% (0) [" + app.debugLoadTime + "/" + app.debugColorTime + "]"
 	}
-	v.TitleColor = app.statusColor
+	v.TitleColor = app.titleColor
 	app.viewScrollLogs(percentage)
 }
 
@@ -6184,13 +6210,19 @@ func (app *App) scrollDownLogs(step int) error {
 				app.autoScroll = false
 			}
 			if !app.testMode {
-				vLog, err := app.gui.View("logs")
+				vStatus, err := app.gui.View("status")
 				if err != nil {
 					return err
 				}
-				vLog.Subtitle = fmt.Sprintf(
-					"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-					app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+				vStatus.Clear()
+				fmt.Fprintf(vStatus,
+					" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+					app.logViewCount,
+					app.autoScroll,
+					app.logUpdateSeconds,
+					app.colorMode,
+					app.dockerStreamLogsStatus,
+					app.filterByDateStatus,
 				)
 			}
 		}
@@ -6209,13 +6241,19 @@ func (app *App) scrollUpLogs(step int) error {
 	// Отключаем автоскролл
 	app.autoScroll = false
 	if !app.testMode {
-		vLog, err := app.gui.View("logs")
+		vStatus, err := app.gui.View("status")
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+		vStatus.Clear()
+		fmt.Fprintf(vStatus,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			app.logViewCount,
+			app.autoScroll,
+			app.logUpdateSeconds,
+			app.colorMode,
+			app.dockerStreamLogsStatus,
+			app.filterByDateStatus,
 		)
 	}
 	app.updateLogsView(false)
@@ -6227,10 +6265,16 @@ func (app *App) pageUpLogs() {
 	app.logScrollPos = 0
 	app.autoScroll = false
 	if !app.testMode {
-		vLog, _ := app.gui.View("logs")
-		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+		vStatus, _ := app.gui.View("status")
+		vStatus.Clear()
+		fmt.Fprintf(vStatus,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			app.logViewCount,
+			app.autoScroll,
+			app.logUpdateSeconds,
+			app.colorMode,
+			app.dockerStreamLogsStatus,
+			app.filterByDateStatus,
 		)
 	}
 	app.updateLogsView(false)
@@ -6272,13 +6316,19 @@ func (app *App) updateLogOutput(newUpdate bool) {
 			app.autoScroll = false
 		}
 		if !app.testMode {
-			vLog, err := app.gui.View("logs")
+			vStatus, err := app.gui.View("status")
 			if err != nil {
 				return err
 			}
-			vLog.Subtitle = fmt.Sprintf(
-				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+			vStatus.Clear()
+			fmt.Fprintf(vStatus,
+				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+				app.logViewCount,
+				app.autoScroll,
+				app.logUpdateSeconds,
+				app.colorMode,
+				app.dockerStreamLogsStatus,
+				app.filterByDateStatus,
 			)
 		}
 		switch app.lastWindow {
@@ -6429,10 +6479,16 @@ func (app *App) updateDelimiter(newUpdate bool) {
 			app.autoScroll = false
 		}
 		if !app.testMode {
-			vLog, _ := app.gui.View("logs")
-			vLog.Subtitle = fmt.Sprintf(
-				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+			vStatus, _ := app.gui.View("status")
+			vStatus.Clear()
+			fmt.Fprintf(vStatus,
+				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+				app.logViewCount,
+				app.autoScroll,
+				app.logUpdateSeconds,
+				app.colorMode,
+				app.dockerStreamLogsStatus,
+				app.filterByDateStatus,
 			)
 		}
 		// Фиксируем новое время загрузки журнала
@@ -7220,13 +7276,19 @@ func (app *App) setupKeybindings() error {
 		} else {
 			app.autoScroll = false
 		}
-		vLog, err := app.gui.View("logs")
+		vStatus, err := app.gui.View("status")
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+		vStatus.Clear()
+		fmt.Fprintf(vStatus,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			app.logViewCount,
+			app.autoScroll,
+			app.logUpdateSeconds,
+			app.colorMode,
+			app.dockerStreamLogsStatus,
+			app.filterByDateStatus,
 		)
 		app.updateLogsView(true)
 		return nil
@@ -7240,13 +7302,19 @@ func (app *App) setupKeybindings() error {
 		} else {
 			app.autoScroll = false
 		}
-		vLog, err := app.gui.View("logs")
+		vStatus, err := app.gui.View("status")
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+		vStatus.Clear()
+		fmt.Fprintf(vStatus,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			app.logViewCount,
+			app.autoScroll,
+			app.logUpdateSeconds,
+			app.colorMode,
+			app.dockerStreamLogsStatus,
+			app.filterByDateStatus,
 		)
 		app.updateLogsView(true)
 		return nil
@@ -7288,14 +7356,20 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("", customUpdateIntervalMore, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.logUpdateSeconds >= 2 && app.logUpdateSeconds <= 9 {
 			app.logUpdateSeconds++
-			v, err := app.gui.View("logs")
+			vStatus, err := app.gui.View("status")
 			if err != nil {
 				return err
 			}
 			app.secondsChan <- app.logUpdateSeconds
-			v.Subtitle = fmt.Sprintf(
-				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+			vStatus.Clear()
+			fmt.Fprintf(vStatus,
+				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+				app.logViewCount,
+				app.autoScroll,
+				app.logUpdateSeconds,
+				app.colorMode,
+				app.dockerStreamLogsStatus,
+				app.filterByDateStatus,
 			)
 		}
 		return nil
@@ -7305,15 +7379,21 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("", customUpdateIntervalLess, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if app.logUpdateSeconds >= 3 && app.logUpdateSeconds <= 10 {
 			app.logUpdateSeconds--
-			v, err := app.gui.View("logs")
+			vStatus, err := app.gui.View("status")
 			if err != nil {
 				return err
 			}
 			// Изменяем интервал в горутине
 			app.secondsChan <- app.logUpdateSeconds
-			v.Subtitle = fmt.Sprintf(
-				"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-				app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+			vStatus.Clear()
+			fmt.Fprintf(vStatus,
+				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+				app.logViewCount,
+				app.autoScroll,
+				app.logUpdateSeconds,
+				app.colorMode,
+				app.dockerStreamLogsStatus,
+				app.filterByDateStatus,
 			)
 		}
 		return nil
@@ -7332,13 +7412,19 @@ func (app *App) setupKeybindings() error {
 			app.disableAutoScroll = true
 			app.autoScroll = false
 		}
-		vLog, err := app.gui.View("logs")
+		vStatus, err := app.gui.View("status")
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+		vStatus.Clear()
+		fmt.Fprintf(vStatus,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			app.logViewCount,
+			app.autoScroll,
+			app.logUpdateSeconds,
+			app.colorMode,
+			app.dockerStreamLogsStatus,
+			app.filterByDateStatus,
 		)
 		app.updateLogOutput(false)
 		return nil
@@ -7391,13 +7477,19 @@ func (app *App) setupKeybindings() error {
 			app.applyFilter(false)
 			app.updateLogOutput(false)
 		}
-		vLog, err := app.gui.View("logs")
+		vStatus, err := app.gui.View("status")
 		if err != nil {
 			return err
 		}
-		vLog.Subtitle = fmt.Sprintf(
-			"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-			app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+		vStatus.Clear()
+		fmt.Fprintf(vStatus,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			app.logViewCount,
+			app.autoScroll,
+			app.logUpdateSeconds,
+			app.colorMode,
+			app.dockerStreamLogsStatus,
+			app.filterByDateStatus,
 		)
 		return nil
 	}); err != nil {
@@ -7813,13 +7905,19 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	// Загружаем журнал заново
 	app.updateLogOutput(true)
 	// Обновляем статус
-	vLog, err := app.gui.View("logs")
+	vStatus, err := app.gui.View("status")
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf(
-		"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-		app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+	vStatus.Clear()
+	fmt.Fprintf(vStatus,
+		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+		app.logViewCount,
+		app.autoScroll,
+		app.logUpdateSeconds,
+		app.colorMode,
+		app.dockerStreamLogsStatus,
+		app.filterByDateStatus,
 	)
 	return nil
 }
@@ -7850,13 +7948,19 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 		app.logViewCount = "200"
 	}
 	app.updateLogOutput(true)
-	vLog, err := app.gui.View("logs")
+	vStatus, err := app.gui.View("status")
 	if err != nil {
 		return err
 	}
-	vLog.Subtitle = fmt.Sprintf(
-		"[Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s]",
-		app.logViewCount, app.autoScroll, app.logUpdateSeconds, app.colorMode, app.dockerStreamLogsStatus, app.filterByDateStatus,
+	vStatus.Clear()
+	fmt.Fprintf(vStatus,
+		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+		app.logViewCount,
+		app.autoScroll,
+		app.logUpdateSeconds,
+		app.colorMode,
+		app.dockerStreamLogsStatus,
+		app.filterByDateStatus,
 	)
 	return nil
 }
@@ -8350,6 +8454,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "services":
 			nextView = "varLogs"
@@ -8364,6 +8469,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "varLogs":
 			nextView = "docker"
@@ -8378,6 +8484,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "docker":
 			if app.timestampFilterView {
@@ -8390,9 +8497,10 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.TitleColor = app.titleColor
 				selectedDocker.FrameColor = app.dockerFrameColor
 				selectedDocker.TitleColor = app.titleColor
-				sinceFilter.FrameColor = app.selectedFrameColor // new
-				sinceFilter.TitleColor = app.selectedTitleColor // new
+				sinceFilter.FrameColor = app.selectedFrameColor
+				sinceFilter.TitleColor = app.selectedTitleColor
 				selectedLogs.FrameColor = app.frameColor
+				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
 			} else {
 				nextView = "filter"
@@ -8407,6 +8515,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 				selectedFilter.FrameColor = app.selectedFrameColor
 				selectedFilter.TitleColor = app.selectedTitleColor
 				selectedLogs.FrameColor = app.frameColor
+				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
 			}
 		case currentView.Name() == "sinceFilter":
@@ -8419,16 +8528,17 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
-			sinceFilter.FrameColor = app.frameColor         // new
-			sinceFilter.TitleColor = app.titleColor         // new
-			untilFilter.FrameColor = app.selectedFrameColor // new
-			untilFilter.TitleColor = app.selectedTitleColor // new
+			sinceFilter.FrameColor = app.frameColor
+			sinceFilter.TitleColor = app.titleColor
+			untilFilter.FrameColor = app.selectedFrameColor
+			untilFilter.TitleColor = app.selectedTitleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "filter" || currentView.Name() == "untilFilter":
 			if app.timestampFilterView {
-				untilFilter.FrameColor = app.frameColor // new
-				untilFilter.TitleColor = app.titleColor // new
+				untilFilter.FrameColor = app.frameColor
+				untilFilter.TitleColor = app.titleColor
 			}
 			nextView = "logs"
 			selectedFilterList.FrameColor = app.frameColor
@@ -8442,6 +8552,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.selectedFrameColor
+			selectedLogs.TitleColor = app.selectedTitleColor
 			selectedScrollLogs.FrameColor = app.selectedFrameColor
 		case currentView.Name() == "logs":
 			nextView = "filterList"
@@ -8456,6 +8567,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		}
 	}
@@ -8527,6 +8639,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.selectedFrameColor
+			selectedLogs.TitleColor = app.selectedTitleColor
 			selectedScrollLogs.FrameColor = app.selectedFrameColor
 		case currentView.Name() == "services":
 			nextView = "filterList"
@@ -8541,6 +8654,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "logs":
 			if app.timestampFilterView {
@@ -8553,9 +8667,10 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.TitleColor = app.titleColor
 				selectedDocker.FrameColor = app.dockerFrameColor
 				selectedDocker.TitleColor = app.titleColor
-				untilFilter.FrameColor = app.selectedFrameColor // new
-				untilFilter.TitleColor = app.selectedTitleColor // new
+				untilFilter.FrameColor = app.selectedFrameColor
+				untilFilter.TitleColor = app.selectedTitleColor
 				selectedLogs.FrameColor = app.frameColor
+				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
 			} else {
 				nextView = "filter"
@@ -8570,6 +8685,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 				selectedFilter.FrameColor = app.selectedFrameColor
 				selectedFilter.TitleColor = app.selectedTitleColor
 				selectedLogs.FrameColor = app.frameColor
+				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
 			}
 		case currentView.Name() == "untilFilter":
@@ -8582,16 +8698,17 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
-			sinceFilter.FrameColor = app.selectedFrameColor // new
-			sinceFilter.TitleColor = app.selectedTitleColor // new
-			untilFilter.FrameColor = app.frameColor         // new
-			untilFilter.TitleColor = app.titleColor         // new
+			sinceFilter.FrameColor = app.selectedFrameColor
+			sinceFilter.TitleColor = app.selectedTitleColor
+			untilFilter.FrameColor = app.frameColor
+			untilFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "filter" || currentView.Name() == "sinceFilter":
 			if app.timestampFilterView {
-				sinceFilter.FrameColor = app.frameColor // new
-				sinceFilter.TitleColor = app.titleColor // new
+				sinceFilter.FrameColor = app.frameColor
+				sinceFilter.TitleColor = app.titleColor
 			}
 			nextView = "docker"
 			selectedFilterList.FrameColor = app.frameColor
@@ -8605,6 +8722,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "docker":
 			nextView = "varLogs"
@@ -8619,6 +8737,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case currentView.Name() == "varLogs":
 			nextView = "services"
@@ -8633,6 +8752,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedFilter.FrameColor = app.frameColor
 			selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
+			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		}
 	}
