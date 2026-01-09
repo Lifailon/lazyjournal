@@ -1593,6 +1593,10 @@ func (app *App) loadServices(journalName string) {
 	switch journalName {
 	// Services list from systemd
 	case "services":
+		app.journals = append(app.journals, Journal{
+			name:    "_all",
+			boot_id: "_all",
+		})
 		// (1) Получаем список всех юнитов со статусом работы и фильтрацией по сервисам через systemctl в формате JSON
 		var unitsList *exec.Cmd
 		if app.sshMode {
@@ -2244,30 +2248,37 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 	default:
 		if selectUnits == "services" {
 			// Удаляем статусы сервисов из навзания
-			serviceName = strings.Split(serviceName, "] ")[1]
+			serviceNameNew := strings.Split(serviceName, "] ")
+			if len(serviceNameNew) >= 2 {
+				serviceName = serviceNameNew[1]
+			}
 		}
 		var cmd *exec.Cmd
+		var serviceNameOpt string
+		if serviceName != "_all" {
+			serviceNameOpt = "-u " + serviceName
+		}
 		if app.sshMode {
 			switch {
 			case app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--since", app.sinceFilterText, "--until", app.untilFilterText)...)
 			case app.sinceDateFilterMode && !app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--since", app.sinceFilterText)...)
 			case !app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--until", app.untilFilterText)...)
 			default:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount)...)
 			}
 		} else {
 			switch {
 			case app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "--until", app.untilFilterText, "-n", app.logViewCount)
+				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--since", app.sinceFilterText, "--until", app.untilFilterText)
 			case app.sinceDateFilterMode && !app.untilDateFilterMode:
-				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--since", app.sinceFilterText, "-n", app.logViewCount)
+				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--since", app.sinceFilterText)
 			case !app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "--until", app.untilFilterText, "-n", app.logViewCount)
+				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--until", app.untilFilterText)
 			default:
-				cmd = exec.Command("journalctl", "-u", serviceName, "--no-pager", "-n", app.logViewCount)
+				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount)
 			}
 		}
 		output, err = cmd.Output()
@@ -2412,6 +2423,11 @@ func (app *App) statFiles(paths []string) (map[string]os.FileInfo, error) {
 	if len(paths) == 0 {
 		return make(map[string]os.FileInfo), nil
 	}
+	// Удаляем лишние символы из путей
+	replPaths := strings.Join(paths, "\n")
+	replPaths = strings.ReplaceAll(replPaths, "(", "")
+	replPaths = strings.ReplaceAll(replPaths, ")", "")
+	paths = strings.Split(replPaths, "\n")
 	args := make([]string, len(app.sshOptions))
 	copy(args, app.sshOptions)
 	args = append(args, "stat", "-L", "-c", "'%n|%s|%Y'")
@@ -2609,7 +2625,12 @@ func (app *App) loadFiles(logPath string) {
 					"find", app.customPath,
 					"-type", "f",
 					"-name", "*.log", "-o",
-					"-name", "*.log.*",
+					"-name", "*.log.*", "-o",
+					"-name", "*.asl", "-o",
+					"-name", "*.pcap", "-o",
+					"-name", "*.pcap.gz", "-o",
+					"-name", "*.pcapng", "-o",
+					"-name", "*.pcapng.gz",
 				)...,
 			)
 		} else {
@@ -2617,7 +2638,12 @@ func (app *App) loadFiles(logPath string) {
 				"find", app.customPath,
 				"-type", "f",
 				"-name", "*.log", "-o",
-				"-name", "*.log.*",
+				"-name", "*.log.*", "-o",
+				"-name", "*.asl", "-o",
+				"-name", "*.pcap", "-o",
+				"-name", "*.pcap.gz", "-o",
+				"-name", "*.pcapng", "-o",
+				"-name", "*.pcapng.gz",
 			)
 		}
 		output, _ = cmd.Output()
@@ -2655,14 +2681,6 @@ func (app *App) loadFiles(logPath string) {
 		var cmd *exec.Cmd
 		args := []string{
 			logPath,
-			"-type", "d",
-			"-name", "Library", "-o",
-			"-name", "Pictures", "-o",
-			"-name", "Movies", "-o",
-			"-name", "Music", "-o",
-			"-name", ".Trash", "-o",
-			"-name", ".cache",
-			"-prune", "-o",
 			"-type", "f",
 			"-name", "*.log", "-o",
 			"-name", "*.asl", "-o",
