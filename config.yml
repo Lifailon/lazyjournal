@@ -36,21 +36,20 @@ hotkeys:
   backSwitchFilterMode: ctrl+j
   left: h
   right: l
-  # left: "["
-  # right: "]"
   disableFilterByDate: delete
   loadJournal: enter
   goToFilter: /
   goToEnd: ctrl+e
   goToTop: ctrl+a
-  tailModeMore: ctrl+x
-  tailModeLess: ctrl+z
-  updateIntervalMore: ctrl+p
-  updateIntervalLess: ctrl+o
+  tailModeMore: "]"
+  tailModeLess: "["
+  updateIntervalMore: "}"
+  updateIntervalLess: "{"
   autoUpdateJournal: ctrl+u
   updateJournal: ctrl+r
   updateLists: ctrl+q
   switchColorMode: ctrl+w
+  switchPriority: ctrl+p
   switchDockerMode: ctrl+d
   switchStreamMode: ctrl+s
   timestampShow: ctrl+t
