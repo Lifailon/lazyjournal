@@ -88,6 +88,7 @@ type Hotkeys struct {
 	UpdateJournal        string `yaml:"updateJournal"`
 	UpdateLists          string `yaml:"updateLists"`
 	SwitchColorMode      string `yaml:"switchColorMode"`
+	SwitchPriority       string `yaml:"switchPriority"`
 	SwitchDockerMode     string `yaml:"switchDockerMode"`
 	SwitchStreamMode     string `yaml:"switchStreamMode"`
 	TimestampShow        string `yaml:"timestampShow"`
@@ -215,6 +216,8 @@ type App struct {
 
 	// Текст для фильтрации список журналов
 	filterListText string
+	// Приоритет для фильтрации журналов
+	priority string
 
 	// Массивы для хранения списка журналов без фильтрации
 	journalsNotFilter         []Journal
@@ -369,6 +372,7 @@ func showConfig() {
 	fmt.Printf("  updateJournal:            %s\n", config.Hotkeys.UpdateJournal)
 	fmt.Printf("  updateLists:              %s\n", config.Hotkeys.UpdateLists)
 	fmt.Printf("  switchColorMode:          %s\n", config.Hotkeys.SwitchColorMode)
+	fmt.Printf("  switchPriority:           %s\n", config.Hotkeys.SwitchPriority)
 	fmt.Printf("  switchDockerMode:         %s\n", config.Hotkeys.SwitchDockerMode)
 	fmt.Printf("  switchStreamMode:         %s\n", config.Hotkeys.SwitchStreamMode)
 	fmt.Printf("  timestampShow:            %s\n", config.Hotkeys.TimestampShow)
@@ -847,6 +851,9 @@ func runGoCui(mock bool) {
 		dockerCompose:                "docker compose",
 		uniquePrefixColorMap:         make(map[string]string),
 	}
+
+	// Приоритет по умолчанию
+	app.priority = "debug"
 
 	// Фиксируем дату для фильтрации
 	app.sinceFilterText = app.sinceFilterDate.Format("2006-01-02")
@@ -1542,11 +1549,12 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Frame = false // Отключаем рамку для статуса
 		v.FgColor = app.statusColor
 		fmt.Fprintf(v,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
+			app.priority,
 			app.dockerStreamLogsStatus,
 			app.filterByDateStatus,
 		)
@@ -4610,9 +4618,9 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 // Функция для фильтрации по дате
 func (app *App) timestampFilterEditor(window string) gocui.Editor {
 	return gocui.EditorFunc(func(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
-		customLeft := getHotkey(config.Hotkeys.Left, "h")
-		customRight := getHotkey(config.Hotkeys.Right, "l")
-		disableFilterByDate := getHotkey(config.Hotkeys.DisableFilterByDate, "delete")
+		customLeft, _ := getHotkey(config.Hotkeys.Left, "h")
+		customRight, _ := getHotkey(config.Hotkeys.Right, "l")
+		disableFilterByDate, _ := getHotkey(config.Hotkeys.DisableFilterByDate, "delete")
 		var filterDate time.Time
 		var filterText string
 		switch window {
@@ -4708,11 +4716,12 @@ func (app *App) updateStatus() {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
 		app.colorMode,
+		app.priority,
 		app.dockerStreamLogsStatus,
 		app.filterByDateStatus,
 	)
@@ -4970,11 +4979,12 @@ func (app *App) applyFilter(color bool) {
 		vStatus, _ := app.gui.View("status")
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
+			app.priority,
 			app.dockerStreamLogsStatus,
 			app.filterByDateStatus,
 		)
@@ -6216,11 +6226,12 @@ func (app *App) scrollDownLogs(step int) error {
 				}
 				vStatus.Clear()
 				fmt.Fprintf(vStatus,
-					" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+					" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 					app.logViewCount,
 					app.autoScroll,
 					app.logUpdateSeconds,
 					app.colorMode,
+					app.priority,
 					app.dockerStreamLogsStatus,
 					app.filterByDateStatus,
 				)
@@ -6247,11 +6258,12 @@ func (app *App) scrollUpLogs(step int) error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
+			app.priority,
 			app.dockerStreamLogsStatus,
 			app.filterByDateStatus,
 		)
@@ -6268,11 +6280,12 @@ func (app *App) pageUpLogs() {
 		vStatus, _ := app.gui.View("status")
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
+			app.priority,
 			app.dockerStreamLogsStatus,
 			app.filterByDateStatus,
 		)
@@ -6322,11 +6335,12 @@ func (app *App) updateLogOutput(newUpdate bool) {
 			}
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 				app.logViewCount,
 				app.autoScroll,
 				app.logUpdateSeconds,
 				app.colorMode,
+				app.priority,
 				app.dockerStreamLogsStatus,
 				app.filterByDateStatus,
 			)
@@ -6482,11 +6496,12 @@ func (app *App) updateDelimiter(newUpdate bool) {
 			vStatus, _ := app.gui.View("status")
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 				app.logViewCount,
 				app.autoScroll,
 				app.logUpdateSeconds,
 				app.colorMode,
+				app.priority,
 				app.dockerStreamLogsStatus,
 				app.filterByDateStatus,
 			)
@@ -6575,41 +6590,47 @@ var keyMap = map[string]gocui.Key{
 }
 
 // Функция для опредиления клавиш из конфигурации
-func getHotkey(configKey, defaultKey string) any {
+func getHotkey(configKey, defaultKey string) (any, gocui.Modifier) {
 	// Опускаем регистр для всех вхождений (букв и сочетаний)
 	inputKey := strings.ToLower(configKey)
-	// Если это одна буква, конвертируем string в rune (используя DecodeRuneInString) и извлекаем значение
-	if len(inputKey) == 1 {
+	switch {
+	// Если это одна буква, конвертируем string в rune и извлекаем значение
+	case len(inputKey) == 1:
 		if r, _ := utf8.DecodeRuneInString(inputKey); r != utf8.RuneError {
-			return r
+			return r, gocui.ModNone
 		}
-	} else {
-		// Если сочетание клавиш содержит shift, извлекаем последнюю букву в верхнем регистре
-		if strings.HasPrefix(inputKey, "shift+") && inputKey != "shift+tab" {
-			inputKey = strings.ToTitle(configKey)
-			return []rune(inputKey)[len(inputKey)-1]
-		} else {
-			// Ищем сочетание клавиш в карте
-			key, exists := keyMap[inputKey]
-			if exists {
-				return key
-			}
+	// Возвращяем alt mode
+	case strings.HasPrefix(inputKey, "alt+"):
+		keyAlt := strings.Replace(inputKey, "alt+", "", 1)
+		key, exists := keyMap[keyAlt]
+		if exists {
+			return key, gocui.ModAlt
+		}
+	// Если сочетание клавиш содержит shift, извлекаем последнюю букву в верхнем регистре
+	case strings.HasPrefix(inputKey, "shift+") && inputKey != "shift+tab":
+		inputKey = strings.ToTitle(configKey)
+		return []rune(inputKey)[len(inputKey)-1], gocui.ModNone
+	default:
+		// Ищем сочетание клавиш в карте
+		key, exists := keyMap[inputKey]
+		if exists {
+			return key, gocui.ModNone
 		}
 	}
 	// Возвращяем значение по умолчанию (которое передается во втором параметре)
 	if len(defaultKey) == 1 {
 		if r, _ := utf8.DecodeRuneInString(defaultKey); r != utf8.RuneError {
-			return r
+			return r, gocui.ModNone
 		}
 	}
-	return keyMap[defaultKey]
+	return keyMap[defaultKey], gocui.ModNone
 }
 
 // Функция для биндинга клавиш
 func (app *App) setupKeybindings() error {
 	// Help (F1)
 	// Открытие окна справки
-	customHelp := getHotkey(config.Hotkeys.Help, "f1")
+	customHelp, altMode := getHotkey(config.Hotkeys.Help, "f1")
 	helpHandler := func(g *gocui.Gui, v *gocui.View) error {
 		app.showInterfaceHelp(g)
 		// Удаляем глобальные биндинги
@@ -6635,7 +6656,7 @@ func (app *App) setupKeybindings() error {
 		}
 		return nil
 	}
-	if err := app.gui.SetKeybinding("", customHelp, gocui.ModNone, helpHandler); err != nil {
+	if err := app.gui.SetKeybinding("", customHelp, altMode, helpHandler); err != nil {
 		return err
 	}
 
@@ -6675,18 +6696,18 @@ func (app *App) setupKeybindings() error {
 	}
 	// Custom up from config
 	// Default: k (1)
-	customUp := getHotkey(config.Hotkeys.Up, "k")
-	if err := app.gui.SetKeybinding("services", customUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customUp, altMode := getHotkey(config.Hotkeys.Up, "k")
+	if err := app.gui.SetKeybinding("services", customUp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", customUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customUp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevFileName(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customUp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevDockerContainer(v, 1)
 	}); err != nil {
 		return err
@@ -6725,18 +6746,18 @@ func (app *App) setupKeybindings() error {
 	}
 	// Custom up from config
 	// Default: shift+k (10)
-	customQuickUp := getHotkey(config.Hotkeys.QuickUp, "K")
-	if err := app.gui.SetKeybinding("services", customQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customQuickUp, altMode := getHotkey(config.Hotkeys.QuickUp, "K")
+	if err := app.gui.SetKeybinding("services", customQuickUp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 10)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", customQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customQuickUp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevFileName(v, 10)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customQuickUp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevDockerContainer(v, 10)
 	}); err != nil {
 		return err
@@ -6775,18 +6796,18 @@ func (app *App) setupKeybindings() error {
 	}
 	// Custom up from config
 	// Default: ctrl+k (100)
-	customVeryQuickUp := getHotkey(config.Hotkeys.VeryQuickUp, "ctrl+k")
-	if err := app.gui.SetKeybinding("services", customVeryQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customVeryQuickUp, altMode := getHotkey(config.Hotkeys.VeryQuickUp, "ctrl+k")
+	if err := app.gui.SetKeybinding("services", customVeryQuickUp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevService(v, 100)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", customVeryQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customVeryQuickUp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevFileName(v, 100)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customVeryQuickUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customVeryQuickUp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.prevDockerContainer(v, 100)
 	}); err != nil {
 		return err
@@ -6828,18 +6849,18 @@ func (app *App) setupKeybindings() error {
 	}
 	// Custom down from config
 	// Default: j (1)
-	customDown := getHotkey(config.Hotkeys.Down, "j")
-	if err := app.gui.SetKeybinding("services", customDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customDown, altMode := getHotkey(config.Hotkeys.Down, "j")
+	if err := app.gui.SetKeybinding("services", customDown, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextService(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", customDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customDown, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextFileName(v, 1)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customDown, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextDockerContainer(v, 1)
 	}); err != nil {
 		return err
@@ -6879,18 +6900,18 @@ func (app *App) setupKeybindings() error {
 	}
 	// Custom down from config
 	// Default: shift+j (10)
-	customQuickDown := getHotkey(config.Hotkeys.QuickDown, "J")
-	if err := app.gui.SetKeybinding("services", customQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customQuickDown, altMode := getHotkey(config.Hotkeys.QuickDown, "J")
+	if err := app.gui.SetKeybinding("services", customQuickDown, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextService(v, 10)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", customQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customQuickDown, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextFileName(v, 10)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customQuickDown, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextDockerContainer(v, 10)
 	}); err != nil {
 		return err
@@ -6929,18 +6950,18 @@ func (app *App) setupKeybindings() error {
 	}
 	// Custom down from config
 	// Default: ctrl+j (100)
-	customVeryQuickDown := getHotkey(config.Hotkeys.VeryQuickDown, "ctrl+j")
-	if err := app.gui.SetKeybinding("services", customVeryQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customVeryQuickDown, altMode := getHotkey(config.Hotkeys.VeryQuickDown, "ctrl+j")
+	if err := app.gui.SetKeybinding("services", customVeryQuickDown, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextService(v, 100)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", customVeryQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customVeryQuickDown, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextFileName(v, 100)
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customVeryQuickDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customVeryQuickDown, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		return app.nextDockerContainer(v, 100)
 	}); err != nil {
 		return err
@@ -6974,25 +6995,25 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	// Custom up and down for switch filter mode from config (ctrl+k b ctrl+j)
-	customUpFilterMode := getHotkey(config.Hotkeys.SwitchFilterMode, "ctrl+k")
-	customDownFilterMode := getHotkey(config.Hotkeys.BackSwitchFilterMode, "ctrl+j")
-	if err := app.gui.SetKeybinding("filter", customUpFilterMode, gocui.ModNone, app.setFilterModeRight); err != nil {
+	customUpFilterMode, altModeUp := getHotkey(config.Hotkeys.SwitchFilterMode, "ctrl+k")
+	customDownFilterMode, altModeDown := getHotkey(config.Hotkeys.BackSwitchFilterMode, "ctrl+j")
+	if err := app.gui.SetKeybinding("filter", customUpFilterMode, altModeUp, app.setFilterModeRight); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("filter", customDownFilterMode, gocui.ModNone, app.setFilterModeLeft); err != nil {
+	if err := app.gui.SetKeybinding("filter", customDownFilterMode, altModeDown, app.setFilterModeLeft); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("sinceFilter", customUpFilterMode, gocui.ModNone, app.setFilterModeRight); err != nil {
+	if err := app.gui.SetKeybinding("sinceFilter", customUpFilterMode, altModeUp, app.setFilterModeRight); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("sinceFilter", customDownFilterMode, gocui.ModNone, app.setFilterModeLeft); err != nil {
+	if err := app.gui.SetKeybinding("sinceFilter", customDownFilterMode, altModeDown, app.setFilterModeLeft); err != nil {
 		return err
 	}
 
 	// ←/→
 	// Custom left and right from config
-	customLeft := getHotkey(config.Hotkeys.Left, "h")
-	customRight := getHotkey(config.Hotkeys.Right, "l")
+	customLeft, altModeLeft := getHotkey(config.Hotkeys.Left, "h")
+	customRight, altModeRight := getHotkey(config.Hotkeys.Right, "l")
 	// Переключение выбора журналов для systemd/journald (отключено для Windows)
 	if app.getOS != "windows" {
 		// Left/Right
@@ -7003,10 +7024,10 @@ func (app *App) setupKeybindings() error {
 			return err
 		}
 		// Custom by default: h/l (100)
-		if err := app.gui.SetKeybinding("services", customLeft, gocui.ModNone, app.setUnitListLeft); err != nil {
+		if err := app.gui.SetKeybinding("services", customLeft, altModeLeft, app.setUnitListLeft); err != nil {
 			return err
 		}
-		if err := app.gui.SetKeybinding("services", customRight, gocui.ModNone, app.setUnitListRight); err != nil {
+		if err := app.gui.SetKeybinding("services", customRight, altModeRight, app.setUnitListRight); err != nil {
 			return err
 		}
 	}
@@ -7019,10 +7040,10 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.SetKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone, app.setLogFilesListRight); err != nil {
 			return err
 		}
-		if err := app.gui.SetKeybinding("varLogs", customLeft, gocui.ModNone, app.setLogFilesListLeft); err != nil {
+		if err := app.gui.SetKeybinding("varLogs", customLeft, altModeLeft, app.setLogFilesListLeft); err != nil {
 			return err
 		}
-		if err := app.gui.SetKeybinding("varLogs", customRight, gocui.ModNone, app.setLogFilesListRight); err != nil {
+		if err := app.gui.SetKeybinding("varLogs", customRight, altModeRight, app.setLogFilesListRight); err != nil {
 			return err
 		}
 	} else {
@@ -7033,10 +7054,10 @@ func (app *App) setupKeybindings() error {
 		if err := app.gui.DeleteKeybinding("varLogs", gocui.KeyArrowRight, gocui.ModNone); err != nil {
 			return err
 		}
-		if err := app.gui.DeleteKeybinding("varLogs", customLeft, gocui.ModNone); err != nil {
+		if err := app.gui.DeleteKeybinding("varLogs", customLeft, altModeLeft); err != nil {
 			return err
 		}
-		if err := app.gui.DeleteKeybinding("varLogs", customRight, gocui.ModNone); err != nil {
+		if err := app.gui.DeleteKeybinding("varLogs", customRight, altModeRight); err != nil {
 			return err
 		}
 	}
@@ -7047,10 +7068,10 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("docker", gocui.KeyArrowRight, gocui.ModNone, app.setContainersListRight); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customLeft, gocui.ModNone, app.setContainersListLeft); err != nil {
+	if err := app.gui.SetKeybinding("docker", customLeft, altModeLeft, app.setContainersListLeft); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customRight, gocui.ModNone, app.setContainersListRight); err != nil {
+	if err := app.gui.SetKeybinding("docker", customRight, altModeRight, app.setContainersListRight); err != nil {
 		return err
 	}
 
@@ -7177,35 +7198,35 @@ func (app *App) setupKeybindings() error {
 	}
 
 	// Tab для переключения между окнами
-	customTab := getHotkey(config.Hotkeys.SwitchWindow, "tab")
-	if err := app.gui.SetKeybinding("", customTab, gocui.ModNone, app.nextView); err != nil {
+	customTab, altMode := getHotkey(config.Hotkeys.SwitchWindow, "tab")
+	if err := app.gui.SetKeybinding("", customTab, altMode, app.nextView); err != nil {
 		return err
 	}
 	// Shift+Tab (Back Tab) для переключения между окнами в обратном порядке
-	customBackTab := getHotkey(config.Hotkeys.BackSwitchWindows, "shift+tab")
-	if err := app.gui.SetKeybinding("", customBackTab, gocui.ModNone, app.backView); err != nil {
+	customBackTab, altMode := getHotkey(config.Hotkeys.BackSwitchWindows, "shift+tab")
+	if err := app.gui.SetKeybinding("", customBackTab, altMode, app.backView); err != nil {
 		return err
 	}
 
 	// Enter для выбора службы и загрузки журналов
-	customEnter := getHotkey(config.Hotkeys.LoadJournal, "enter")
-	if err := app.gui.SetKeybinding("services", customEnter, gocui.ModNone, app.selectService); err != nil {
+	customEnter, altModeEnter := getHotkey(config.Hotkeys.LoadJournal, "enter")
+	if err := app.gui.SetKeybinding("services", customEnter, altModeEnter, app.selectService); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", customEnter, gocui.ModNone, app.selectFile); err != nil {
+	if err := app.gui.SetKeybinding("varLogs", customEnter, altModeEnter, app.selectFile); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customEnter, gocui.ModNone, app.selectDocker); err != nil {
+	if err := app.gui.SetKeybinding("docker", customEnter, altModeEnter, app.selectDocker); err != nil {
 		return err
 	}
 	// Enter для загрузки журнала из фильтра по дате
-	if err := app.gui.SetKeybinding("sinceFilter", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("sinceFilter", customEnter, altModeEnter, func(g *gocui.Gui, v *gocui.View) error {
 		app.updateLogOutput(true)
 		return nil
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("untilFilter", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("untilFilter", customEnter, altModeEnter, func(g *gocui.Gui, v *gocui.View) error {
 		app.updateLogOutput(true)
 		return nil
 	}); err != nil {
@@ -7214,22 +7235,22 @@ func (app *App) setupKeybindings() error {
 
 	// filter (/) slash
 	// Переключение фокуса на окно фильтрации списков журналов
-	customSlash := getHotkey(config.Hotkeys.GoToFilter, "/")
-	if err := app.gui.SetKeybinding("services", customSlash, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customSlash, altMode := getHotkey(config.Hotkeys.GoToFilter, "/")
+	if err := app.gui.SetKeybinding("services", customSlash, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		app.lastCurrentView = "services"
 		app.backCurrentView = true
 		return app.setSelectView(app.gui, "filterList")
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("varLogs", customSlash, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("varLogs", customSlash, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		app.lastCurrentView = "varLogs"
 		app.backCurrentView = true
 		return app.setSelectView(app.gui, "filterList")
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("docker", customSlash, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("docker", customSlash, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		app.lastCurrentView = "docker"
 		app.backCurrentView = true
 		return app.setSelectView(app.gui, "filterList")
@@ -7237,7 +7258,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	// В окне вывода журнала переключаемся на фильтр журнала
-	if err := app.gui.SetKeybinding("logs", customSlash, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("logs", customSlash, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		app.lastCurrentView = "logs"
 		app.backCurrentView = true
 		return app.setSelectView(app.gui, "filter")
@@ -7246,7 +7267,7 @@ func (app *App) setupKeybindings() error {
 	}
 	// Enter for return to the window
 	// Возврат к последнему окну до использования слэша с использование Enter из окна фильтрации
-	if err := app.gui.SetKeybinding("filterList", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("filterList", customEnter, altModeEnter, func(g *gocui.Gui, v *gocui.View) error {
 		if app.backCurrentView {
 			app.backCurrentView = false
 			return app.setSelectView(app.gui, app.lastCurrentView)
@@ -7256,7 +7277,7 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("filter", customEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	if err := app.gui.SetKeybinding("filter", customEnter, altModeEnter, func(g *gocui.Gui, v *gocui.View) error {
 		if app.backCurrentView {
 			app.backCurrentView = false
 			return app.setSelectView(app.gui, app.lastCurrentView)
@@ -7282,11 +7303,12 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
+			app.priority,
 			app.dockerStreamLogsStatus,
 			app.filterByDateStatus,
 		)
@@ -7295,8 +7317,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	customEnd := getHotkey(config.Hotkeys.GoToEnd, "ctrl+e")
-	if err := app.gui.SetKeybinding("", customEnd, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customEnd, altMode := getHotkey(config.Hotkeys.GoToEnd, "ctrl+e")
+	if err := app.gui.SetKeybinding("", customEnd, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if !app.disableAutoScroll {
 			app.autoScroll = true
 		} else {
@@ -7308,11 +7330,12 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
+			app.priority,
 			app.dockerStreamLogsStatus,
 			app.filterByDateStatus,
 		)
@@ -7330,8 +7353,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	customHome := getHotkey(config.Hotkeys.GoToTop, "ctrl+a")
-	if err := app.gui.SetKeybinding("", customHome, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customHome, altMode := getHotkey(config.Hotkeys.GoToTop, "ctrl+a")
+	if err := app.gui.SetKeybinding("", customHome, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		app.pageUpLogs()
 		return nil
 	}); err != nil {
@@ -7340,20 +7363,19 @@ func (app *App) setupKeybindings() error {
 
 	// tail mode (Alt+Left/Right)
 	// Переключение для количества строк вывода
-	customTailMore := getHotkey(config.Hotkeys.TailModeMore, "ctrl+x")
-	customTailLess := getHotkey(config.Hotkeys.TailModeLess, "ctrl+z")
-	if err := app.gui.SetKeybinding("", customTailMore, gocui.ModNone, app.setCountLogViewUp); err != nil {
+	customTailMore, altMode := getHotkey(config.Hotkeys.TailModeMore, "]")
+	if err := app.gui.SetKeybinding("", customTailMore, altMode, app.setCountLogViewUp); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("", customTailLess, gocui.ModNone, app.setCountLogViewDown); err != nil {
+	customTailLess, altMode := getHotkey(config.Hotkeys.TailModeLess, "[")
+	if err := app.gui.SetKeybinding("", customTailLess, altMode, app.setCountLogViewDown); err != nil {
 		return err
 	}
 
 	// update interval Shift+Left/Right
 	// Увеличение фоновго интервала обновления журнала
-	customUpdateIntervalMore := getHotkey(config.Hotkeys.UpdateIntervalMore, "ctrl+p")
-	customUpdateIntervalLess := getHotkey(config.Hotkeys.UpdateIntervalLess, "ctrl+o")
-	if err := app.gui.SetKeybinding("", customUpdateIntervalMore, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customUpdateIntervalMore, altMode := getHotkey(config.Hotkeys.UpdateIntervalMore, "}")
+	if err := app.gui.SetKeybinding("", customUpdateIntervalMore, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.logUpdateSeconds >= 2 && app.logUpdateSeconds <= 9 {
 			app.logUpdateSeconds++
 			vStatus, err := app.gui.View("status")
@@ -7363,11 +7385,12 @@ func (app *App) setupKeybindings() error {
 			app.secondsChan <- app.logUpdateSeconds
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 				app.logViewCount,
 				app.autoScroll,
 				app.logUpdateSeconds,
 				app.colorMode,
+				app.priority,
 				app.dockerStreamLogsStatus,
 				app.filterByDateStatus,
 			)
@@ -7376,7 +7399,8 @@ func (app *App) setupKeybindings() error {
 	}); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("", customUpdateIntervalLess, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customUpdateIntervalLess, altMode := getHotkey(config.Hotkeys.UpdateIntervalLess, "{")
+	if err := app.gui.SetKeybinding("", customUpdateIntervalLess, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.logUpdateSeconds >= 3 && app.logUpdateSeconds <= 10 {
 			app.logUpdateSeconds--
 			vStatus, err := app.gui.View("status")
@@ -7387,11 +7411,12 @@ func (app *App) setupKeybindings() error {
 			app.secondsChan <- app.logUpdateSeconds
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 				app.logViewCount,
 				app.autoScroll,
 				app.logUpdateSeconds,
 				app.colorMode,
+				app.priority,
 				app.dockerStreamLogsStatus,
 				app.filterByDateStatus,
 			)
@@ -7403,8 +7428,8 @@ func (app *App) setupKeybindings() error {
 
 	// auto update (Ctrl+U)
 	// Включение или отключение автоматического скроллинга
-	customAutoUpdate := getHotkey(config.Hotkeys.AutoUpdateJournal, "ctrl+u")
-	if err := app.gui.SetKeybinding("", customAutoUpdate, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customAutoUpdate, altMode := getHotkey(config.Hotkeys.AutoUpdateJournal, "ctrl+u")
+	if err := app.gui.SetKeybinding("", customAutoUpdate, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.disableAutoScroll {
 			app.disableAutoScroll = false
 			app.autoScroll = false
@@ -7418,11 +7443,12 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
+			app.priority,
 			app.dockerStreamLogsStatus,
 			app.filterByDateStatus,
 		)
@@ -7435,8 +7461,8 @@ func (app *App) setupKeybindings() error {
 	// update journal (Ctrl+R)
 	// Ручное обновление текущего вывода журнала
 	// Актуально в режиме выключенного автоматического обновления
-	customUpdateJournal := getHotkey(config.Hotkeys.UpdateJournal, "ctrl+r")
-	if err := app.gui.SetKeybinding("", customUpdateJournal, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customUpdateJournal, altMode := getHotkey(config.Hotkeys.UpdateJournal, "ctrl+r")
+	if err := app.gui.SetKeybinding("", customUpdateJournal, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		app.updateLogOutput(false)
 		return nil
 	}); err != nil {
@@ -7445,8 +7471,8 @@ func (app *App) setupKeybindings() error {
 
 	// update lists (Ctrl+Q)
 	// Обновить все текущие списки журналов вручную
-	customUpdateLists := getHotkey(config.Hotkeys.UpdateLists, "ctrl+q")
-	if err := app.gui.SetKeybinding("", customUpdateLists, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customUpdateLists, altMode := getHotkey(config.Hotkeys.UpdateLists, "ctrl+q")
+	if err := app.gui.SetKeybinding("", customUpdateLists, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.getOS != "windows" {
 			app.loadServices(app.selectUnits)
 			app.loadFiles(app.selectPath)
@@ -7460,8 +7486,8 @@ func (app *App) setupKeybindings() error {
 	}
 
 	// switch color mode - default (custom built-in), tailspin/tspin, bat/batcat or disable (Ctrl+W)
-	customColor := getHotkey(config.Hotkeys.SwitchColorMode, "ctrl+w")
-	if err := app.gui.SetKeybinding("", customColor, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customColor, altMode := getHotkey(config.Hotkeys.SwitchColorMode, "ctrl+w")
+	if err := app.gui.SetKeybinding("", customColor, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		switch app.colorMode {
 		case "disable":
 			app.colorMode = "default"
@@ -7483,11 +7509,58 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
+			app.priority,
+			app.dockerStreamLogsStatus,
+			app.filterByDateStatus,
+		)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	// switch priority for journald (Ctrl+P)
+	customPriority, altMode := getHotkey(config.Hotkeys.SwitchPriority, "ctrl+p")
+	if err := app.gui.SetKeybinding("", customPriority, altMode, func(g *gocui.Gui, v *gocui.View) error {
+		switch app.priority {
+		case "debug":
+			app.priority = "info"
+		case "info":
+			app.priority = "notice"
+		case "notice":
+			app.priority = "warning"
+		case "warning":
+			app.priority = "err"
+		case "err":
+			app.priority = "crit"
+		case "crit":
+			app.priority = "alert"
+		case "alert":
+			app.priority = "emerg"
+		case "emerg":
+			app.priority = "debug"
+		}
+		if len(app.currentLogLines) != 0 {
+			app.updateLogsView(true)
+			app.applyFilter(false)
+			app.updateLogOutput(false)
+		}
+		vStatus, err := app.gui.View("status")
+		if err != nil {
+			return err
+		}
+		vStatus.Clear()
+		fmt.Fprintf(vStatus,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.logViewCount,
+			app.autoScroll,
+			app.logUpdateSeconds,
+			app.colorMode,
+			app.priority,
 			app.dockerStreamLogsStatus,
 			app.filterByDateStatus,
 		)
@@ -7498,8 +7571,8 @@ func (app *App) setupKeybindings() error {
 
 	// docker log load mode from stream or file system (Ctrl+D)
 	// Переключение режима чтения журналов Docker из потоков или файловой системы
-	customDockerMode := getHotkey(config.Hotkeys.SwitchDockerMode, "ctrl+d")
-	if err := app.gui.SetKeybinding("", customDockerMode, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customDockerMode, altMode := getHotkey(config.Hotkeys.SwitchDockerMode, "ctrl+d")
+	if err := app.gui.SetKeybinding("", customDockerMode, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.dockerStreamLogs {
 			app.dockerStreamLogs = false
 			app.dockerStreamLogsStatus = "json-file"
@@ -7515,8 +7588,8 @@ func (app *App) setupKeybindings() error {
 
 	// docker stream (Ctrl+S)
 	// Переключение режима вывода потоков журналов (фильтрация по потоку)
-	customStreamMode := getHotkey(config.Hotkeys.SwitchStreamMode, "ctrl+s")
-	if err := app.gui.SetKeybinding("", customStreamMode, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customStreamMode, altMode := getHotkey(config.Hotkeys.SwitchStreamMode, "ctrl+s")
+	if err := app.gui.SetKeybinding("", customStreamMode, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		switch app.dockerStreamMode {
 		case "stream":
 			app.dockerStreamMode = "stdout"
@@ -7534,8 +7607,8 @@ func (app *App) setupKeybindings() error {
 
 	// docker timestamp (Ctrl+T)
 	// Переключение режима вывода timestamp и название потока
-	customTimestamp := getHotkey(config.Hotkeys.TimestampShow, "ctrl+t")
-	if err := app.gui.SetKeybinding("", customTimestamp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customTimestamp, altMode := getHotkey(config.Hotkeys.TimestampShow, "ctrl+t")
+	if err := app.gui.SetKeybinding("", customTimestamp, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		switch {
 		case app.timestampDocker && app.streamTypeDocker:
 			app.streamTypeDocker = false
@@ -7554,8 +7627,8 @@ func (app *App) setupKeybindings() error {
 
 	// Exit (ctrl+c)
 	// Очистка поля ввода для фильтрации списков или выход
-	customExit := getHotkey(config.Hotkeys.Exit, "ctrl+c")
-	if err := app.gui.SetKeybinding("filterList", customExit, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+	customExit, altMode := getHotkey(config.Hotkeys.Exit, "ctrl+c")
+	if err := app.gui.SetKeybinding("filterList", customExit, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.filterListText == "" {
 			return quit(g, v)
 		} else {
@@ -7911,11 +7984,12 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
 		app.colorMode,
+		app.priority,
 		app.dockerStreamLogsStatus,
 		app.filterByDateStatus,
 	)
@@ -7954,11 +8028,12 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Docker: %s | Filter by date: %s",
+		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
 		app.colorMode,
+		app.priority,
 		app.dockerStreamLogsStatus,
 		app.filterByDateStatus,
 	)
