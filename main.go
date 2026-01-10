@@ -2283,24 +2283,24 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if app.sshMode {
 			switch {
 			case app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--since", app.sinceFilterText, "--until", app.untilFilterText)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText, "--until", app.untilFilterText)...)
 			case app.sinceDateFilterMode && !app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--since", app.sinceFilterText)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText)...)
 			case !app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--until", app.untilFilterText)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--until", app.untilFilterText)...)
 			default:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority)...)
 			}
 		} else {
 			switch {
 			case app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--since", app.sinceFilterText, "--until", app.untilFilterText)
+				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText, "--until", app.untilFilterText)
 			case app.sinceDateFilterMode && !app.untilDateFilterMode:
-				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--since", app.sinceFilterText)
+				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText)
 			case !app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "--until", app.untilFilterText)
+				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--until", app.untilFilterText)
 			default:
-				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount)
+				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority)
 			}
 		}
 		output, err = cmd.Output()
@@ -5479,12 +5479,18 @@ func (app *App) wordColor(inputWord string) string {
 		coloredWord = strings.ReplaceAll(inputWord, "NOTICE", "\033[46m\033[30m NOTICE \033[0m")
 	case strings.Contains(inputWord, "ERROR"):
 		coloredWord = strings.ReplaceAll(inputWord, "ERROR", "\033[41m\033[30m ERROR \033[0m")
+	case strings.Contains(inputWord, "CRITICAL"):
+		coloredWord = strings.ReplaceAll(inputWord, "CRITICAL", "\033[41m\033[30m CRITICAL \033[0m")
 	case strings.Contains(inputWord, "CRIT"):
 		coloredWord = strings.ReplaceAll(inputWord, "CRIT", "\033[41m\033[30m CRIT \033[0m")
 	case strings.Contains(inputWord, "ALERT"):
 		coloredWord = strings.ReplaceAll(inputWord, "ALERT", "\033[41m\033[30m ALERT \033[0m")
+	case strings.Contains(inputWord, "EMERGENCY"):
+		coloredWord = strings.ReplaceAll(inputWord, "EMERGENCY", "\033[41m\033[30m EMERGENCY \033[0m")
 	case strings.Contains(inputWord, "EMERG"):
 		coloredWord = strings.ReplaceAll(inputWord, "EMERG", "\033[41m\033[30m EMERG \033[0m")
+	case strings.Contains(inputWord, "FAILURE"):
+		coloredWord = strings.ReplaceAll(inputWord, "FAILURE", "\033[41m\033[30m FAILURE \033[0m")
 	case strings.Contains(inputWord, "FAIL"):
 		coloredWord = strings.ReplaceAll(inputWord, "FAIL", "\033[41m\033[30m FAIL \033[0m")
 	case strings.Contains(inputWord, "FATAL"):
