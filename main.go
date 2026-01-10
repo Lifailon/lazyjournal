@@ -31,7 +31,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var programVersion string = "0.8.3"
+var programVersion string = "0.8.4"
 
 // Структура конфигурации
 type Config struct {
@@ -155,6 +155,7 @@ type App struct {
 	dockerFrameColor      gocui.Attribute
 
 	sshMode                bool     // использовать вызов команд (exec.Command) через ssh
+	sshStatus              string   // имя хоста для статуса
 	sshOptions             []string // опции для ssh подключения
 	fastMode               bool     // загрузка журналов в горутине (beta mode)
 	testMode               bool     // исключаем вызовы к gocui при тестирование функций
@@ -1296,6 +1297,7 @@ func runGoCui(mock bool) {
 	// Включаем режим ssh и заполняем параметры (включая sudo и другие стандартные опции ssh подключения, например, порт)
 	if *sshModeFlag != "" {
 		app.sshMode = true
+		app.sshStatus = *sshModeFlag
 		options := strings.Split(*sshModeFlag, " ")
 		app.sshOptions = append(app.sshOptions, options...)
 		getOS, err := remoteGetOS(app.sshOptions)
@@ -1305,6 +1307,8 @@ func runGoCui(mock bool) {
 		} else {
 			app.getOS = getOS
 		}
+	} else {
+		app.sshStatus = "localhost"
 	}
 
 	// Создаем GUI
@@ -1549,7 +1553,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Frame = false // Отключаем рамку для статуса
 		v.FgColor = app.statusColor
 		fmt.Fprintf(v,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -4716,7 +4721,8 @@ func (app *App) updateStatus() {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+		app.sshStatus,
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
@@ -4979,7 +4985,8 @@ func (app *App) applyFilter(color bool) {
 		vStatus, _ := app.gui.View("status")
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -6232,7 +6239,8 @@ func (app *App) scrollDownLogs(step int) error {
 				}
 				vStatus.Clear()
 				fmt.Fprintf(vStatus,
-					" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+					" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+					app.sshStatus,
 					app.logViewCount,
 					app.autoScroll,
 					app.logUpdateSeconds,
@@ -6264,7 +6272,8 @@ func (app *App) scrollUpLogs(step int) error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -6286,7 +6295,8 @@ func (app *App) pageUpLogs() {
 		vStatus, _ := app.gui.View("status")
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -6341,7 +6351,8 @@ func (app *App) updateLogOutput(newUpdate bool) {
 			}
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				app.sshStatus,
 				app.logViewCount,
 				app.autoScroll,
 				app.logUpdateSeconds,
@@ -6502,7 +6513,8 @@ func (app *App) updateDelimiter(newUpdate bool) {
 			vStatus, _ := app.gui.View("status")
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				app.sshStatus,
 				app.logViewCount,
 				app.autoScroll,
 				app.logUpdateSeconds,
@@ -7309,7 +7321,8 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -7336,7 +7349,8 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -7391,7 +7405,8 @@ func (app *App) setupKeybindings() error {
 			app.secondsChan <- app.logUpdateSeconds
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				app.sshStatus,
 				app.logViewCount,
 				app.autoScroll,
 				app.logUpdateSeconds,
@@ -7417,7 +7432,8 @@ func (app *App) setupKeybindings() error {
 			app.secondsChan <- app.logUpdateSeconds
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				app.sshStatus,
 				app.logViewCount,
 				app.autoScroll,
 				app.logUpdateSeconds,
@@ -7449,7 +7465,8 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -7515,7 +7532,8 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -7561,7 +7579,8 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -7903,8 +7922,8 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "      \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
 	fmt.Fprintln(helpView, "      \033[32mEnd\033[0m/\033[32mCtrl\033[0m+\033[32mE\033[0m - go to the end of the log.")
 	fmt.Fprintln(helpView, "      \033[32mHome\033[0m/\033[32mCtrl\033[0m+\033[32mA\033[0m - go to the top of the log.")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mX\033[0m/\033[32mZ\033[0m - change the number of log lines to output (default: 50000, range: 200-200000).")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mP\033[0m/\033[32mO\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
+	fmt.Fprintln(helpView, "      \033[32m[\033[0m/\033[32m]\033[0m - change the number of log lines to output (default: 50000, range: 200-200000).")
+	fmt.Fprintln(helpView, "      \033[32m{\033[0m/\033[32m}\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mU\033[0m - disable streaming of new events (log is loaded once without automatic update).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mR\033[0m - update the current log output manually (relevant in disable streaming mode).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mQ\033[0m - update all log lists.")
@@ -7990,7 +8009,8 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+		app.sshStatus,
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
@@ -8034,7 +8054,8 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+		app.sshStatus,
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
