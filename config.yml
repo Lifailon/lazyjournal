@@ -23,7 +23,8 @@ settings:
 # shift+<a-z>
 # ctrl+<a-z>
 hotkeys:
-  help: f1
+  showHelp: f1
+  showManager: f2
   switchWindow: tab
   backSwitchWindows: shift+tab
   up: k

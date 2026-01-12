@@ -62,7 +62,8 @@ type Settings struct {
 
 // Структура доступных сочетаний клавиш для переопределения (#23)
 type Hotkeys struct {
-	Help                 string `yaml:"help"`
+	ShowHelp             string `yaml:"showHelp"`
+	ShowManager          string `yaml:"showManager"`
 	SwitchWindow         string `yaml:"switchWindow"`
 	BackSwitchWindows    string `yaml:"backSwitchWindows"`
 	Up                   string `yaml:"up"`
@@ -275,9 +276,9 @@ type App struct {
 	integersInputRegex *regexp.Regexp
 	syslogUnitRegex    *regexp.Regexp
 
-	lastCurrentView string // фиксируем последнее используемое окно для Esc после /
-	backCurrentView bool   // отключаем/ключаем возврат
-	globalNextView  string // хранение названия следующего окна после возврата из окна менеджера
+	lastCurrentView   string // фиксируем последнее используемое окно для Esc после /
+	backCurrentView   bool   // отключаем/ключаем возврат
+	globalCurrentView string // хранение названия текущего окна после возврата из окна менеджера
 
 	dockerCompose        string            // название используемого исполняемого файла docker-compose или как плагин "docker compose"
 	uniquePrefixColorMap map[string]string // карта для хранения уникального цвета для каждого контейнера в стеках compose
@@ -349,7 +350,8 @@ func showConfig() {
 	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
 
 	fmt.Println("hotkeys:")
-	fmt.Printf("  help:                     %s\n", config.Hotkeys.Help)
+	fmt.Printf("  showHelp:                 %s\n", config.Hotkeys.ShowHelp)
+	fmt.Printf("  ShowManager:              %s\n", config.Hotkeys.ShowManager)
 	fmt.Printf("  switchWindow:             %s\n", config.Hotkeys.SwitchWindow)
 	fmt.Printf("  backSwitchWindows:        %s\n", config.Hotkeys.BackSwitchWindows)
 	fmt.Printf("  up:                       %s\n", config.Hotkeys.Up)
@@ -856,8 +858,9 @@ func runGoCui(mock bool) {
 		uniquePrefixColorMap:         make(map[string]string),
 	}
 
-	// Приоритет по умолчанию
+	// Значения по умолчанию
 	app.priority = "debug"
+	app.globalCurrentView = "filterList"
 
 	// Фиксируем дату для фильтрации
 	app.sinceFilterText = app.sinceFilterDate.Format("2006-01-02")
@@ -6673,15 +6676,25 @@ func getHotkey(configKey, defaultKey string) (any, gocui.Modifier) {
 
 // Функция для биндинга клавиш
 func (app *App) setupKeybindings() error {
+	mainViews := []string{
+		"filterList",
+		"services",
+		"varLogs",
+		"docker",
+		"filter",
+		"sinceFilter",
+		"untilFilter",
+		"logs",
+	}
+
 	// Открытие окна справки (F1)
-	customHelp, altMode := getHotkey(config.Hotkeys.Help, "f1")
+	customHelp, altMode := getHotkey(config.Hotkeys.ShowHelp, "f1")
 	helpHandler := func(g *gocui.Gui, v *gocui.View) error {
 		app.showInterfaceHelp(g)
 		// Удаляем глобальные биндинги
 		g.DeleteKeybindings("")
 		// Удаляем все биндинги назначенные для окон
-		viewsRange := []string{"filterList", "services", "varLogs", "docker", "filter", "sinceFilter", "untilFilter", "logs"}
-		for _, viewName := range viewsRange {
+		for _, viewName := range mainViews {
 			g.DeleteKeybindings(viewName)
 		}
 		// Создаем временный биндинг на Esc для закрытия окна
@@ -6701,6 +6714,67 @@ func (app *App) setupKeybindings() error {
 		return nil
 	}
 	if err := app.gui.SetKeybinding("", customHelp, altMode, helpHandler); err != nil {
+		return err
+	}
+
+	// Открытие окна для переключения ssh хостов и контекстов (F2)
+	customManager, altMode := getHotkey(config.Hotkeys.ShowManager, "f2")
+	managerHandler := func(g *gocui.Gui, v *gocui.View) error {
+		app.showInterfaceManager(g)
+		if v, err := g.SetCurrentView("sshManager"); err == nil {
+			v.FrameColor = app.selectedFrameColor
+			v.TitleColor = app.selectedTitleColor
+		}
+		for _, viewName := range mainViews {
+			g.DeleteKeybindings(viewName)
+		}
+		// Tab для переключения между окнами
+		customTab, altMode := getHotkey(config.Hotkeys.SwitchWindow, "tab")
+		views := []string{
+			"sshManager",
+			"dockerContextManager",
+			"kubernetesContextManager",
+			"kubernetesNamespaceManager",
+		}
+		app.gui.SetKeybinding("", customTab, altMode, func(g *gocui.Gui, v *gocui.View) error {
+			return app.nextViewManager(g, v, views)
+		})
+		customBackTab, altMode := getHotkey(config.Hotkeys.BackSwitchWindows, "shift+tab")
+		backViews := []string{
+			"kubernetesNamespaceManager",
+			"kubernetesContextManager",
+			"dockerContextManager",
+			"sshManager",
+		}
+		app.gui.SetKeybinding("", customBackTab, altMode, func(g *gocui.Gui, v *gocui.View) error {
+			return app.nextViewManager(g, v, backViews)
+		})
+		// Управление в окне dockerContextManager
+		if err := g.SetKeybinding("dockerContextManager", gocui.KeyArrowUp, gocui.ModNone, app.moveCursorUp); err != nil {
+			log.Panicln(err)
+		}
+		if err := g.SetKeybinding("dockerContextManager", gocui.KeyArrowDown, gocui.ModNone, app.moveCursorDown); err != nil {
+			log.Panicln(err)
+		}
+		if err := g.SetKeybinding("dockerContextManager", gocui.KeyEnter, gocui.ModNone, app.getSelectedLine); err != nil {
+			log.Panicln(err)
+		}
+		// Закрытие окна
+		if err := app.gui.SetKeybinding("", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+			app.closeManager(g)
+			if err := app.setupKeybindings(); err != nil {
+				log.Panicln("Error key bindings", err)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if err := app.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
+			return err
+		}
+		return nil
+	}
+	if err := app.gui.SetKeybinding("", customManager, altMode, managerHandler); err != nil {
 		return err
 	}
 
@@ -8067,6 +8141,10 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		v.SelFgColor = app.selectedForegroundColor
 		v.SelBgColor = app.selectedBackgroundColor
 		v.Clear()
+		contexts := app.getDockerContext()
+		for _, ctx := range contexts {
+			fmt.Fprintln(v, ctx)
+		}
 	}
 
 	if v, err := g.SetView("kubernetesContextManager", x0+1, midY, midX-1, y1-1, 0); err != nil {
@@ -8082,6 +8160,10 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		v.SelFgColor = app.selectedForegroundColor
 		v.SelBgColor = app.selectedBackgroundColor
 		v.Clear()
+		contexts := app.getKubernetesContext()
+		for _, ctx := range contexts {
+			fmt.Fprintln(v, ctx)
+		}
 	}
 
 	if v, err := g.SetView("kubernetesNamespaceManager", midX, midY, x1-1, y1-1, 0); err != nil {
@@ -8096,6 +8178,10 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		v.TitleColor = app.titleColor
 		v.SelFgColor = app.selectedForegroundColor
 		v.SelBgColor = app.selectedBackgroundColor
+		namespaces := app.getKubernetesNamespace()
+		for _, ns := range namespaces {
+			fmt.Fprintln(v, ns)
+		}
 	}
 }
 
@@ -8116,6 +8202,123 @@ func (app *App) closeManager(g *gocui.Gui) {
 	if err := g.DeleteView("kubernetesNamespaceManager"); err != nil {
 		return
 	}
+}
+
+// Функция для перемещения курсора вверх
+func (app *App) moveCursorUp(g *gocui.Gui, v *gocui.View) error {
+	if v == nil {
+		return nil
+	}
+	ox, oy := v.Origin()
+	cx, cy := v.Cursor()
+	if err := v.SetCursor(cx, cy-1); err != nil && oy > 0 {
+		if err := v.SetOrigin(ox, oy-1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Функция для перемещения курсора вниз
+func (app *App) moveCursorDown(g *gocui.Gui, v *gocui.View) error {
+	if v == nil {
+		return nil
+	}
+	cx, cy := v.Cursor()
+	line, _ := v.Line(cy + 1)
+	if line != "" {
+		if err := v.SetCursor(cx, cy+1); err != nil {
+			ox, oy := v.Origin()
+			if err := v.SetOrigin(ox, oy+1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Функция для получения выбранной строки
+func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
+	_, cy := v.Cursor()
+	line, err := v.Line(cy)
+	if err != nil {
+		return nil
+	}
+	app.dockerContext = line
+	return nil
+}
+
+// Функция для переключения окон
+func (app *App) nextViewManager(g *gocui.Gui, v *gocui.View, views []string) error {
+	// Сбрасываем цвета у всех окон
+	for _, name := range views {
+		if view, err := g.View(name); err == nil {
+			view.FrameColor = app.frameColor
+			view.TitleColor = app.titleColor
+		}
+	}
+	// Ищем индекс текущего окна
+	currentName := v.Name()
+	nextIndex := 0
+	for i, name := range views {
+		if name == currentName {
+			nextIndex = (i + 1) % len(views)
+			break
+		}
+	}
+	// Получаем имя следующего окна
+	nextName := views[nextIndex]
+	// Устанавливаем фокус на новое окно
+	nextView, err := g.SetCurrentView(nextName)
+	if err != nil {
+		return err
+	}
+	nextView.FrameColor = app.selectedFrameColor
+	nextView.TitleColor = app.selectedTitleColor
+	return nil
+}
+
+// Функция для получения списка контекстов Docker
+func (app *App) getDockerContext() []string {
+	cmd := exec.Command(
+		"docker", "context", "ls", "-q",
+	)
+	context, err := cmd.Output()
+	if err == nil {
+		strCtx := string(context)
+		return strings.Split(strCtx, "\n")
+	}
+	return nil
+}
+
+// Функция для получения списка контекстов Kubernetes
+func (app *App) getKubernetesContext() []string {
+	cmd := exec.Command(
+		"kubectl", "config", "get-contexts", "-o", "name",
+	)
+	context, err := cmd.Output()
+	if err == nil {
+		strCtx := string(context)
+		return strings.Split(strCtx, "\n")
+	}
+	return nil
+}
+
+// Функция для получения списка контекстов Kubernetes
+func (app *App) getKubernetesNamespace() []string {
+	cmd := exec.Command(
+		"kubectl", "get", "namespace", "-o", "name",
+	)
+	namespace, err := cmd.Output()
+	if err == nil {
+		strNs := string(namespace)
+		strNs = strings.ReplaceAll(strNs, "namespace/", "")
+		arrNsAll := strings.Split(strNs, "\n")
+		arrNs := []string{"all"}
+		arrNs = append(arrNs, arrNsAll...)
+		return arrNs
+	}
+	return nil
 }
 
 // Функции для переключения количества строк для вывода логов
@@ -8714,7 +8917,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			}
 		}
 		if !ok {
-			cView = app.globalNextView
+			cView = app.globalCurrentView
 		}
 		switch cView {
 		case "filterList":
@@ -8848,7 +9051,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 		}
 	}
 	// Фиксируем название окна
-	app.globalNextView = nextView
+	app.globalCurrentView = nextView
 	// Устанавливаем новое активное окно
 	if _, err := g.SetCurrentView(nextView); err != nil {
 		return err
@@ -8923,7 +9126,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			}
 		}
 		if !ok {
-			cView = app.globalNextView
+			cView = app.globalCurrentView
 		}
 		switch cView {
 		case "filterList":
@@ -9056,7 +9259,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedScrollLogs.FrameColor = app.frameColor
 		}
 	}
-	app.globalNextView = nextView
+	app.globalCurrentView = nextView
 	if _, err := g.SetCurrentView(nextView); err != nil {
 		return err
 	}
@@ -9065,7 +9268,16 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 
 func (app *App) setSelectView(g *gocui.Gui, viewName string) error {
 	// Сбрасываем цвет всех окон
-	views := []string{"filterList", "services", "varLogs", "docker", "filter", "sinceFilter", "untilFilter", "logs"}
+	views := []string{
+		"filterList",
+		"services",
+		"varLogs",
+		"docker",
+		"filter",
+		"sinceFilter",
+		"untilFilter",
+		"logs",
+	}
 	for _, name := range views {
 		if v, err := g.View(name); err == nil {
 			v.FrameColor = app.frameColor
