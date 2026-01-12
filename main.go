@@ -1551,7 +1551,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.TitleColor = app.titleColor
 	}
 
-	// Окно статуса внизу интерфейса вместо Subtitle
+	// Окно статуса внизу интерфейса (вместо Subtitle)
 	if v, err := g.SetView("status", -1, maxY-2, maxX, maxY, 8); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
@@ -1559,18 +1559,18 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Frame = false // Отключаем рамку для статуса
 		v.FgColor = app.statusColor
 		fmt.Fprintf(v,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-			app.sshStatus,
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Filter by date: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Host: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
 			app.priority,
+			app.filterByDateStatus,
 			app.dockerStreamLogsStatus,
 			app.dockerContext,
 			app.kubernetesContext,
 			app.kubernetesNamespaceStatus,
-			app.filterByDateStatus,
+			app.sshStatus,
 		)
 	}
 
@@ -4652,7 +4652,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				v.FrameColor = app.errorColor
 				v.Clear()
 				fmt.Fprint(v, "⎯")
-				app.updateStatus()
+				app.updateFilterStatus()
 				return
 			// Игнорируем другие символы
 			default:
@@ -4669,7 +4669,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			fmt.Fprint(v, app.sinceFilterText)
 			app.sinceDateFilterMode = true
 			v.FrameColor = app.selectedFrameColor
-			app.updateStatus()
+			app.updateFilterStatus()
 		case "untilFilter":
 			switch {
 			case key == gocui.KeyArrowRight || ch == customRight:
@@ -4681,7 +4681,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				v.FrameColor = app.errorColor
 				v.Clear()
 				fmt.Fprint(v, "⎯")
-				app.updateStatus()
+				app.updateFilterStatus()
 				return
 			default:
 				return
@@ -4696,7 +4696,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			fmt.Fprint(v, app.untilFilterText)
 			app.untilDateFilterMode = true
 			v.FrameColor = app.selectedFrameColor
-			app.updateStatus()
+			app.updateFilterStatus()
 		}
 	})
 }
@@ -4713,7 +4713,7 @@ func (app *App) switchDate(inputDate time.Time, up bool) (time.Time, string) {
 }
 
 // Функция для обновления статуса работы фильтра по дате
-func (app *App) updateStatus() {
+func (app *App) updateFilterStatus() {
 	switch {
 	case app.sinceDateFilterMode && !app.untilDateFilterMode:
 		app.filterByDateStatus = "since only"
@@ -4724,26 +4724,31 @@ func (app *App) updateStatus() {
 	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
 		app.filterByDateStatus = "false"
 	}
+	app.updateStatus()
+	app.updateLogsView(false)
+}
+
+// Функция для обновления всех параметров в статусе
+func (app *App) updateStatus() {
 	vStatus, err := app.gui.View("status")
 	if err != nil {
 		return
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-		app.sshStatus,
+		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Filter by date: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Host: %s",
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
 		app.colorMode,
 		app.priority,
+		app.filterByDateStatus,
 		app.dockerStreamLogsStatus,
 		app.dockerContext,
 		app.kubernetesContext,
 		app.kubernetesNamespaceStatus,
-		app.filterByDateStatus,
+		app.sshStatus,
 	)
-	app.updateLogsView(false)
 }
 
 // Функция для фильтрации всех списоков журналов
@@ -4994,22 +4999,7 @@ func (app *App) applyFilter(color bool) {
 		} else {
 			app.autoScroll = false
 		}
-		vStatus, _ := app.gui.View("status")
-		vStatus.Clear()
-		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-			app.sshStatus,
-			app.logViewCount,
-			app.autoScroll,
-			app.logUpdateSeconds,
-			app.colorMode,
-			app.priority,
-			app.dockerStreamLogsStatus,
-			app.dockerContext,
-			app.kubernetesContext,
-			app.kubernetesNamespaceStatus,
-			app.filterByDateStatus,
-		)
+		app.updateStatus()
 		app.logScrollPos = 0
 		app.updateLogsView(true)
 	}
@@ -6248,25 +6238,7 @@ func (app *App) scrollDownLogs(step int) error {
 				app.autoScroll = false
 			}
 			if !app.testMode {
-				vStatus, err := app.gui.View("status")
-				if err != nil {
-					return err
-				}
-				vStatus.Clear()
-				fmt.Fprintf(vStatus,
-					" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-					app.sshStatus,
-					app.logViewCount,
-					app.autoScroll,
-					app.logUpdateSeconds,
-					app.colorMode,
-					app.priority,
-					app.dockerStreamLogsStatus,
-					app.dockerContext,
-					app.kubernetesContext,
-					app.kubernetesNamespaceStatus,
-					app.filterByDateStatus,
-				)
+				app.updateStatus()
 			}
 		}
 		// Вызываем функцию для обновления отображения журнала
@@ -6284,25 +6256,7 @@ func (app *App) scrollUpLogs(step int) error {
 	// Отключаем автоскролл
 	app.autoScroll = false
 	if !app.testMode {
-		vStatus, err := app.gui.View("status")
-		if err != nil {
-			return err
-		}
-		vStatus.Clear()
-		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-			app.sshStatus,
-			app.logViewCount,
-			app.autoScroll,
-			app.logUpdateSeconds,
-			app.colorMode,
-			app.priority,
-			app.dockerStreamLogsStatus,
-			app.dockerContext,
-			app.kubernetesContext,
-			app.kubernetesNamespaceStatus,
-			app.filterByDateStatus,
-		)
+		app.updateStatus()
 	}
 	app.updateLogsView(false)
 	return nil
@@ -6313,22 +6267,7 @@ func (app *App) pageUpLogs() {
 	app.logScrollPos = 0
 	app.autoScroll = false
 	if !app.testMode {
-		vStatus, _ := app.gui.View("status")
-		vStatus.Clear()
-		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-			app.sshStatus,
-			app.logViewCount,
-			app.autoScroll,
-			app.logUpdateSeconds,
-			app.colorMode,
-			app.priority,
-			app.dockerStreamLogsStatus,
-			app.dockerContext,
-			app.kubernetesContext,
-			app.kubernetesNamespaceStatus,
-			app.filterByDateStatus,
-		)
+		app.updateStatus()
 	}
 	app.updateLogsView(false)
 }
@@ -6369,25 +6308,7 @@ func (app *App) updateLogOutput(newUpdate bool) {
 			app.autoScroll = false
 		}
 		if !app.testMode {
-			vStatus, err := app.gui.View("status")
-			if err != nil {
-				return err
-			}
-			vStatus.Clear()
-			fmt.Fprintf(vStatus,
-				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-				app.sshStatus,
-				app.logViewCount,
-				app.autoScroll,
-				app.logUpdateSeconds,
-				app.colorMode,
-				app.priority,
-				app.dockerStreamLogsStatus,
-				app.dockerContext,
-				app.kubernetesContext,
-				app.kubernetesNamespaceStatus,
-				app.filterByDateStatus,
-			)
+			app.updateStatus()
 		}
 		switch app.lastWindow {
 		case "services":
@@ -6537,22 +6458,7 @@ func (app *App) updateDelimiter(newUpdate bool) {
 			app.autoScroll = false
 		}
 		if !app.testMode {
-			vStatus, _ := app.gui.View("status")
-			vStatus.Clear()
-			fmt.Fprintf(vStatus,
-				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-				app.sshStatus,
-				app.logViewCount,
-				app.autoScroll,
-				app.logUpdateSeconds,
-				app.colorMode,
-				app.priority,
-				app.dockerStreamLogsStatus,
-				app.dockerContext,
-				app.kubernetesContext,
-				app.kubernetesNamespaceStatus,
-				app.filterByDateStatus,
-			)
+			app.updateStatus()
 		}
 		// Фиксируем новое время загрузки журнала
 		app.updateTime = time.Now().Format("15:04:05")
@@ -7415,25 +7321,7 @@ func (app *App) setupKeybindings() error {
 		} else {
 			app.autoScroll = false
 		}
-		vStatus, err := app.gui.View("status")
-		if err != nil {
-			return err
-		}
-		vStatus.Clear()
-		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-			app.sshStatus,
-			app.logViewCount,
-			app.autoScroll,
-			app.logUpdateSeconds,
-			app.colorMode,
-			app.priority,
-			app.dockerStreamLogsStatus,
-			app.dockerContext,
-			app.kubernetesContext,
-			app.kubernetesNamespaceStatus,
-			app.filterByDateStatus,
-		)
+		app.updateStatus()
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
@@ -7446,25 +7334,7 @@ func (app *App) setupKeybindings() error {
 		} else {
 			app.autoScroll = false
 		}
-		vStatus, err := app.gui.View("status")
-		if err != nil {
-			return err
-		}
-		vStatus.Clear()
-		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-			app.sshStatus,
-			app.logViewCount,
-			app.autoScroll,
-			app.logUpdateSeconds,
-			app.colorMode,
-			app.priority,
-			app.dockerStreamLogsStatus,
-			app.dockerContext,
-			app.kubernetesContext,
-			app.kubernetesNamespaceStatus,
-			app.filterByDateStatus,
-		)
+		app.updateStatus()
 		app.updateLogsView(true)
 		return nil
 	}); err != nil {
@@ -7504,26 +7374,7 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("", customUpdateIntervalMore, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.logUpdateSeconds >= 2 && app.logUpdateSeconds <= 9 {
 			app.logUpdateSeconds++
-			vStatus, err := app.gui.View("status")
-			if err != nil {
-				return err
-			}
-			app.secondsChan <- app.logUpdateSeconds
-			vStatus.Clear()
-			fmt.Fprintf(vStatus,
-				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-				app.sshStatus,
-				app.logViewCount,
-				app.autoScroll,
-				app.logUpdateSeconds,
-				app.colorMode,
-				app.priority,
-				app.dockerStreamLogsStatus,
-				app.dockerContext,
-				app.kubernetesContext,
-				app.kubernetesNamespaceStatus,
-				app.filterByDateStatus,
-			)
+			app.updateStatus()
 		}
 		return nil
 	}); err != nil {
@@ -7533,27 +7384,9 @@ func (app *App) setupKeybindings() error {
 	if err := app.gui.SetKeybinding("", customUpdateIntervalLess, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.logUpdateSeconds >= 3 && app.logUpdateSeconds <= 10 {
 			app.logUpdateSeconds--
-			vStatus, err := app.gui.View("status")
-			if err != nil {
-				return err
-			}
 			// Изменяем интервал в горутине
 			app.secondsChan <- app.logUpdateSeconds
-			vStatus.Clear()
-			fmt.Fprintf(vStatus,
-				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-				app.sshStatus,
-				app.logViewCount,
-				app.autoScroll,
-				app.logUpdateSeconds,
-				app.colorMode,
-				app.priority,
-				app.dockerStreamLogsStatus,
-				app.dockerContext,
-				app.kubernetesContext,
-				app.kubernetesNamespaceStatus,
-				app.filterByDateStatus,
-			)
+			app.updateStatus()
 		}
 		return nil
 	}); err != nil {
@@ -7571,25 +7404,7 @@ func (app *App) setupKeybindings() error {
 			app.disableAutoScroll = true
 			app.autoScroll = false
 		}
-		vStatus, err := app.gui.View("status")
-		if err != nil {
-			return err
-		}
-		vStatus.Clear()
-		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-			app.sshStatus,
-			app.logViewCount,
-			app.autoScroll,
-			app.logUpdateSeconds,
-			app.colorMode,
-			app.priority,
-			app.dockerStreamLogsStatus,
-			app.dockerContext,
-			app.kubernetesContext,
-			app.kubernetesNamespaceStatus,
-			app.filterByDateStatus,
-		)
+		app.updateStatus()
 		app.updateLogOutput(false)
 		return nil
 	}); err != nil {
@@ -7641,25 +7456,7 @@ func (app *App) setupKeybindings() error {
 			app.applyFilter(false)
 			app.updateLogOutput(false)
 		}
-		vStatus, err := app.gui.View("status")
-		if err != nil {
-			return err
-		}
-		vStatus.Clear()
-		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-			app.sshStatus,
-			app.logViewCount,
-			app.autoScroll,
-			app.logUpdateSeconds,
-			app.colorMode,
-			app.priority,
-			app.dockerStreamLogsStatus,
-			app.dockerContext,
-			app.kubernetesContext,
-			app.kubernetesNamespaceStatus,
-			app.filterByDateStatus,
-		)
+		app.updateStatus()
 		return nil
 	}); err != nil {
 		return err
@@ -7691,25 +7488,7 @@ func (app *App) setupKeybindings() error {
 			app.applyFilter(false)
 			app.updateLogOutput(false)
 		}
-		vStatus, err := app.gui.View("status")
-		if err != nil {
-			return err
-		}
-		vStatus.Clear()
-		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-			app.sshStatus,
-			app.logViewCount,
-			app.autoScroll,
-			app.logUpdateSeconds,
-			app.colorMode,
-			app.priority,
-			app.dockerStreamLogsStatus,
-			app.dockerContext,
-			app.kubernetesContext,
-			app.kubernetesNamespaceStatus,
-			app.filterByDateStatus,
-		)
+		app.updateStatus()
 		return nil
 	}); err != nil {
 		return err
@@ -7856,7 +7635,7 @@ func (app *App) setupKeybindings() error {
 			v.FrameColor = app.errorColor
 			v.Clear()
 			fmt.Fprint(v, "⎯")
-			app.updateStatus()
+			app.updateFilterStatus()
 			return nil
 		}
 	}); err != nil {
@@ -7870,7 +7649,7 @@ func (app *App) setupKeybindings() error {
 			v.FrameColor = app.errorColor
 			v.Clear()
 			fmt.Fprint(v, "⎯")
-			app.updateStatus()
+			app.updateFilterStatus()
 			return nil
 		}
 	}); err != nil {
@@ -8351,25 +8130,7 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	// Загружаем журнал заново
 	app.updateLogOutput(true)
 	// Обновляем статус
-	vStatus, err := app.gui.View("status")
-	if err != nil {
-		return err
-	}
-	vStatus.Clear()
-	fmt.Fprintf(vStatus,
-		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-		app.sshStatus,
-		app.logViewCount,
-		app.autoScroll,
-		app.logUpdateSeconds,
-		app.colorMode,
-		app.priority,
-		app.dockerStreamLogsStatus,
-		app.dockerContext,
-		app.kubernetesContext,
-		app.kubernetesNamespaceStatus,
-		app.filterByDateStatus,
-	)
+	app.updateStatus()
 	return nil
 }
 
@@ -8399,25 +8160,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 		app.logViewCount = "200"
 	}
 	app.updateLogOutput(true)
-	vStatus, err := app.gui.View("status")
-	if err != nil {
-		return err
-	}
-	vStatus.Clear()
-	fmt.Fprintf(vStatus,
-		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
-		app.sshStatus,
-		app.logViewCount,
-		app.autoScroll,
-		app.logUpdateSeconds,
-		app.colorMode,
-		app.priority,
-		app.dockerStreamLogsStatus,
-		app.dockerContext,
-		app.kubernetesContext,
-		app.kubernetesNamespaceStatus,
-		app.filterByDateStatus,
-	)
+	app.updateStatus()
 	return nil
 }
 
