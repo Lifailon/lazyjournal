@@ -166,9 +166,10 @@ type App struct {
 	dockerStreamLogsStatus string   // отображаемый режим чтения журнала Docker в статусе Subtitle (в зависимости от прав доступа и флага)
 	dockerStreamMode       string   // переменная для хранения режима чтения потоков (stream, stdout или stderr)
 
-	dockerContext       string
-	kubernetesContext   string
-	kubernetesNamespace string
+	dockerContext             string
+	kubernetesContext         string
+	kubernetesNamespace       string
+	kubernetesNamespaceStatus string
 
 	getOS         string   // название ОС
 	getArch       string   // архитектура процессора
@@ -276,6 +277,7 @@ type App struct {
 
 	lastCurrentView string // фиксируем последнее используемое окно для Esc после /
 	backCurrentView bool   // отключаем/ключаем возврат
+	globalNextView  string // хранение названия следующего окна после возврата из окна менеджера
 
 	dockerCompose        string            // название используемого исполняемого файла docker-compose или как плагин "docker compose"
 	uniquePrefixColorMap map[string]string // карта для хранения уникального цвета для каждого контейнера в стеках compose
@@ -622,6 +624,7 @@ func (app *App) showAudit() {
 				auditText = append(auditText, "    version: "+csVersion)
 				// Определяем namespace
 				currentNamespace := app.kubernetesNamespace
+				app.kubernetesNamespaceStatus = app.kubernetesNamespace
 				if app.kubernetesNamespace == "all" {
 					app.kubernetesNamespace = "--all-namespaces"
 				} else {
@@ -1134,7 +1137,7 @@ func runGoCui(mock bool) {
 	app.dockerContext = *dockerContextFlag
 
 	app.kubernetesContext = *kubernetesContextFlag
-
+	app.kubernetesNamespaceStatus = *kubernetesNamespaceFlag
 	if *kubernetesNamespaceFlag == "all" {
 		app.kubernetesNamespace = "--all-namespaces"
 	} else {
@@ -1553,7 +1556,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Frame = false // Отключаем рамку для статуса
 		v.FgColor = app.statusColor
 		fmt.Fprintf(v,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
@@ -1561,6 +1564,9 @@ func (app *App) layout(g *gocui.Gui) error {
 			app.colorMode,
 			app.priority,
 			app.dockerStreamLogsStatus,
+			app.dockerContext,
+			app.kubernetesContext,
+			app.kubernetesNamespaceStatus,
 			app.filterByDateStatus,
 		)
 	}
@@ -4721,7 +4727,7 @@ func (app *App) updateStatus() {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 		app.sshStatus,
 		app.logViewCount,
 		app.autoScroll,
@@ -4729,6 +4735,9 @@ func (app *App) updateStatus() {
 		app.colorMode,
 		app.priority,
 		app.dockerStreamLogsStatus,
+		app.dockerContext,
+		app.kubernetesContext,
+		app.kubernetesNamespaceStatus,
 		app.filterByDateStatus,
 	)
 	app.updateLogsView(false)
@@ -4985,7 +4994,7 @@ func (app *App) applyFilter(color bool) {
 		vStatus, _ := app.gui.View("status")
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
@@ -4993,6 +5002,9 @@ func (app *App) applyFilter(color bool) {
 			app.colorMode,
 			app.priority,
 			app.dockerStreamLogsStatus,
+			app.dockerContext,
+			app.kubernetesContext,
+			app.kubernetesNamespaceStatus,
 			app.filterByDateStatus,
 		)
 		app.logScrollPos = 0
@@ -6239,7 +6251,7 @@ func (app *App) scrollDownLogs(step int) error {
 				}
 				vStatus.Clear()
 				fmt.Fprintf(vStatus,
-					" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+					" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 					app.sshStatus,
 					app.logViewCount,
 					app.autoScroll,
@@ -6247,6 +6259,9 @@ func (app *App) scrollDownLogs(step int) error {
 					app.colorMode,
 					app.priority,
 					app.dockerStreamLogsStatus,
+					app.dockerContext,
+					app.kubernetesContext,
+					app.kubernetesNamespaceStatus,
 					app.filterByDateStatus,
 				)
 			}
@@ -6272,7 +6287,7 @@ func (app *App) scrollUpLogs(step int) error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
@@ -6280,6 +6295,9 @@ func (app *App) scrollUpLogs(step int) error {
 			app.colorMode,
 			app.priority,
 			app.dockerStreamLogsStatus,
+			app.dockerContext,
+			app.kubernetesContext,
+			app.kubernetesNamespaceStatus,
 			app.filterByDateStatus,
 		)
 	}
@@ -6295,7 +6313,7 @@ func (app *App) pageUpLogs() {
 		vStatus, _ := app.gui.View("status")
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
@@ -6303,6 +6321,9 @@ func (app *App) pageUpLogs() {
 			app.colorMode,
 			app.priority,
 			app.dockerStreamLogsStatus,
+			app.dockerContext,
+			app.kubernetesContext,
+			app.kubernetesNamespaceStatus,
 			app.filterByDateStatus,
 		)
 	}
@@ -6351,7 +6372,7 @@ func (app *App) updateLogOutput(newUpdate bool) {
 			}
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 				app.sshStatus,
 				app.logViewCount,
 				app.autoScroll,
@@ -6359,6 +6380,9 @@ func (app *App) updateLogOutput(newUpdate bool) {
 				app.colorMode,
 				app.priority,
 				app.dockerStreamLogsStatus,
+				app.dockerContext,
+				app.kubernetesContext,
+				app.kubernetesNamespaceStatus,
 				app.filterByDateStatus,
 			)
 		}
@@ -6513,7 +6537,7 @@ func (app *App) updateDelimiter(newUpdate bool) {
 			vStatus, _ := app.gui.View("status")
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 				app.sshStatus,
 				app.logViewCount,
 				app.autoScroll,
@@ -6521,6 +6545,9 @@ func (app *App) updateDelimiter(newUpdate bool) {
 				app.colorMode,
 				app.priority,
 				app.dockerStreamLogsStatus,
+				app.dockerContext,
+				app.kubernetesContext,
+				app.kubernetesNamespaceStatus,
 				app.filterByDateStatus,
 			)
 		}
@@ -6646,8 +6673,7 @@ func getHotkey(configKey, defaultKey string) (any, gocui.Modifier) {
 
 // Функция для биндинга клавиш
 func (app *App) setupKeybindings() error {
-	// Help (F1)
-	// Открытие окна справки
+	// Открытие окна справки (F1)
 	customHelp, altMode := getHotkey(config.Hotkeys.Help, "f1")
 	helpHandler := func(g *gocui.Gui, v *gocui.View) error {
 		app.showInterfaceHelp(g)
@@ -7321,7 +7347,7 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
@@ -7329,6 +7355,9 @@ func (app *App) setupKeybindings() error {
 			app.colorMode,
 			app.priority,
 			app.dockerStreamLogsStatus,
+			app.dockerContext,
+			app.kubernetesContext,
+			app.kubernetesNamespaceStatus,
 			app.filterByDateStatus,
 		)
 		app.updateLogsView(true)
@@ -7349,7 +7378,7 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
@@ -7357,6 +7386,9 @@ func (app *App) setupKeybindings() error {
 			app.colorMode,
 			app.priority,
 			app.dockerStreamLogsStatus,
+			app.dockerContext,
+			app.kubernetesContext,
+			app.kubernetesNamespaceStatus,
 			app.filterByDateStatus,
 		)
 		app.updateLogsView(true)
@@ -7405,7 +7437,7 @@ func (app *App) setupKeybindings() error {
 			app.secondsChan <- app.logUpdateSeconds
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 				app.sshStatus,
 				app.logViewCount,
 				app.autoScroll,
@@ -7413,6 +7445,9 @@ func (app *App) setupKeybindings() error {
 				app.colorMode,
 				app.priority,
 				app.dockerStreamLogsStatus,
+				app.dockerContext,
+				app.kubernetesContext,
+				app.kubernetesNamespaceStatus,
 				app.filterByDateStatus,
 			)
 		}
@@ -7432,7 +7467,7 @@ func (app *App) setupKeybindings() error {
 			app.secondsChan <- app.logUpdateSeconds
 			vStatus.Clear()
 			fmt.Fprintf(vStatus,
-				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+				" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 				app.sshStatus,
 				app.logViewCount,
 				app.autoScroll,
@@ -7440,6 +7475,9 @@ func (app *App) setupKeybindings() error {
 				app.colorMode,
 				app.priority,
 				app.dockerStreamLogsStatus,
+				app.dockerContext,
+				app.kubernetesContext,
+				app.kubernetesNamespaceStatus,
 				app.filterByDateStatus,
 			)
 		}
@@ -7465,7 +7503,7 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
@@ -7473,6 +7511,9 @@ func (app *App) setupKeybindings() error {
 			app.colorMode,
 			app.priority,
 			app.dockerStreamLogsStatus,
+			app.dockerContext,
+			app.kubernetesContext,
+			app.kubernetesNamespaceStatus,
 			app.filterByDateStatus,
 		)
 		app.updateLogOutput(false)
@@ -7532,7 +7573,7 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
@@ -7540,6 +7581,9 @@ func (app *App) setupKeybindings() error {
 			app.colorMode,
 			app.priority,
 			app.dockerStreamLogsStatus,
+			app.dockerContext,
+			app.kubernetesContext,
+			app.kubernetesNamespaceStatus,
 			app.filterByDateStatus,
 		)
 		return nil
@@ -7579,7 +7623,7 @@ func (app *App) setupKeybindings() error {
 		}
 		vStatus.Clear()
 		fmt.Fprintf(vStatus,
-			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+			" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 			app.sshStatus,
 			app.logViewCount,
 			app.autoScroll,
@@ -7587,6 +7631,9 @@ func (app *App) setupKeybindings() error {
 			app.colorMode,
 			app.priority,
 			app.dockerStreamLogsStatus,
+			app.dockerContext,
+			app.kubernetesContext,
+			app.kubernetesNamespaceStatus,
 			app.filterByDateStatus,
 		)
 		return nil
@@ -7877,7 +7924,7 @@ func (app *App) setupKeybindings() error {
 	return nil
 }
 
-// Интерфейс справки
+// Интерфейс справки (F1)
 func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
@@ -7967,8 +8014,106 @@ func (app *App) showInterfaceInfo(g *gocui.Gui, errInfo bool, text string) {
 	fmt.Fprintln(helpView, text)
 }
 
+// Закрытие интерфейс ошибки
 func (app *App) closeInfo(g *gocui.Gui) {
 	if err := g.DeleteView("info"); err != nil {
+		return
+	}
+}
+
+// Интерфейс менеджера (F2)
+func (app *App) showInterfaceManager(g *gocui.Gui) {
+	maxX, maxY := g.Size()
+	width, height := 108, 42
+	x0 := (maxX - width) / 2
+	y0 := (maxY - height) / 2
+	x1 := x0 + width
+	y1 := y0 + height
+	managerView, err := g.SetView("manager", x0, y0, x1, y1, 0)
+	if err != nil && !errors.Is(err, gocui.ErrUnknownView) {
+		return
+	}
+	managerView.FrameColor = app.selectedFrameColor
+	managerView.TitleColor = app.selectedTitleColor
+	managerView.Clear()
+
+	midX := x0 + (width / 2)
+	midY := y0 + (height / 2)
+
+	if v, err := g.SetView("sshManager", x0+1, y0+1, midX-1, midY-1, 0); err != nil {
+		if !errors.Is(err, gocui.ErrUnknownView) {
+			return
+		}
+		v.Title = " SSH Manager "
+		v.Highlight = true
+		v.Wrap = false
+		v.Autoscroll = true
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
+		v.SelFgColor = app.selectedForegroundColor
+		v.SelBgColor = app.selectedBackgroundColor
+	}
+
+	if v, err := g.SetView("dockerContextManager", midX, y0+1, x1-1, midY-1, 0); err != nil {
+		if !errors.Is(err, gocui.ErrUnknownView) {
+			return
+		}
+		v.Title = " Docker Context Manager "
+		v.Highlight = true
+		v.Wrap = false
+		v.Autoscroll = true
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
+		v.SelFgColor = app.selectedForegroundColor
+		v.SelBgColor = app.selectedBackgroundColor
+		v.Clear()
+	}
+
+	if v, err := g.SetView("kubernetesContextManager", x0+1, midY, midX-1, y1-1, 0); err != nil {
+		if !errors.Is(err, gocui.ErrUnknownView) {
+			return
+		}
+		v.Title = " Kubernetes Context Manager "
+		v.Highlight = true
+		v.Wrap = false
+		v.Autoscroll = true
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
+		v.SelFgColor = app.selectedForegroundColor
+		v.SelBgColor = app.selectedBackgroundColor
+		v.Clear()
+	}
+
+	if v, err := g.SetView("kubernetesNamespaceManager", midX, midY, x1-1, y1-1, 0); err != nil {
+		if !errors.Is(err, gocui.ErrUnknownView) {
+			return
+		}
+		v.Title = " Kubernetes Namespace Manager "
+		v.Highlight = true
+		v.Wrap = false
+		v.Autoscroll = true
+		v.FrameColor = app.frameColor
+		v.TitleColor = app.titleColor
+		v.SelFgColor = app.selectedForegroundColor
+		v.SelBgColor = app.selectedBackgroundColor
+	}
+}
+
+// Функция для удаления всех окон
+func (app *App) closeManager(g *gocui.Gui) {
+	if err := g.DeleteView("manager"); err != nil {
+		return
+	}
+	if err := g.DeleteView("sshManager"); err != nil {
+		return
+	}
+	if err := g.DeleteView("dockerContextManager"); err != nil {
+		return
+	}
+	if err := g.DeleteView("kubernetesContextManager"); err != nil {
+		return
+	}
+	if err := g.DeleteView("kubernetesNamespaceManager"); err != nil {
 		return
 	}
 }
@@ -8009,7 +8154,7 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 		app.sshStatus,
 		app.logViewCount,
 		app.autoScroll,
@@ -8017,6 +8162,9 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 		app.colorMode,
 		app.priority,
 		app.dockerStreamLogsStatus,
+		app.dockerContext,
+		app.kubernetesContext,
+		app.kubernetesNamespaceStatus,
 		app.filterByDateStatus,
 	)
 	return nil
@@ -8054,7 +8202,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker: %s | Filter by date: %s",
+		" Host: %s | Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Filter by date: %s",
 		app.sshStatus,
 		app.logViewCount,
 		app.autoScroll,
@@ -8062,6 +8210,9 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 		app.colorMode,
 		app.priority,
 		app.dockerStreamLogsStatus,
+		app.dockerContext,
+		app.kubernetesContext,
+		app.kubernetesNamespaceStatus,
 		app.filterByDateStatus,
 	)
 	return nil
@@ -8538,12 +8689,35 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 	}
 	currentView := g.CurrentView()
 	var nextView string
-	// Начальное окно
+	// Выставляем начальное окно
 	if currentView == nil {
 		nextView = "services"
 	} else {
-		switch {
-		case currentView.Name() == "filterList":
+		cView := currentView.Name()
+		// Проверяем активное окно
+		views := []string{
+			"filterList",
+			"services",
+			"varLogs",
+			"docker",
+			"filter",
+			"sinceFilter",
+			"untilFilter",
+			"logs",
+			"scrollLogs",
+		}
+		ok := false
+		for _, v := range views {
+			if cView == v {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			cView = app.globalNextView
+		}
+		switch cView {
+		case "filterList":
 			nextView = "services"
 			selectedFilterList.FrameColor = app.frameColor
 			selectedFilterList.TitleColor = app.titleColor
@@ -8558,7 +8732,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
-		case currentView.Name() == "services":
+		case "services":
 			nextView = "varLogs"
 			selectedFilterList.FrameColor = app.frameColor
 			selectedFilterList.TitleColor = app.titleColor
@@ -8573,7 +8747,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
-		case currentView.Name() == "varLogs":
+		case "varLogs":
 			nextView = "docker"
 			selectedFilterList.FrameColor = app.frameColor
 			selectedFilterList.TitleColor = app.titleColor
@@ -8588,7 +8762,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
-		case currentView.Name() == "docker":
+		case "docker":
 			if app.timestampFilterView {
 				nextView = "sinceFilter"
 				selectedFilterList.FrameColor = app.frameColor
@@ -8620,7 +8794,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
 			}
-		case currentView.Name() == "sinceFilter":
+		case "sinceFilter":
 			nextView = "untilFilter"
 			selectedFilterList.FrameColor = app.frameColor
 			selectedFilterList.TitleColor = app.titleColor
@@ -8637,7 +8811,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
-		case currentView.Name() == "filter" || currentView.Name() == "untilFilter":
+		case "filter", "untilFilter":
 			if app.timestampFilterView {
 				untilFilter.FrameColor = app.frameColor
 				untilFilter.TitleColor = app.titleColor
@@ -8656,7 +8830,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.selectedFrameColor
 			selectedLogs.TitleColor = app.selectedTitleColor
 			selectedScrollLogs.FrameColor = app.selectedFrameColor
-		case currentView.Name() == "logs":
+		case "logs":
 			nextView = "filterList"
 			selectedFilterList.FrameColor = app.selectedFrameColor
 			selectedFilterList.TitleColor = app.selectedTitleColor
@@ -8673,6 +8847,8 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedScrollLogs.FrameColor = app.frameColor
 		}
 	}
+	// Фиксируем название окна
+	app.globalNextView = nextView
 	// Устанавливаем новое активное окно
 	if _, err := g.SetCurrentView(nextView); err != nil {
 		return err
@@ -8727,8 +8903,30 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 	if currentView == nil {
 		nextView = "services"
 	} else {
-		switch {
-		case currentView.Name() == "filterList":
+		cView := currentView.Name()
+		views := []string{
+			"filterList",
+			"services",
+			"varLogs",
+			"docker",
+			"filter",
+			"sinceFilter",
+			"untilFilter",
+			"logs",
+			"scrollLogs",
+		}
+		ok := false
+		for _, v := range views {
+			if cView == v {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			cView = app.globalNextView
+		}
+		switch cView {
+		case "filterList":
 			nextView = "logs"
 			selectedFilterList.FrameColor = app.frameColor
 			selectedFilterList.TitleColor = app.titleColor
@@ -8743,7 +8941,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.selectedFrameColor
 			selectedLogs.TitleColor = app.selectedTitleColor
 			selectedScrollLogs.FrameColor = app.selectedFrameColor
-		case currentView.Name() == "services":
+		case "services":
 			nextView = "filterList"
 			selectedFilterList.FrameColor = app.selectedFrameColor
 			selectedFilterList.TitleColor = app.selectedTitleColor
@@ -8758,7 +8956,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
-		case currentView.Name() == "logs":
+		case "logs":
 			if app.timestampFilterView {
 				nextView = "untilFilter"
 				selectedFilterList.FrameColor = app.frameColor
@@ -8790,7 +8988,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
 			}
-		case currentView.Name() == "untilFilter":
+		case "untilFilter":
 			nextView = "sinceFilter"
 			selectedFilterList.FrameColor = app.frameColor
 			selectedFilterList.TitleColor = app.titleColor
@@ -8807,7 +9005,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
-		case currentView.Name() == "filter" || currentView.Name() == "sinceFilter":
+		case "filter", "sinceFilter":
 			if app.timestampFilterView {
 				sinceFilter.FrameColor = app.frameColor
 				sinceFilter.TitleColor = app.titleColor
@@ -8826,7 +9024,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
-		case currentView.Name() == "docker":
+		case "docker":
 			nextView = "varLogs"
 			selectedFilterList.FrameColor = app.frameColor
 			selectedFilterList.TitleColor = app.titleColor
@@ -8841,7 +9039,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
-		case currentView.Name() == "varLogs":
+		case "varLogs":
 			nextView = "services"
 			selectedFilterList.FrameColor = app.frameColor
 			selectedFilterList.TitleColor = app.titleColor
@@ -8858,6 +9056,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedScrollLogs.FrameColor = app.frameColor
 		}
 	}
+	app.globalNextView = nextView
 	if _, err := g.SetCurrentView(nextView); err != nil {
 		return err
 	}
