@@ -2291,31 +2291,35 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			}
 		}
 		var cmd *exec.Cmd
-		var serviceNameOpt string
+		// Две переменные для команды в режиме ssh (используем массив) или без (используем строку)
+		var serviceNameStr string
+		var serviceNameArr []string
 		if serviceName != "_all" {
-			serviceNameOpt = "-u " + serviceName
+			serviceNameStr = "-u " + serviceName
+			serviceNameArr = []string{"-u", serviceName}
 		}
+		// Формируем команду для выполнения
 		if app.sshMode {
 			switch {
 			case app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText, "--until", app.untilFilterText)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText, "--until", app.untilFilterText)...)
 			case app.sinceDateFilterMode && !app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText)...)
 			case !app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--until", app.untilFilterText)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--until", app.untilFilterText)...)
 			default:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority)...)
+				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority)...)
 			}
 		} else {
 			switch {
 			case app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText, "--until", app.untilFilterText)
+				cmd = exec.Command("journalctl", append(serviceNameArr, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText, "--until", app.untilFilterText)...)
 			case app.sinceDateFilterMode && !app.untilDateFilterMode:
-				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText)
+				cmd = exec.Command("journalctl", append(serviceNameArr, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText)...)
 			case !app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--until", app.untilFilterText)
+				cmd = exec.Command("journalctl", append(serviceNameArr, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--until", app.untilFilterText)...)
 			default:
-				cmd = exec.Command("journalctl", serviceNameOpt, "--no-pager", "-n", app.logViewCount, "-p", app.priority)
+				cmd = exec.Command("journalctl", append(serviceNameArr, "--no-pager", "-n", app.logViewCount, "-p", app.priority)...)
 			}
 		}
 		output, err = cmd.Output()
