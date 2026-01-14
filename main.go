@@ -3697,7 +3697,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	if err != nil && app.testMode {
 		switch containerizationSystem {
 		case "kubectl":
-			log.Print("Error:", containerizationSystem+" not installed or no connection to the Kubernetes cluster.")
+			log.Print("Error:", containerizationSystem+" not installed or no connection to the Kubernetes cluster")
 		case "compose":
 			log.Print("Error:", app.dockerCompose+" not installed (environment not found)")
 		default:
@@ -3726,34 +3726,53 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		}
 	case "compose":
 		if app.sshMode {
-			cmd = exec.Command("ssh", append(app.sshOptions,
-				app.dockerCompose, "ls", "-a",
-			)...)
+			// Корректируем положение флага context в команде compose (после docker и перед context)
+			if app.dockerCompose == "docker-compose" {
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						app.dockerCompose,
+						"--context", app.dockerContext, "ls", "-a",
+					)...)
+			} else {
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						"docker",
+						"--context", app.dockerContext, "compose", "ls", "-a",
+					)...)
+			}
 		} else {
 			// Корректируем положение флага context в команде compose
 			if app.dockerCompose == "docker-compose" {
 				cmd = exec.CommandContext(
 					ctx,
-					app.dockerCompose, "--context", app.dockerContext, "ls", "-a",
+					app.dockerCompose,
+					"--context", app.dockerContext, "ls", "-a",
 				)
 			} else {
 				cmd = exec.CommandContext(
 					ctx,
-					"docker", "--context", app.dockerContext, "compose", "ls", "-a",
+					"docker",
+					"--context", app.dockerContext, "compose", "ls", "-a",
 				)
 			}
 		}
 	default:
 		// Получаем список контейнеров из Docker или Podman
 		if app.sshMode {
-			cmd = exec.Command("ssh", append(app.sshOptions,
-				containerizationSystem, "ps", "-a",
-				"--format", "'{{.ID}} {{.Names}} {{.State}}'", // добавляем кавычки для передаваемых через пробел параметров в ssh
-			)...)
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					containerizationSystem,
+					"--context", app.dockerContext, "ps", "-a",
+					"--format", "'{{.ID}} {{.Names}} {{.State}}'", // добавляем кавычки для передаваемых через пробел параметров в ssh
+				)...)
 		} else {
 			cmd = exec.CommandContext(
 				ctx,
-				containerizationSystem, "--context", app.dockerContext, "ps", "-a",
+				containerizationSystem,
+				"--context", app.dockerContext, "ps", "-a",
 				"--format", "{{.ID}} {{.Names}} {{.State}}",
 			)
 		}
@@ -4236,34 +4255,38 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				if app.dockerCompose == "docker compose" {
 					switch {
 					case app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.Command(
+						cmd = exec.CommandContext(
+							ctx,
 							"ssh", append(app.sshOptions,
-								"docker", "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
+								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
 								"--since", sinceFilterTextNotSpace,
 								"--until", untilFilterTextNotSpace,
 								"--tail", app.logViewCount,
 							)...,
 						)
 					case app.sinceDateFilterMode && !app.untilDateFilterMode:
-						cmd = exec.Command(
+						cmd = exec.CommandContext(
+							ctx,
 							"ssh", append(app.sshOptions,
-								"docker", "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
+								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
 								"--since", sinceFilterTextNotSpace,
 								"--tail", app.logViewCount,
 							)...,
 						)
 					case !app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.Command(
+						cmd = exec.CommandContext(
+							ctx,
 							"ssh", append(app.sshOptions,
-								"docker", "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
+								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
 								"--until", untilFilterTextNotSpace,
 								"--tail", app.logViewCount,
 							)...,
 						)
 					default:
-						cmd = exec.Command(
+						cmd = exec.CommandContext(
+							ctx,
 							"ssh", append(app.sshOptions,
-								"docker", "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
+								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
 								"--tail", app.logViewCount,
 							)...,
 						)
@@ -4271,34 +4294,38 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				} else {
 					switch {
 					case app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.Command(
+						cmd = exec.CommandContext(
+							ctx,
 							"ssh", append(app.sshOptions,
-								app.dockerCompose, "--project-name", containerId, "logs", "--timestamps", "--no-color",
+								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
 								"--since", sinceFilterTextNotSpace,
 								"--until", untilFilterTextNotSpace,
 								"--tail", app.logViewCount,
 							)...,
 						)
 					case app.sinceDateFilterMode && !app.untilDateFilterMode:
-						cmd = exec.Command(
+						cmd = exec.CommandContext(
+							ctx,
 							"ssh", append(app.sshOptions,
-								app.dockerCompose, "--project-name", containerId, "logs", "--timestamps", "--no-color",
+								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
 								"--since", sinceFilterTextNotSpace,
 								"--tail", app.logViewCount,
 							)...,
 						)
 					case !app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.Command(
+						cmd = exec.CommandContext(
+							ctx,
 							"ssh", append(app.sshOptions,
-								app.dockerCompose, "--project-name", containerId, "logs", "--timestamps", "--no-color",
+								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
 								"--until", untilFilterTextNotSpace,
 								"--tail", app.logViewCount,
 							)...,
 						)
 					default:
-						cmd = exec.Command(
+						cmd = exec.CommandContext(
+							ctx,
 							"ssh", append(app.sshOptions,
-								app.dockerCompose, "--project-name", containerId, "logs", "--timestamps", "--no-color",
+								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
 								"--tail", app.logViewCount,
 							)...,
 						)
@@ -4376,34 +4403,38 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			if app.sshMode {
 				switch {
 				case app.sinceDateFilterMode && app.untilDateFilterMode:
-					cmd = exec.Command(
+					cmd = exec.CommandContext(
+						ctx,
 						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
+							containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 							"--since", sinceFilterTextNotSpace,
 							"--until", untilFilterTextNotSpace,
 							containerId,
 						)...,
 					)
 				case app.sinceDateFilterMode && !app.untilDateFilterMode:
-					cmd = exec.Command(
+					cmd = exec.CommandContext(
+						ctx,
 						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
+							containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 							"--since", sinceFilterTextNotSpace,
 							containerId,
 						)...,
 					)
 				case !app.sinceDateFilterMode && app.untilDateFilterMode:
-					cmd = exec.Command(
+					cmd = exec.CommandContext(
+						ctx,
 						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
+							containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 							"--until", untilFilterTextNotSpace,
 							containerId,
 						)...,
 					)
 				default:
-					cmd = exec.Command(
+					cmd = exec.CommandContext(
+						ctx,
 						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs", "--timestamps", "--tail", app.logViewCount,
+							containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
 							containerId,
 						)...,
 					)
@@ -8052,7 +8083,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 	}
 }
 
-// Функция для удаления всех окон
+// Функция для удаления всех окон менеджера ssh/контектов
 func (app *App) closeManager(g *gocui.Gui) {
 	if err := g.DeleteView("manager"); err != nil {
 		return
@@ -8071,7 +8102,7 @@ func (app *App) closeManager(g *gocui.Gui) {
 	}
 }
 
-// Функция для перемещения курсора вверх
+// Функция для перемещения курсора вверх в менеджере ssh/контектов
 func (app *App) moveCursorUp(g *gocui.Gui, v *gocui.View) error {
 	if v == nil {
 		return nil
@@ -8086,7 +8117,7 @@ func (app *App) moveCursorUp(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-// Функция для перемещения курсора вниз
+// Функция для перемещения курсора вниз в менеджере ssh/контектов
 func (app *App) moveCursorDown(g *gocui.Gui, v *gocui.View) error {
 	if v == nil {
 		return nil
@@ -8141,6 +8172,9 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 		} else {
 			app.loadWinFiles(app.selectPath)
 		}
+		// Обновляем все списки в менеджере (что бы загрузить удаленный список контекстов Docker и Kubernetes)
+		app.closeManager(g)
+		app.showInterfaceManager(g)
 	case "dockerContextManager":
 		app.dockerContext = line
 	case "kubernetesContextManager":
@@ -8160,7 +8194,7 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-// Функция для переключения окон
+// Функция для переключения окон в менеджере ssh/контектов (3-й параметр содержит массив окон и определяет направление - tab/shift+tab)
 func (app *App) nextViewManager(g *gocui.Gui, v *gocui.View, views []string) error {
 	// Сбрасываем цвета у всех окон
 	for _, name := range views {
@@ -8192,9 +8226,16 @@ func (app *App) nextViewManager(g *gocui.Gui, v *gocui.View, views []string) err
 
 // Функция для получения списка контекстов Docker
 func (app *App) getDockerContext() []string {
-	cmd := exec.Command(
-		"docker", "context", "ls", "-q",
-	)
+	var cmd *exec.Cmd
+	if app.sshMode {
+		cmd = exec.Command("ssh", append(app.sshOptions,
+			"docker", "context", "ls", "-q",
+		)...)
+	} else {
+		cmd = exec.Command(
+			"docker", "context", "ls", "-q",
+		)
+	}
 	context, err := cmd.Output()
 	if err == nil {
 		strCtx := string(context)
@@ -8205,9 +8246,16 @@ func (app *App) getDockerContext() []string {
 
 // Функция для получения списка контекстов Kubernetes
 func (app *App) getKubernetesContext() []string {
-	cmd := exec.Command(
-		"kubectl", "config", "get-contexts", "-o", "name",
-	)
+	var cmd *exec.Cmd
+	if app.sshMode {
+		cmd = exec.Command("ssh", append(app.sshOptions,
+			"kubectl", "config", "get-contexts", "-o", "name",
+		)...)
+	} else {
+		cmd = exec.Command(
+			"kubectl", "config", "get-contexts", "-o", "name",
+		)
+	}
 	context, err := cmd.Output()
 	if err == nil {
 		strCtx := string(context)
@@ -8218,9 +8266,16 @@ func (app *App) getKubernetesContext() []string {
 
 // Функция для получения списка контекстов Kubernetes
 func (app *App) getKubernetesNamespace() []string {
-	cmd := exec.Command(
-		"kubectl", "get", "namespace", "-o", "name",
-	)
+	var cmd *exec.Cmd
+	if app.sshMode {
+		cmd = exec.Command("ssh", append(app.sshOptions,
+			"kubectl", "get", "namespace", "-o", "name",
+		)...)
+	} else {
+		cmd = exec.Command(
+			"kubectl", "get", "namespace", "-o", "name",
+		)
+	}
 	namespace, err := cmd.Output()
 	if err == nil {
 		strNs := string(namespace)
