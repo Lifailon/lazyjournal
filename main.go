@@ -39,6 +39,7 @@ type Config struct {
 	Settings  Settings  `yaml:"settings"`
 	Hotkeys   Hotkeys   `yaml:"hotkeys"`
 	Interface Interface `yaml:"interface"`
+	Ssh       Ssh       `yaml:ssh`
 }
 
 // Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
@@ -111,6 +112,11 @@ type Interface struct {
 	ErrorColor              string `yaml:"errorColor"`
 }
 
+// Структура с содержимым массива ssh хостов с параметрами подключения
+type Ssh struct {
+	Hosts []string `yaml:"hosts"`
+}
+
 // Структура хранения информации о журналах
 type Journal struct {
 	name    string // название журнала (имя службы) или дата загрузки
@@ -157,7 +163,7 @@ type App struct {
 	dockerFrameColor      gocui.Attribute
 
 	sshMode                bool     // использовать вызов команд (exec.Command) через ssh
-	sshStatus              string   // имя хоста для статуса
+	sshStatus              string   // режим работы (false или имя хоста) для статуса
 	sshOptions             []string // опции для ssh подключения
 	fastMode               bool     // загрузка журналов в горутине (beta mode)
 	testMode               bool     // исключаем вызовы к gocui при тестирование функций
@@ -352,7 +358,7 @@ func showConfig() {
 
 	fmt.Println("hotkeys:")
 	fmt.Printf("  showHelp:                 %s\n", config.Hotkeys.ShowHelp)
-	fmt.Printf("  ShowManager:              %s\n", config.Hotkeys.ShowManager)
+	fmt.Printf("  showManager:              %s\n", config.Hotkeys.ShowManager)
 	fmt.Printf("  switchWindow:             %s\n", config.Hotkeys.SwitchWindow)
 	fmt.Printf("  backSwitchWindows:        %s\n", config.Hotkeys.BackSwitchWindows)
 	fmt.Printf("  up:                       %s\n", config.Hotkeys.Up)
@@ -395,6 +401,12 @@ func showConfig() {
 	fmt.Printf("  selectedTitleColor:       %s\n", config.Interface.SelectedTitleColor)
 	fmt.Printf("  statusColor:              %s\n", config.Interface.StatusColor)
 	fmt.Printf("  errorColor:               %s\n", config.Interface.ErrorColor)
+
+	fmt.Println("ssh:")
+	fmt.Printf("  hosts:\n")
+	for _, sshHost := range config.Ssh.Hosts {
+		fmt.Printf("    - %s\n", sshHost)
+	}
 }
 
 // Audit (#18) for homebrew
@@ -1315,7 +1327,7 @@ func runGoCui(mock bool) {
 			app.getOS = getOS
 		}
 	} else {
-		app.sshStatus = "localhost"
+		app.sshStatus = "false"
 	}
 
 	// Создаем GUI
@@ -1560,7 +1572,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Frame = false // Отключаем рамку для статуса
 		v.FgColor = app.statusColor
 		fmt.Fprintf(v,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Filter by date: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Host: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Filter by date: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | SSH mode: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -2291,7 +2303,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			}
 		}
 		var cmd *exec.Cmd
-		// Две переменные для команды в режиме ssh (используем массив) или без (используем строку)
+		// #34 Две переменные для команды в режиме ssh (используем строку) или локально (используем массив)
 		var serviceNameStr string
 		var serviceNameArr []string
 		if serviceName != "_all" {
@@ -3699,12 +3711,15 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	case "kubectl":
 		// Получаем список подов из k8s
 		if app.sshMode {
-			cmd = exec.Command("ssh", append(app.sshOptions,
-				containerizationSystem, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
-				"-o", "'jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}'",
-			)...)
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					containerizationSystem, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
+					"-o", "'jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}'",
+				)...)
 		} else {
-			cmd = exec.Command(
+			cmd = exec.CommandContext(
+				ctx,
 				containerizationSystem, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
 				"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}",
 			)
@@ -4203,11 +4218,14 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		case "kubectl":
 			// Формируем команду kubectl с нужными ключами и предварительно извлеченным namespace при выборе пода
 			if app.sshMode {
-				cmd = exec.Command("ssh", append(app.sshOptions,
-					containerizationSystem, "logs", "--context", app.kubernetesContext, "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
-				)...)
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						containerizationSystem, "logs", "--context", app.kubernetesContext, "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
+					)...)
 			} else {
-				cmd = exec.Command(
+				cmd = exec.CommandContext(
+					ctx,
 					containerizationSystem, "logs", "--context", app.kubernetesContext, "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
 				)
 			}
@@ -4766,7 +4784,7 @@ func (app *App) updateStatus() {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Filter by date: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | Host: %s",
+		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Filter by date: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | SSH mode: %s",
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
@@ -7966,6 +7984,14 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		v.TitleColor = app.titleColor
 		v.SelFgColor = app.selectedForegroundColor
 		v.SelBgColor = app.selectedBackgroundColor
+		v.Clear()
+		sshHosts := []string{"localhost"}
+		for _, sshHost := range config.Ssh.Hosts {
+			sshHosts = append(sshHosts, sshHost)
+		}
+		for _, sshHost := range sshHosts {
+			fmt.Fprintln(v, sshHost)
+		}
 	}
 
 	if v, err := g.SetView("dockerContextManager", midX, y0+1, x1-1, midY-1, 0); err != nil {
@@ -8086,6 +8112,33 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 	}
 	// Обновляем значения
 	switch g.CurrentView().Name() {
+	case "sshManager":
+		if line == "localhost" {
+			app.sshMode = false
+			app.sshStatus = "false"
+			// Определяем локальную ОС
+			app.getOS = runtime.GOOS
+		} else {
+			// Включаем ssh режим и определяем параметры
+			app.sshMode = true
+			app.sshStatus = line
+			app.sshOptions = strings.Split(line, " ")
+			// Определяем удаленную ОС
+			getOS, err := remoteGetOS(app.sshOptions)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			} else {
+				app.getOS = getOS
+			}
+		}
+		// Обновляем списки сервисов и файлов
+		if app.getOS != "windows" {
+			app.loadServices(app.selectUnits)
+			app.loadFiles(app.selectPath)
+		} else {
+			app.loadWinFiles(app.selectPath)
+		}
 	case "dockerContextManager":
 		app.dockerContext = line
 	case "kubernetesContextManager":
@@ -8098,13 +8151,7 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 			app.kubernetesNamespace = "--namespace " + line
 		}
 	}
-	// Обновляем списки
-	// if app.getOS != "windows" {
-	// 	app.loadServices(app.selectUnits)
-	// 	app.loadFiles(app.selectPath)
-	// } else {
-	// 	app.loadWinFiles(app.selectPath)
-	// }
+	// Обновляем список контейнеров
 	app.loadDockerContainer(app.selectContainerizationSystem)
 	// Обновляем статус
 	app.updateStatus()

@@ -18,10 +18,8 @@ settings:
   disableFastMode: false
 
 # Available hotkeys:
-# a-z, 0-9, f1-f12 and any other symbols
+# a-z, shift+<a-z>, ctrl+<a-z>, 0-9, f1-f12 and any other symbols
 # tab, shift+tab, enter, space, backspace, del/delete and esc/escape
-# shift+<a-z>
-# ctrl+<a-z>
 hotkeys:
   showHelp: f1
   showManager: f2
@@ -68,3 +66,10 @@ interface:
   selectedTitleColor: green
   statusColor: yellow
   errorColor: red
+
+# List of ssh hosts with connection options
+# ssh:
+#   hosts:
+#     - lifailon@192.168.3.101
+#     - lifailon@192.168.3.105
+#     - lifailon@192.168.3.106
