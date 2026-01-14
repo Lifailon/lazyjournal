@@ -882,13 +882,17 @@ func runGoCui(mock bool) {
 	// Определяем используемую ОС (linux/darwin/*bsd/windows) и архитектуру
 	app.getOS = runtime.GOOS
 	app.getArch = runtime.GOARCH
-
-	// Проверяем установку compose как плагин docker или docker-compose
+	// Создаем контекст выполнения удаленных команд по ssh (timeout 30s)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	var composeVer *exec.Cmd
+	// Проверяем установку compose как плагин docker или docker-compose
 	if app.sshMode {
-		composeVer = exec.Command("ssh", append(app.sshOptions,
-			"docker", "compose", "version",
-		)...)
+		composeVer = exec.CommandContext(
+			ctx,
+			"ssh", append(app.sshOptions,
+				"docker", "compose", "version",
+			)...)
 	} else {
 		composeVer = exec.Command(
 			"docker", "compose", "version",
@@ -1620,8 +1624,15 @@ func (app *App) loadServices(journalName string) {
 	app.journals = nil
 	// Проверка, что в системе установлен/поддерживается утилита journalctl
 	var checkJournald *exec.Cmd
+	// Создаем контекст выполнения удаленных команд по ssh (timeout 30s)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	if app.sshMode {
-		checkJournald = exec.Command("ssh", append(app.sshOptions, "journalctl", "--version")...)
+		checkJournald = exec.CommandContext(
+			ctx,
+			"ssh", append(app.sshOptions,
+				"journalctl", "--version",
+			)...)
 	} else {
 		checkJournald = exec.Command("journalctl", "--version")
 	}
@@ -1649,9 +1660,11 @@ func (app *App) loadServices(journalName string) {
 		// (1) Получаем список всех юнитов со статусом работы и фильтрацией по сервисам через systemctl в формате JSON
 		var unitsList *exec.Cmd
 		if app.sshMode {
-			unitsList = exec.Command("ssh", append(app.sshOptions,
-				"systemctl", "list-units", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
-			)...)
+			unitsList = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"systemctl", "list-units", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
+				)...)
 		} else {
 			unitsList = exec.Command(
 				"systemctl", "list-units", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
@@ -1705,9 +1718,11 @@ func (app *App) loadServices(journalName string) {
 		// (2) Получаем список всех юнит-файлов для извлечения статуса автозагрузки и отключенных сервисов
 		var unitFilesList *exec.Cmd
 		if app.sshMode {
-			unitFilesList = exec.Command("ssh", append(app.sshOptions,
-				"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
-			)...)
+			unitFilesList = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
+				)...)
 		} else {
 			unitFilesList = exec.Command(
 				"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
@@ -1804,7 +1819,11 @@ func (app *App) loadServices(journalName string) {
 		// Получаем список правил
 		var auditRulesList *exec.Cmd
 		if app.sshMode {
-			auditRulesList = exec.Command("ssh", append(app.sshOptions, "auditctl", "-l")...)
+			auditRulesList = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"auditctl", "-l",
+				)...)
 		} else {
 			auditRulesList = exec.Command("auditctl", "-l")
 		}
@@ -1866,7 +1885,11 @@ func (app *App) loadServices(journalName string) {
 		// Получаем список загрузок системы
 		var bootCmd *exec.Cmd
 		if app.sshMode {
-			bootCmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "--list-boots", "-o", "json")...)
+			bootCmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"journalctl", "--list-boots", "-o", "json",
+				)...)
 		} else {
 			bootCmd = exec.Command("journalctl", "--list-boots", "-o", "json")
 		}
@@ -1965,7 +1988,11 @@ func (app *App) loadServices(journalName string) {
 	default:
 		var cmd *exec.Cmd
 		if app.sshMode {
-			cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "--no-pager", "-F", journalName)...)
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"journalctl", "--no-pager", "-F", journalName,
+				)...)
 		} else {
 			cmd = exec.Command("journalctl", "--no-pager", "-F", journalName)
 		}
@@ -2210,6 +2237,9 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 	} else {
 		selectUnits = app.lastSelectUnits
 	}
+	// Создаем контекст выполнения удаленных команд по ssh (timeout 30s)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	switch {
 	// Читаем журналы Windows
 	case app.getOS == "windows":
@@ -2246,7 +2276,11 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		}
 		var cmd *exec.Cmd
 		if app.sshMode {
-			cmd = exec.Command("ssh", append(app.sshOptions, "ausearch", "-k", serviceName, "--format", "interpret")...)
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"ausearch", "-k", serviceName, "--format", "interpret",
+				)...)
 		} else {
 			cmd = exec.Command("ausearch", "-k", serviceName, "--format", "interpret")
 		}
@@ -2279,7 +2313,11 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		}
 		var cmd *exec.Cmd
 		if app.sshMode {
-			cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount)...)
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount,
+				)...)
 		} else {
 			cmd = exec.Command("journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount)
 		}
@@ -2314,13 +2352,32 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if app.sshMode {
 			switch {
 			case app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText, "--until", app.untilFilterText)...)
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						"journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
+						"--since", app.sinceFilterText, "--until", app.untilFilterText,
+					)...)
 			case app.sinceDateFilterMode && !app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--since", app.sinceFilterText)...)
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						"journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
+						"--since", app.sinceFilterText,
+					)...)
 			case !app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority, "--until", app.untilFilterText)...)
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						"journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
+						"--until", app.untilFilterText,
+					)...)
 			default:
-				cmd = exec.Command("ssh", append(app.sshOptions, "journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority)...)
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						"journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
+					)...)
 			}
 		} else {
 			switch {
@@ -3630,24 +3687,33 @@ func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors str
 
 func (app *App) loadDockerContainer(containerizationSystem string) {
 	app.dockerContainers = nil
+	// Создаем контекст выполнения удаленных команд по ssh (timeout 2s)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	// Получаем версию для проверки, что система контейнеризации установлена
 	var cmd *exec.Cmd
 	if app.sshMode {
 		if containerizationSystem == "compose" {
 			// Корректируем формат команды
 			if app.dockerCompose == "docker compose" {
-				cmd = exec.Command("ssh", append(app.sshOptions,
-					"docker", "compose", "version",
-				)...)
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						"docker", "compose", "version",
+					)...)
 			} else {
-				cmd = exec.Command("ssh", append(app.sshOptions,
-					app.dockerCompose, "version",
-				)...)
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						app.dockerCompose, "version",
+					)...)
 			}
 		} else {
-			cmd = exec.Command("ssh", append(app.sshOptions,
-				containerizationSystem, "version",
-			)...)
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					containerizationSystem, "version",
+				)...)
 		}
 	} else {
 		if containerizationSystem == "compose" {
@@ -3704,9 +3770,6 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			log.Print("Error:", containerizationSystem+" not installed (environment not found)")
 		}
 	}
-	// Создаем контекст выполнения (timeout 2s)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
 	switch containerizationSystem {
 	case "kubectl":
 		// Получаем список подов из k8s
@@ -4087,13 +4150,20 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	} else {
 		containerId = app.lastContainerId
 	}
+	// Создаем контекст выполнения удаленных команд по ssh (timeout 2s)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	// Читаем журналы Docker из файловой системы в формате JSON (если не отключено флагом и docker context default)
 	var readFileContainer bool
 	if containerizationSystem == "docker" && !app.dockerStreamLogs && app.dockerContext == "default" {
 		// Получаем путь к журналу контейнера в файловой системе по id с помощью метода docker cli
 		var cmd *exec.Cmd
 		if app.sshMode {
-			cmd = exec.Command("ssh", append(app.sshOptions, "docker", "inspect", "--format", "{{.LogPath}}", containerId)...)
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"docker", "inspect", "--format", "{{.LogPath}}", containerId,
+				)...)
 		} else {
 			cmd = exec.Command("docker", "inspect", "--format", "{{.LogPath}}", containerId)
 		}
@@ -4110,7 +4180,11 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		logFilePath := strings.TrimSpace(string(logFilePathBytes))
 		// Читаем файл с конца с помощью tail
 		if app.sshMode {
-			cmd = exec.Command("ssh", append(app.sshOptions, "tail", "-n", app.logViewCount, logFilePath)...)
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"tail", "-n", app.logViewCount, logFilePath,
+				)...)
 		} else {
 			cmd = exec.Command("tail", "-n", app.logViewCount, logFilePath)
 		}
@@ -4230,9 +4304,6 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 		}
 		var cmd *exec.Cmd
-		// Создаем контекст выполнения (timeout 2s)
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
 		switch containerizationSystem {
 		case "kubectl":
 			// Формируем команду kubectl с нужными ключами и предварительно извлеченным namespace при выборе пода
@@ -8227,10 +8298,14 @@ func (app *App) nextViewManager(g *gocui.Gui, v *gocui.View, views []string) err
 // Функция для получения списка контекстов Docker
 func (app *App) getDockerContext() []string {
 	var cmd *exec.Cmd
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	if app.sshMode {
-		cmd = exec.Command("ssh", append(app.sshOptions,
-			"docker", "context", "ls", "-q",
-		)...)
+		cmd = exec.CommandContext(
+			ctx,
+			"ssh", append(app.sshOptions,
+				"docker", "context", "ls", "-q",
+			)...)
 	} else {
 		cmd = exec.Command(
 			"docker", "context", "ls", "-q",
@@ -8247,10 +8322,14 @@ func (app *App) getDockerContext() []string {
 // Функция для получения списка контекстов Kubernetes
 func (app *App) getKubernetesContext() []string {
 	var cmd *exec.Cmd
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	if app.sshMode {
-		cmd = exec.Command("ssh", append(app.sshOptions,
-			"kubectl", "config", "get-contexts", "-o", "name",
-		)...)
+		cmd = exec.CommandContext(
+			ctx,
+			"ssh", append(app.sshOptions,
+				"kubectl", "config", "get-contexts", "-o", "name",
+			)...)
 	} else {
 		cmd = exec.Command(
 			"kubectl", "config", "get-contexts", "-o", "name",
@@ -8267,10 +8346,14 @@ func (app *App) getKubernetesContext() []string {
 // Функция для получения списка контекстов Kubernetes
 func (app *App) getKubernetesNamespace() []string {
 	var cmd *exec.Cmd
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	if app.sshMode {
-		cmd = exec.Command("ssh", append(app.sshOptions,
-			"kubectl", "get", "namespace", "-o", "name",
-		)...)
+		cmd = exec.CommandContext(
+			ctx,
+			"ssh", append(app.sshOptions,
+				"kubectl", "get", "namespace", "-o", "name",
+			)...)
 	} else {
 		cmd = exec.Command(
 			"kubectl", "get", "namespace", "-o", "name",
