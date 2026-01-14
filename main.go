@@ -643,7 +643,7 @@ func (app *App) showAudit() {
 				if app.kubernetesNamespace == "all" {
 					app.kubernetesNamespace = "--all-namespaces"
 				} else {
-					app.kubernetesNamespace = "--namespace " + app.kubernetesNamespace
+					app.kubernetesNamespace = "--namespace=" + app.kubernetesNamespace
 				}
 				// kubectl pods
 				cmd := exec.Command(
@@ -1157,7 +1157,7 @@ func runGoCui(mock bool) {
 	if *kubernetesNamespaceFlag == "all" {
 		app.kubernetesNamespace = "--all-namespaces"
 	} else {
-		app.kubernetesNamespace = "--namespace " + *kubernetesNamespaceFlag
+		app.kubernetesNamespace = "--namespace=" + *kubernetesNamespaceFlag
 	}
 
 	if *pathFlag != "" && len(*pathFlag) > 1 && *pathFlag != "/" && strings.HasPrefix(*pathFlag, "/") {
@@ -6675,6 +6675,7 @@ func (app *App) setupKeybindings() error {
 	customManager, altMode := getHotkey(config.Hotkeys.ShowManager, "f2")
 	managerHandler := func(g *gocui.Gui, v *gocui.View) error {
 		app.showInterfaceManager(g)
+		g.DeleteKeybindings("")
 		if v, err := g.SetCurrentView("sshManager"); err == nil {
 			v.FrameColor = app.selectedFrameColor
 			v.TitleColor = app.selectedTitleColor
@@ -7976,7 +7977,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return
 		}
-		v.Title = " SSH Manager "
+		v.Title = " SSH Hosts "
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
@@ -7998,7 +7999,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return
 		}
-		v.Title = " Docker Context Manager "
+		v.Title = " Docker Contexts "
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
@@ -8017,7 +8018,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return
 		}
-		v.Title = " Kubernetes Context Manager "
+		v.Title = " Kubernetes Contexts "
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
@@ -8036,7 +8037,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return
 		}
-		v.Title = " Kubernetes Namespace Manager "
+		v.Title = " Kubernetes Namespaces "
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
@@ -8079,7 +8080,7 @@ func (app *App) moveCursorUp(g *gocui.Gui, v *gocui.View) error {
 	cx, cy := v.Cursor()
 	if err := v.SetCursor(cx, cy-1); err != nil && oy > 0 {
 		if err := v.SetOrigin(ox, oy-1); err != nil {
-			return err
+			return nil
 		}
 	}
 	return nil
@@ -8096,7 +8097,7 @@ func (app *App) moveCursorDown(g *gocui.Gui, v *gocui.View) error {
 		if err := v.SetCursor(cx, cy+1); err != nil {
 			ox, oy := v.Origin()
 			if err := v.SetOrigin(ox, oy+1); err != nil {
-				return err
+				return nil
 			}
 		}
 	}
@@ -8133,6 +8134,7 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 			}
 		}
 		// Обновляем списки сервисов и файлов
+		// Требуется перерисовка окон при смене ОС
 		if app.getOS != "windows" {
 			app.loadServices(app.selectUnits)
 			app.loadFiles(app.selectPath)
@@ -8148,7 +8150,7 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 		if line == "all" {
 			app.kubernetesNamespace = "--all-namespaces"
 		} else {
-			app.kubernetesNamespace = "--namespace " + line
+			app.kubernetesNamespace = "--namespace=" + line
 		}
 	}
 	// Обновляем список контейнеров
