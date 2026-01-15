@@ -39,7 +39,7 @@ type Config struct {
 	Settings  Settings  `yaml:"settings"`
 	Hotkeys   Hotkeys   `yaml:"hotkeys"`
 	Interface Interface `yaml:"interface"`
-	Ssh       Ssh       `yaml:ssh`
+	Ssh       Ssh       `yaml:"ssh"`
 }
 
 // Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
@@ -321,7 +321,7 @@ func showHelp() {
 	fmt.Println()
 }
 
-// Confi (#23)
+// Config (#23)
 func showConfig() {
 	// Читаем конфигурацию (извлекаем путь и ошибки)
 	configPath, err := config.getConfig()
@@ -809,9 +809,16 @@ var mapColorFromConfig = map[string]gocui.Attribute{
 	"white":   gocui.ColorWhite,
 }
 
-// Функция для опредиления название удаленной системы
+// Функция для опредиления название удаленной системы с timeout в 5 секунд
 func remoteGetOS(sshOptions []string) (string, error) {
-	cmd := exec.Command("ssh", append(sshOptions, "uname", "-s")...)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(
+		ctx,
+		"ssh", append(
+			sshOptions, "uname", "-s",
+		)...)
+	cmd.WaitDelay = 5 * time.Second
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrSSHConnection, sshOptions[0])
@@ -1321,8 +1328,9 @@ func runGoCui(mock bool) {
 		app.sshOptions = append(app.sshOptions, options...)
 		getOS, err := remoteGetOS(app.sshOptions)
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			app.sshMode = false
+			app.sshStatus = "error connection"
+			app.getOS = runtime.GOOS
 		} else {
 			app.getOS = getOS
 		}
@@ -8096,7 +8104,7 @@ func (app *App) showInterfaceInfo(g *gocui.Gui, errInfo bool, text string) {
 	maxX, maxY := g.Size()
 	width, height := 50, 3
 	x0 := (maxX - width) - 5
-	y0 := (maxY - height) - 2
+	y0 := (maxY - height) - 3
 	x1 := x0 + width
 	y1 := y0 + height
 	helpView, err := g.SetView("info", x0, y0, x1, y1, 0)
@@ -8297,8 +8305,17 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 			// Определяем удаленную ОС
 			getOS, err := remoteGetOS(app.sshOptions)
 			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				app.sshMode = false
+				app.sshStatus = "false"
+				app.getOS = runtime.GOOS
+				if !app.testMode {
+					go func() {
+						errorText := "Error connecting to " + line
+						app.showInterfaceInfo(g, true, errorText)
+						time.Sleep(3 * time.Second)
+						app.closeInfo(g)
+					}()
+				}
 			} else {
 				app.getOS = getOS
 			}
