@@ -8292,6 +8292,7 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 	// Обновляем значения
 	switch g.CurrentView().Name() {
 	case "sshManager":
+		lastOS := app.getOS
 		if line == "localhost" {
 			app.sshMode = false
 			app.sshStatus = "false"
@@ -8320,17 +8321,48 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 				app.getOS = getOS
 			}
 		}
-		// Обновляем списки сервисов и файлов
 		// Требуется перерисовка окон при смене ОС
+		if lastOS == "windows" && app.getOS != "windows" || lastOS != "windows" && app.getOS == "windows" {
+			// Удаляем старые окна
+			if err := g.DeleteView("services"); err != nil {
+				return nil
+			}
+			if err := g.DeleteView("varLogs"); err != nil {
+				return nil
+			}
+			// Создаем окна заново
+			if err := app.layout(g); err != nil {
+				log.Panicln(err)
+			}
+			// Обновляем названия окон
+			if app.getOS == "windows" {
+				app.selectPath = "ProgramFiles"
+			} else {
+				app.selectUnits = "services"
+				app.selectPath = "/var/log/"
+			}
+		}
+		// Обновляем списки сервисов и файлов
 		if app.getOS != "windows" {
 			app.loadServices(app.selectUnits)
 			app.loadFiles(app.selectPath)
 		} else {
+			v, err := g.View("services")
+			if err != nil {
+				log.Panicln(err)
+			}
+			v.Title = " < Windows Event Logs (0) > "
+			v.Clear()
+			app.loadWinEvents()
 			app.loadWinFiles(app.selectPath)
 		}
 		// Обновляем все списки в менеджере (что бы загрузить удаленный список контекстов Docker и Kubernetes)
 		app.closeManager(g)
 		app.showInterfaceManager(g)
+		// Сбрасываем контексты
+		app.dockerContext = "default"
+		app.kubernetesContext = "default"
+		app.kubernetesNamespace = "--all-namespaces"
 	case "dockerContextManager":
 		app.dockerContext = line
 	case "kubernetesContextManager":
