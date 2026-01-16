@@ -5514,11 +5514,16 @@ func (app *App) lineColor(inputLine string) string {
 	}
 }
 
-// Игнорируем регистр и проверяем, что слово окружено границами (не буквы и цифры)
+// Игнорируем регистр и проверяем, что слово окружено не буквами и цифрами
 func (app *App) replaceWordLower(word, keyword, color string) string {
 	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(keyword) + `\b`)
 	return re.ReplaceAllStringFunc(word, func(match string) string {
-		return color + match + "\033[0m"
+		// Если цвет содержит фон, то добавляем отступы
+		if strings.Contains(color, "30m") {
+			return color + " " + match + " " + "\033[0m"
+		} else {
+			return color + match + "\033[0m"
+		}
 	})
 }
 
@@ -5620,32 +5625,41 @@ func (app *App) wordColor(inputWord string) string {
 	// Значение по умолчанию
 	var coloredWord = inputWord
 	switch {
-	// Исключения для HTTP методов длинной в 3 символа
-	case strings.Contains(inputWord, "GET"):
-		coloredWord = strings.ReplaceAll(inputWord, "GET", "\033[42m\033[30m GET \033[0m")
-	case strings.Contains(inputWord, "PUT"):
-		coloredWord = strings.ReplaceAll(inputWord, "PUT", "\033[45m\033[30m PUT \033[0m")
-	// Сначала проверяем длинну символов и HTTP статусы ответов по стандарту Mozilla
+	// Проверяем длинну символов на минимальную длинну или пропускаем покраску
 	case len(inputWord) <= 3:
-		// Проверяем вхождение символов на цифры
-		inputInt, isInt := parseStringToInt(inputWord)
-		if isInt {
-			// HTTP response status codes
-			switch {
-			case inputInt >= 200 && inputInt <= 208:
-				coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[42m\033[30m "+inputWord+" \033[0m")
-			case inputInt >= 300 && inputInt <= 308:
-				coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[43m\033[30m "+inputWord+" \033[0m")
-			case inputInt >= 400 && inputInt <= 431 || inputInt >= 500 && inputInt <= 511:
-				coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[41m\033[30m "+inputWord+" \033[0m")
-			default:
-				// Красим цифры стандартно
-				coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[34m"+inputWord+"\033[0m")
+		// Исключения для вхождений длинной в 3 символа
+		switch {
+		case strings.Contains(inputWord, "GET"):
+			coloredWord = app.replaceWordLower(inputWord, "GET", "\033[42m\033[30m")
+		case strings.Contains(inputWord, "PUT"):
+			coloredWord = strings.ReplaceAll(inputWord, "PUT", "\033[45m\033[30m PUT \033[0m")
+		case strings.Contains(inputWord, "INF"):
+			coloredWord = strings.ReplaceAll(inputWord, "INF", "\033[46m\033[30m INF \033[0m")
+		case strings.Contains(inputWord, "WRN"):
+			coloredWord = strings.ReplaceAll(inputWord, "WRN", "\033[43m\033[30m WRN \033[0m")
+		case strings.Contains(inputWord, "ERR"):
+			coloredWord = strings.ReplaceAll(inputWord, "ERR", "\033[41m\033[30m ERR \033[0m")
+		default:
+			// Проверяем вхождение символов на цифры
+			inputInt, isInt := parseStringToInt(inputWord)
+			if isInt {
+				// Проверяем HTTP статус кодов ответов по стандарту Mozilla
+				switch {
+				case inputInt >= 200 && inputInt <= 208:
+					coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[42m\033[30m "+inputWord+" \033[0m")
+				case inputInt >= 300 && inputInt <= 308:
+					coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[43m\033[30m "+inputWord+" \033[0m")
+				case inputInt >= 400 && inputInt <= 431 || inputInt >= 500 && inputInt <= 511:
+					coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[41m\033[30m "+inputWord+" \033[0m")
+				default:
+					// Красим цифры стандартно
+					coloredWord = strings.ReplaceAll(inputWord, inputWord, "\033[34m"+inputWord+"\033[0m")
+				}
+			} else if app.integersInputRegex.MatchString(inputWord) {
+				// Красим цифры по функции
+				coloredWord = app.intColor(inputWord)
+				return coloredWord
 			}
-		} else if app.integersInputRegex.MatchString(inputWord) {
-			// Красим цифры по функции
-			coloredWord = app.intColor(inputWord)
-			return coloredWord
 		}
 	// URL
 	case strings.Contains(inputWord, "http://"):
@@ -5690,49 +5704,59 @@ func (app *App) wordColor(inputWord string) string {
 	case strings.HasPrefix(inputWordLower, "sudo:"):
 		coloredWord = app.replaceWordLower(inputWord, "sudo", "\033[36m")
 	// HTTP request methods
+	case strings.Contains(inputWord, "GET"):
+		coloredWord = app.replaceWordLower(inputWord, "GET", "\033[42m\033[30m")
 	case strings.Contains(inputWord, "POST"):
-		coloredWord = strings.ReplaceAll(inputWord, "POST", "\033[43m\033[30m POST \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "POST", "\033[43m\033[30m")
+	case strings.Contains(inputWord, "PUT"):
+		coloredWord = app.replaceWordLower(inputWord, "PUT", "\033[45m\033[30m")
 	case strings.Contains(inputWord, "PATCH"):
-		coloredWord = strings.ReplaceAll(inputWord, "PATCH", "\033[45m\033[30m PATCH \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "PATCH", "\033[45m\033[30m")
 	case strings.Contains(inputWord, "TRACE"):
-		coloredWord = strings.ReplaceAll(inputWord, "TRACE", "\033[45m\033[30m TRACE \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "TRACE", "\033[45m\033[30m")
 	case strings.Contains(inputWord, "OPTIONS"):
-		coloredWord = strings.ReplaceAll(inputWord, "OPTIONS", "\033[45m\033[30m OPTIONS \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "OPTIONS", "\033[45m\033[30m")
 	case strings.Contains(inputWord, "CONNECT"):
-		coloredWord = strings.ReplaceAll(inputWord, "CONNECT", "\033[42m\033[30m CONNECT \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "CONNECT", "\033[42m\033[30m")
 	case strings.Contains(inputWord, "DELETE"):
-		coloredWord = strings.ReplaceAll(inputWord, "DELETE", "\033[41m\033[30m DELETE \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "DELETE", "\033[41m\033[30m")
 	// Статусы
 	case strings.Contains(inputWord, "DONE"):
-		coloredWord = strings.ReplaceAll(inputWord, "DONE", "\033[42m\033[30m DONE \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "DONE", "\033[42m\033[30m")
 	case strings.Contains(inputWord, "WARNING"):
-		coloredWord = strings.ReplaceAll(inputWord, "WARNING", "\033[43m\033[30m WARNING \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "WARNING", "\033[43m\033[30m")
 	case strings.Contains(inputWord, "WARN"):
-		coloredWord = strings.ReplaceAll(inputWord, "WARN", "\033[43m\033[30m WARN \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "WARN", "\033[43m\033[30m")
+	case strings.Contains(inputWord, "WRN"):
+		coloredWord = app.replaceWordLower(inputWord, "WRN", "\033[43m\033[30m")
 	case strings.Contains(inputWord, "DEBUG"):
-		coloredWord = strings.ReplaceAll(inputWord, "DEBUG", "\033[46m\033[30m DEBUG \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "DEBUG", "\033[46m\033[30m")
 	case strings.Contains(inputWord, "INFO"):
-		coloredWord = strings.ReplaceAll(inputWord, "INFO", "\033[46m\033[30m INFO \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "INFO", "\033[46m\033[30m")
+	case strings.Contains(inputWord, "INF"):
+		coloredWord = app.replaceWordLower(inputWord, "INF", "\033[46m\033[30m")
 	case strings.Contains(inputWord, "NOTICE"):
-		coloredWord = strings.ReplaceAll(inputWord, "NOTICE", "\033[46m\033[30m NOTICE \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "NOTICE", "\033[46m\033[30m")
 	case strings.Contains(inputWord, "ERROR"):
-		coloredWord = strings.ReplaceAll(inputWord, "ERROR", "\033[41m\033[30m ERROR \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "ERROR", "\033[41m\033[30m")
+	case strings.Contains(inputWord, "ERR"):
+		coloredWord = app.replaceWordLower(inputWord, "ERR", "\033[41m\033[30m")
 	case strings.Contains(inputWord, "CRITICAL"):
-		coloredWord = strings.ReplaceAll(inputWord, "CRITICAL", "\033[41m\033[30m CRITICAL \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "CRITICAL", "\033[41m\033[30m")
 	case strings.Contains(inputWord, "CRIT"):
-		coloredWord = strings.ReplaceAll(inputWord, "CRIT", "\033[41m\033[30m CRIT \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "CRIT", "\033[41m\033[30m")
 	case strings.Contains(inputWord, "ALERT"):
-		coloredWord = strings.ReplaceAll(inputWord, "ALERT", "\033[41m\033[30m ALERT \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "ALERT", "\033[41m\033[30m")
 	case strings.Contains(inputWord, "EMERGENCY"):
-		coloredWord = strings.ReplaceAll(inputWord, "EMERGENCY", "\033[41m\033[30m EMERGENCY \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "EMERGENCY", "\033[41m\033[30m")
 	case strings.Contains(inputWord, "EMERG"):
-		coloredWord = strings.ReplaceAll(inputWord, "EMERG", "\033[41m\033[30m EMERG \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "EMERG", "\033[41m\033[30m")
 	case strings.Contains(inputWord, "FAILURE"):
-		coloredWord = strings.ReplaceAll(inputWord, "FAILURE", "\033[41m\033[30m FAILURE \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "FAILURE", "\033[41m\033[30m")
 	case strings.Contains(inputWord, "FAIL"):
-		coloredWord = strings.ReplaceAll(inputWord, "FAIL", "\033[41m\033[30m FAIL \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "FAIL", "\033[41m\033[30m")
 	case strings.Contains(inputWord, "FATAL"):
-		coloredWord = strings.ReplaceAll(inputWord, "FATAL", "\033[41m\033[30m FATAL \033[0m")
+		coloredWord = app.replaceWordLower(inputWord, "FATAL", "\033[41m\033[30m")
 	// Желтый [33m]
 	// Известные имена: hostname и username
 	case strings.Contains(inputWord, app.hostName):
