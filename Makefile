@@ -66,6 +66,10 @@ test-all:
 
 # Build
 
+build:
+	@CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -o lazyjournal
+	@echo "Assembled for $(OS)/$(ARCH): in \033[32m$(shell pwd)/lazyjournal\033[0m"
+
 VERSION := $(shell go run main.go -v)
 
 build-clear:
@@ -116,13 +120,6 @@ ifeq ($(ARCH),x86_64)
 else ifeq ($(ARCH),aarch64)
 	ARCH := arm64
 endif
-
-build:
-	@CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -o lazyjournal
-
-run-bin: build
-	@./lazyjournal
-	@rm ./lazyjournal
 
 # Install
 

@@ -67,9 +67,9 @@ interface:
   statusColor: yellow
   errorColor: red
 
-# List of ssh hosts with connection options
+# List of ssh hosts with flags for connection
 # ssh:
 #   hosts:
-#     - lifailon@192.168.3.101
+#     - lifailon@192.168.3.101 -p 2121
 #     - lifailon@192.168.3.105
 #     - lifailon@192.168.3.106
