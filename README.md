@@ -9,6 +9,7 @@
     <a href="https://app.fossa.com/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal?ref=badge_shield&issueType=security" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal.svg?type=shield&issueType=security"/></a>
     <a href="https://github.com/avelino/awesome-go?tab=readme-ov-file#logging"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a>
     <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
+    <a href="https://deepwiki.com/Lifailon/lazyjournal"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 <br>
     <a href="https://github.com/Lifailon/lazyjournal/releases"><img title="GitHub Download" src="https://img.shields.io/github/downloads/lifailon/lazyjournal/total?logo=github&color=green&label=GitHub+Downloads"></a>
     <a href="https://formulae.brew.sh/formula/lazyjournal"><img title="Homebrew" src="https://img.shields.io/homebrew/v/lazyjournal?logo=homebrew&color=yellow&label=Homebrew"></a>
@@ -236,7 +237,7 @@ You can run the interface from anywhere:
 
 Access to all system logs and containers may require elevated privileges for the current user. For example, if a user does not have read permission to the directory `/var/lib/docker/containers`, he will not be able to access all archived logs from the moment the container is started, but only from the moment the containerization system is started, so the process of reading logs is different. However, reading in streaming mode is faster than parsing json logs from the file system.
 
-Hotkeys and settings values ​​can be overridden using the [config](/config.yml) file (see issue [#23](https://github.com/Lifailon/lazyjournal/issues/23) and [#27](https://github.com/Lifailon/lazyjournal/issues/27)), which can be in `~/.config/lazydocker/config.yml`, as well as next to the executable or in the current startup directory (has high priority).
+Hotkeys and settings values ​​can be overridden using the [config](/config.yml) file (see issue [#23](https://github.com/Lifailon/lazyjournal/issues/23) and [#27](https://github.com/Lifailon/lazyjournal/issues/27)), which can be in `~/.config/lazyjournal/config.yml`, as well as next to the executable or in the current startup directory (has high priority).
 
 ### Hotkeys
 
