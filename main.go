@@ -4390,12 +4390,20 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				cmd = exec.CommandContext(
 					ctx,
 					"ssh", append(app.sshOptions,
-						containerizationSystem, "logs", "--context", app.kubernetesContext, "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
+						containerizationSystem, "logs",
+						"--context", app.kubernetesContext, "-n", namespace,
+						"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
+						"--all-containers=true", "--prefix=true",
+						"--timestamps=true", "--tail", app.logViewCount, containerId,
 					)...)
 			} else {
 				cmd = exec.CommandContext(
 					ctx,
-					containerizationSystem, "logs", "--context", app.kubernetesContext, "-n", namespace, "--timestamps=true", "--tail", app.logViewCount, containerId,
+					containerizationSystem, "logs",
+					"--context", app.kubernetesContext, "-n", namespace,
+					"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
+					"--all-containers=true", "--prefix=true",
+					"--timestamps=true", "--tail", app.logViewCount, containerId,
 				)
 			}
 		case "compose":
@@ -4630,7 +4638,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		// Храним комбинированный вывод двух потоков
 		var combined []dockerLogLines
 		switch {
-		// Читаем только один поток в режиме stdout или compose
+		// Читаем только один поток в режиме stdout для Docker или compose и kubectl
 		case app.dockerStreamMode == "stdout" || containerizationSystem == "compose" || containerizationSystem == "kubectl":
 			// Читаем стандартный вывод
 			stdoutPipe, _ := cmd.StdoutPipe()
@@ -4645,15 +4653,25 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				}
 				var ts time.Time
 				var err error
-				// Извлекаем время из compose
-				if containerizationSystem == "compose" {
+				// Извлекаем timestamp
+				switch containerizationSystem {
+				case "compose":
 					// Сначала извлекаем имя сервиса
 					parts1 := strings.SplitN(line, " | ", 2)
 					// Затем извлекаем timestamp
 					parts2 := strings.SplitN(parts1[1], " ", 2)
 					tsStr := strings.TrimSpace(parts2[0])
 					ts, err = time.Parse(time.RFC3339Nano, tsStr)
-				} else {
+				case "kubectl":
+					// Сначала извлекаем префикс (название пода и контейнера в формате [pod/<podName>/<containerName>])
+					parts1 := strings.SplitN(line, "] ", 2)
+					// Затем извлекаем timestamp
+					parts2 := strings.SplitN(parts1[1], " ", 2)
+					tsStr := strings.TrimSpace(parts2[0])
+					// Удаляем префикс названия типа объекта
+					// tsStr = strings.Replace(tsStr, "pod/", "", 1)
+					ts, err = time.Parse(time.RFC3339Nano, tsStr)
+				default:
 					// Извлекаем время из префикса docker/podman
 					ts, err = parseTimestamp(line)
 				}
@@ -4773,9 +4791,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			entryLine := entry.content
 			// Удаляем из строки timestamp
 			if !app.timestampDocker {
-				entryLine = removeTimestamp(entry.content)
+				entryLine = removeTimestamp(entry.content, containerizationSystem)
 			}
-			// Не добавляем профексы в отключенном режиме, а также для compose и kubectl
+			// Не добавляем префексы названия потока в отключенном режиме для Docker (а также для compose и kubectl по умолчанию)
 			if !app.streamTypeDocker || containerizationSystem == "compose" || containerizationSystem == "kubectl" {
 				finalLines = append(finalLines, entryLine)
 			} else {
@@ -4796,7 +4814,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	}
 }
 
-// Функция извлечения parseTimestamp для сортировки
+// Функция извлечения timestamp для сортировки
 func parseTimestamp(line string) (time.Time, error) {
 	// Делим строку на две части по первому пробелу
 	parts := strings.SplitN(line, " ", 2)
@@ -4806,16 +4824,30 @@ func parseTimestamp(line string) (time.Time, error) {
 	return time.Parse(time.RFC3339Nano, tsStr)
 }
 
-// Функция для удаления timestamp из строки (первого слова до первого пробела)
-func removeTimestamp(line string) string {
-	// Находим индекс первого пробела
-	spaceIndex := strings.Index(line, " ")
-	if spaceIndex == -1 {
+// Функция для удаления timestamp из строки
+func removeTimestamp(line string, containerizationSystem string) string {
+	// Удаляем слово до первого пробела для Docker или Podman
+	if containerizationSystem == "docker" || containerizationSystem == "podman" {
+		// Находим индекс первого пробела
+		spaceIndex := strings.Index(line, " ")
 		// Если пробела нет, возвращаем строку как есть
-		return line
+		if spaceIndex == -1 {
+			return line
+		}
+		// Возвращаем строку начиная с символа после первого пробела
+		return line[spaceIndex+1:]
+	} else {
+		// Удаляем второй индекс для compose или kubectl
+		lineArr := strings.Split(line, " ")
+		if len(lineArr) < 3 {
+			return line
+		} else {
+			// Собираем массив в строку без второго индекса
+			linePrefix := lineArr[0]
+			lineText := strings.Join(lineArr[2:], " ")
+			return linePrefix + " " + lineText
+		}
 	}
-	// Возвращаем строку начиная с символа после первого пробела
-	return line[spaceIndex+1:]
 }
 
 // ---------------------------------------- Filter ----------------------------------------
