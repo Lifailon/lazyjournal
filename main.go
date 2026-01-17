@@ -271,8 +271,9 @@ type App struct {
 	// Отключение привязки горячих клавиш на время загрузки списка
 	keybindingsEnabled bool
 
-	// Отключение встроенных временных меток (timestamp) для логов Docker
-	timestampDocker  bool
+	// Отключение отображения встроенных временных меток (timestamp) для логов контейнеров Docker и Kubernetes
+	timestampDocker bool
+	// Отключение отображения типа потока (stdout/stderr) для логов Docker
 	streamTypeDocker bool
 
 	// Регулярные выражения для покраски строк
@@ -1580,13 +1581,14 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Frame = false // Отключаем рамку для статуса
 		v.FgColor = app.statusColor
 		fmt.Fprintf(v,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Filter by date: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | SSH mode: %s",
+			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Filter by date: %s | Priority: %s | Timestamp: %t | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | SSH mode: %s",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
 			app.colorMode,
-			app.priority,
 			app.filterByDateStatus,
+			app.priority,
+			app.timestampDocker,
 			app.dockerStreamLogsStatus,
 			app.dockerContext,
 			app.kubernetesContext,
@@ -4962,13 +4964,14 @@ func (app *App) updateStatus() {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Priority: %s | Filter by date: %s | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | SSH mode: %s",
+		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Filter by date: %s | Priority: %s | Timestamp: %t | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | SSH mode: %s",
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
 		app.colorMode,
-		app.priority,
 		app.filterByDateStatus,
+		app.priority,
+		app.timestampDocker,
 		app.dockerStreamLogsStatus,
 		app.dockerContext,
 		app.kubernetesContext,
@@ -7813,17 +7816,12 @@ func (app *App) setupKeybindings() error {
 	}
 
 	// docker timestamp (Ctrl+T)
-	// Переключение режима вывода timestamp и название потока
+	// Переключение режима вывода timestamp и названия потока
 	customTimestamp, altMode := getHotkey(config.Hotkeys.TimestampShow, "ctrl+t")
 	if err := app.gui.SetKeybinding("", customTimestamp, altMode, func(g *gocui.Gui, v *gocui.View) error {
-		switch {
-		case app.timestampDocker && app.streamTypeDocker:
-			app.streamTypeDocker = false
-		case app.timestampDocker && !app.streamTypeDocker:
+		if app.timestampDocker {
 			app.timestampDocker = false
-		case !app.timestampDocker && !app.streamTypeDocker:
-			app.streamTypeDocker = true
-		case !app.timestampDocker && app.streamTypeDocker:
+		} else {
 			app.timestampDocker = true
 		}
 		app.updateLogOutput(false)
@@ -8112,7 +8110,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - switch color mode between default, tailspin, bat or disable.")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change read mode for docker logs (stream only or json from file system).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp and stream type for docker logs.")
+	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp for Docker and Kubernetes logs.")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mC\033[0m - clear input text in the filter window or exit.")
 	fmt.Fprintln(helpView, "\n    Source code: "+app.wordColor("https://github.com/Lifailon/lazyjournal"))
 }
