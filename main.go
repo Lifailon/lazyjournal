@@ -5507,18 +5507,21 @@ func (app *App) lineColor(inputLine string) string {
 	var colorLine string
 	var filterColor = false
 	// Извлекаем название контейнера в логах стека compose
-	// var containerName string
-	// if app.lastContainerizationSystem == "compose" {
-	// 	// Исключаем строку с делиметром
-	// 	if !strings.HasPrefix(inputLine, "⎯") {
-	// 		splitLine := strings.SplitN(inputLine, " | ", 2)
-	// 		if splitLine[0] != "" && splitLine[1] != "" {
-	// 			containerName = splitLine[0]
-	// 			// Удаляем название контейнера из покраски
-	// 			inputLine = splitLine[1]
-	// 		}
-	// 	}
-	// }
+	var containerName string
+	if app.lastContainerizationSystem == "compose" {
+		// Исключаем строку с делиметром
+		if !strings.HasPrefix(inputLine, "⎯") {
+			// Извлекаем название контейнера
+			splitLine := strings.SplitN(inputLine, "] ", 2)
+			if len(splitLine) >= 2 {
+				containerName = splitLine[0]
+				// Удаляем первый индекс из названия контейнера (квадратная открывающиеся скобка)
+				containerName = containerName[1:]
+				// Удаляем название контейнера из покраски
+				inputLine = splitLine[1]
+			}
+		}
+	}
 	// Разбиваем строку по пробелам, сохраняя их
 	words := strings.Split(inputLine, " ")
 	var colorLineBuilder strings.Builder
@@ -5552,16 +5555,16 @@ func (app *App) lineColor(inputLine string) string {
 	colorLine = strings.ReplaceAll(colorLine, "not found", "\033[31mnot found\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "Bad request", "\033[31mBad request\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "bad request", "\033[31mbad request\033[0m")
-	// if app.lastContainerizationSystem == "compose" && containerName != "" {
-	// 	// Возвращяем название контейнера с уникальной покраской
-	// 	if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
-	// 		return app.uniquePrefixColorMap[strings.TrimSpace(containerName)] + containerName + " |\033[0m " + colorLine
-	// 	} else {
-	// 		return containerName + " | " + colorLine
-	// 	}
-	// } else {
-	return colorLine
-	// }
+	// Возвращяем название контейнера с уникальной покраской
+	if app.lastContainerizationSystem == "compose" && containerName != "" {
+		if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
+			return "[" + app.uniquePrefixColorMap[strings.TrimSpace(containerName)] + containerName + "\033[0m" + "] " + colorLine
+		} else {
+			return "[" + containerName + "] " + colorLine
+		}
+	} else {
+		return colorLine
+	}
 }
 
 // Игнорируем регистр и проверяем, что слово окружено не буквами и цифрами
