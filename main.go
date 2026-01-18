@@ -4668,8 +4668,6 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					// Затем извлекаем timestamp
 					parts2 := strings.SplitN(parts1[1], " ", 2)
 					tsStr := strings.TrimSpace(parts2[0])
-					// Удаляем префикс названия типа объекта
-					// tsStr = strings.Replace(tsStr, "pod/", "", 1)
 					ts, err = time.Parse(time.RFC3339Nano, tsStr)
 				default:
 					// Извлекаем время из префикса docker/podman
@@ -4785,13 +4783,29 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				},
 			)
 		}
-		// Добавляем префиксы с типом данных (stdout или stderr) в зависимости от режима флагов
+		// Обновляем префиксы
 		var finalLines []string
 		for _, entry := range combined {
 			entryLine := entry.content
+			switch containerizationSystem {
+			case "compose":
+				prefixIndex := strings.Index(entryLine, "|")
+				if prefixIndex != -1 {
+					// Удаляем табуляцию из названия контейнера в префиксе compose
+					beforePrefixLine := entryLine[:prefixIndex]
+					beforePrefixLine = strings.TrimSpace(beforePrefixLine)
+					// Удаляем индекс разделителя "|"
+					afterPrefixLine := entryLine[prefixIndex+1:]
+					// Заключаем название контейнера в квадратные скобки
+					entryLine = "[" + beforePrefixLine + "]" + afterPrefixLine
+				}
+			case "kubectl":
+				// Удаляем префикс названия типа объекта "pod/"
+				entryLine = strings.Replace(entryLine, "pod/", "", 1)
+			}
 			// Удаляем из строки timestamp
 			if !app.timestampDocker {
-				entryLine = removeTimestamp(entry.content, containerizationSystem)
+				entryLine = removeTimestamp(entryLine, containerizationSystem)
 			}
 			// Не добавляем префексы названия потока в отключенном режиме для Docker (а также для compose и kubectl по умолчанию)
 			if !app.streamTypeDocker || containerizationSystem == "compose" || containerizationSystem == "kubectl" {
@@ -5493,18 +5507,18 @@ func (app *App) lineColor(inputLine string) string {
 	var colorLine string
 	var filterColor = false
 	// Извлекаем название контейнера в логах стека compose
-	var containerName string
-	if app.lastContainerizationSystem == "compose" {
-		// Исключаем строку с делиметром
-		if !strings.HasPrefix(inputLine, "⎯") {
-			splitLine := strings.SplitN(inputLine, " | ", 2)
-			if splitLine[0] != "" && splitLine[1] != "" {
-				containerName = splitLine[0]
-				// Удаляем название контейнера из покраски
-				inputLine = splitLine[1]
-			}
-		}
-	}
+	// var containerName string
+	// if app.lastContainerizationSystem == "compose" {
+	// 	// Исключаем строку с делиметром
+	// 	if !strings.HasPrefix(inputLine, "⎯") {
+	// 		splitLine := strings.SplitN(inputLine, " | ", 2)
+	// 		if splitLine[0] != "" && splitLine[1] != "" {
+	// 			containerName = splitLine[0]
+	// 			// Удаляем название контейнера из покраски
+	// 			inputLine = splitLine[1]
+	// 		}
+	// 	}
+	// }
 	// Разбиваем строку по пробелам, сохраняя их
 	words := strings.Split(inputLine, " ")
 	var colorLineBuilder strings.Builder
@@ -5538,16 +5552,16 @@ func (app *App) lineColor(inputLine string) string {
 	colorLine = strings.ReplaceAll(colorLine, "not found", "\033[31mnot found\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "Bad request", "\033[31mBad request\033[0m")
 	colorLine = strings.ReplaceAll(colorLine, "bad request", "\033[31mbad request\033[0m")
-	if app.lastContainerizationSystem == "compose" && containerName != "" {
-		// Возвращяем название контейнера с уникальной покраской
-		if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
-			return app.uniquePrefixColorMap[strings.TrimSpace(containerName)] + containerName + " |\033[0m " + colorLine
-		} else {
-			return containerName + " | " + colorLine
-		}
-	} else {
-		return colorLine
-	}
+	// if app.lastContainerizationSystem == "compose" && containerName != "" {
+	// 	// Возвращяем название контейнера с уникальной покраской
+	// 	if app.uniquePrefixColorMap[strings.TrimSpace(containerName)] != "" {
+	// 		return app.uniquePrefixColorMap[strings.TrimSpace(containerName)] + containerName + " |\033[0m " + colorLine
+	// 	} else {
+	// 		return containerName + " | " + colorLine
+	// 	}
+	// } else {
+	return colorLine
+	// }
 }
 
 // Игнорируем регистр и проверяем, что слово окружено не буквами и цифрами
