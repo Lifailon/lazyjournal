@@ -3766,8 +3766,8 @@ func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors str
 
 func (app *App) loadDockerContainer(containerizationSystem string) {
 	app.dockerContainers = nil
-	// Создаем контекст выполнения удаленных команд по ssh (timeout 2s)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// Создаем контекст выполнения удаленных команд по ssh (timeout 5s)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// Получаем версию для проверки, что система контейнеризации установлена
 	var cmd *exec.Cmd
@@ -3885,7 +3885,6 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 					)...)
 			}
 		} else {
-			// Корректируем положение флага context в команде compose
 			if app.dockerCompose == "docker-compose" {
 				cmd = exec.CommandContext(
 					ctx,
@@ -4086,16 +4085,6 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		app.dockerContainersNotFilter = app.dockerContainers
 		app.applyFilterList()
 	}
-	// Заполняем карту уникальных цветов для контейнеров (используется для покраски префиксов в compose)
-	if containerizationSystem == "docker" {
-		for _, dc := range app.dockerContainers {
-			cn := dc.rawName
-			if cn != "" {
-				newColor := uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(uniquePrefixColorArr)]
-				app.uniquePrefixColorMap[cn] = newColor
-			}
-		}
-	}
 }
 
 func (app *App) updateDockerContainerList() {
@@ -4229,8 +4218,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	} else {
 		containerId = app.lastContainerId
 	}
-	// Создаем контекст выполнения удаленных команд по ssh (timeout 2s)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// Создаем контекст выполнения удаленных команд по ssh (timeout 5s)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// Читаем журналы Docker из файловой системы в формате JSON (если не отключено флагом и docker context default)
 	var readFileContainer bool
@@ -4407,6 +4396,20 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				)
 			}
 		case "compose":
+			// Сначала получаем список контейнеров в стеке Compose
+			if newUpdate {
+				containerNameArr := app.getContainersFromCompose(containerId)
+				// Предварительно очищаем карту
+				clear(app.uniquePrefixColorMap)
+				// Заполняем карту уникальных цветов для уникальной покраски названия контейнеров в префиксах compose
+				for _, containerName := range containerNameArr {
+					if containerName != "" {
+						newColor := uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(uniquePrefixColorArr)]
+						app.uniquePrefixColorMap[containerName] = newColor
+					}
+				}
+			}
+			// Извлекаем содержимое логов
 			sinceFilterTextNotSpace := reSpace.ReplaceAllString(app.sinceFilterText, "T")
 			untilFilterTextNotSpace := reSpace.ReplaceAllString(app.untilFilterText, "T")
 			if app.sshMode {
@@ -4825,6 +4828,52 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	if !readFileContainer || (readFileContainer && app.updateFile) || containerizationSystem != "docker" {
 		app.updateDelimiter(newUpdate)
 		app.applyFilter(false)
+	}
+}
+
+// Функция для получения массива из названия контейнеров в заданном проекте Compose
+func (app *App) getContainersFromCompose(projectName string) []string {
+	var cmd *exec.Cmd
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if app.sshMode {
+		if app.dockerCompose == "docker-compose" {
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					app.dockerCompose,
+					"--context", app.dockerContext, "--project-name", projectName, "ps", "-a", "--services",
+				)...)
+		} else {
+			cmd = exec.CommandContext(
+				ctx,
+				"ssh", append(app.sshOptions,
+					"docker",
+					"--context", app.dockerContext, "compose", "--project-name", projectName, "ps", "-a", "--services",
+				)...)
+		}
+	} else {
+		if app.dockerCompose == "docker-compose" {
+			cmd = exec.CommandContext(
+				ctx,
+				app.dockerCompose,
+				"--context", app.dockerContext, "--project-name", projectName, "ps", "-a", "--services",
+			)
+		} else {
+			cmd = exec.CommandContext(
+				ctx,
+				"docker",
+				"--context", app.dockerContext, "compose", "--project-name", projectName, "ps", "-a", "--services",
+			)
+		}
+	}
+	cmd.WaitDelay = 2 * time.Second
+	output, err := cmd.Output()
+	if err == nil {
+		containerNameArr := strings.Split(strings.TrimSpace(string(output)), "\n")
+		return containerNameArr
+	} else {
+		return []string{}
 	}
 }
 
