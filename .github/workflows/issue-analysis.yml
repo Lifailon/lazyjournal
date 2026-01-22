@@ -1,0 +1,34 @@
+name: AI Issue Analysis
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  issue_analysis:
+    permissions:
+      issues: write
+      models: read
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sending a request to AI
+        id: ai_query
+        uses: actions/ai-inference@v2
+        with:
+          model: DeepSeek-R1
+          system-prompt: |
+            You are a developer assistant.
+            Your job is to analyze issues on GitHub and suggest solutions.
+            Your responses should be brief and in English.
+          prompt: |
+            Title: ${{ github.event.issue.title }}
+            Description: ${{ github.event.issue.body }}
+
+      - name: Post comment from AI
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "$AI_RESPONSE"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_RESPONSE: ${{ steps.ai_query.outputs.response }}
