@@ -1,4 +1,4 @@
-name: Merge Coverage
+name: Merge coverage and update Wiki
 
 on:
   workflow_dispatch:

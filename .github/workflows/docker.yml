@@ -1,14 +1,14 @@
-name: Docker Build
+name: Docker Build and Push from specified commit
 
 on:
   workflow_dispatch:
     inputs:
       Commit:
-        description: "Commit for checkout"
+        description: "Commit for git checkout"
         required: true
         default: ""
       Version:
-        description: "Version for tag"
+        description: "Version for docker tag"
         required: true
         default: ""
 
