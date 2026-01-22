@@ -20,7 +20,10 @@ jobs:
         id: ai_query
         uses: actions/ai-inference@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          endpoint: https://models.github.ai/inference
           model: gpt-4.1
+          max-tokens: 1024
           system-prompt: |
             You are a developer assistant.
             Your job is to analyze issues on GitHub and suggest solutions.
@@ -30,8 +33,8 @@ jobs:
             Description: ${{ github.event.issue.body }}
 
       - name: Post comment from AI
-        run: |
-          gh issue comment ${{ github.event.issue.number }} --body "$AI_RESPONSE"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AI_RESPONSE: ${{ steps.ai_query.outputs.response }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "$AI_RESPONSE"
