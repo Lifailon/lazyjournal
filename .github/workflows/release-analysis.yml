@@ -1,0 +1,63 @@
+name: AI Release Analysis
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  release_analysis:
+    permissions:
+      contents: write
+      models: read
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get diff from git
+        id: get_diff
+        run: |
+          LATEST_TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "head")
+          fi
+          PRE_TAG=$(git describe --abbrev=0 --tags "$LATEST_TAG^" 2>/dev/null || echo "")
+          if [ -z "$PRE_TAG" ]; then
+            DIFF=$(git log --oneline -n 50)
+          else
+            DIFF=$(git log "$PRE_TAG..$LATEST_TAG" --oneline)
+          fi
+          echo "DIFF_DATA<<EOF" >> $GITHUB_ENV
+          echo "$DIFF" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Generate report using AI
+        id: ai_query
+        uses: actions/ai-inference@v2
+        with:
+          model: gpt-4.1
+          max-tokens: 2048
+          system-prompt: |
+            You are a technical writer.
+            Analyze the Git commit log and create a summary of the changes.
+            Focus on new features and bug fixes.
+            The summary must be in Markdown format in English and contain two key headings: "New Features" and "Fixes."
+          prompt: |
+            Analyze these changes for release ${{ github.event.release.tag_name }}:
+            ${{ env.DIFF_DATA }}
+
+      - name: Push report to git
+        run: |
+          REPORT_FILE="changelog.md"
+          echo -e "\n# Release ${{ github.event.release.tag_name }}\n" >> $REPORT_FILE
+          echo "${{ steps.ai_query.outputs.response }}" >> $REPORT_FILE
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add $REPORT_FILE
+          git commit -m "add ai report for ${{ github.event.release.tag_name }} release"
+          git push
