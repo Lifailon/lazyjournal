@@ -1,3 +1,32 @@
+## Release 0.8.3
+
+### New features
+
+- Added coloring for HTTP response status codes and improved HTTP path coloring.
+- Introduced settings for color options and a startup parameter for date filtering.
+- Added the ability to disable color actions via settings.
+- Implemented new settings and configuration options for view mode and filtering by date in subtitles.
+- Replaced the timestamp filter mode with a date filter that includes value switching.
+- Simultaneous coloring and filtering now supported in CLI mode.
+- Added a check for connection to Kubernetes clusters.
+- Added 'bat' mode and binary checks.
+- JSON coloring support added.
+- Added minimal symbol options for flags and configs related to filtering.
+- Improved keyword and status coloring.
+- Enhanced CLI mode checks.
+- Updated hotkey bindings for filtering and color mode.
+
+### Fixes
+
+- Fixed filtering by date range functionality.
+- Updated status updates for date filtering.
+- Fixed frame and title color rendering when loading.
+- Improved tests and log file updates related to coloring.
+- Removed tcpdump and refined keyword coloring.
+- Revised color mode and bat mode testing.
+- Checked and removed root directory references in coloring logic.
+
+
 
 ## Release 0.8.2
 
