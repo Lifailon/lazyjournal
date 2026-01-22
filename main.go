@@ -108,7 +108,6 @@ type Interface struct {
 	TitleColor              string `yaml:"titleColor"`
 	SelectedFrameColor      string `yaml:"selectedFrameColor"`
 	SelectedTitleColor      string `yaml:"selectedTitleColor"`
-	StatusColor             string `yaml:"statusColor"`
 	ErrorColor              string `yaml:"errorColor"`
 }
 
@@ -154,7 +153,6 @@ type App struct {
 	titleColor              gocui.Attribute // цвет заголовка окон
 	selectedFrameColor      gocui.Attribute // цвет выбранного окна
 	selectedTitleColor      gocui.Attribute // цвет заголовка выбранного окна
-	statusColor             gocui.Attribute // цвет окна статуса
 	errorColor              gocui.Attribute // цвет ошибок
 
 	// Цвета окон по умолчанию (изменяется в зависимости от доступности журналов)
@@ -171,7 +169,7 @@ type App struct {
 	colorActionsDisable    bool     // отключить покраску для действий
 	mouseSupport           bool     // включение/отключение поддержки мыши
 	dockerStreamLogs       bool     // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
-	dockerStreamLogsStatus string   // отображаемый режим чтения журнала Docker в статусе Subtitle (в зависимости от прав доступа и флага)
+	dockerStreamLogsStatus string   // отображаемый режим чтения журнала Docker в статусе (в зависимости от прав доступа и флага)
 	dockerStreamMode       string   // переменная для хранения режима чтения потоков (stream, stdout или stderr)
 
 	dockerContext             string
@@ -222,7 +220,7 @@ type App struct {
 	untilFilterText     string    // конец отрезка времени
 	untilFilterDate     time.Time // конец отрезка времени в формате time для проверки
 	limitFilterDate     time.Time // предельное значение для проверки untilFilterDate
-	filterByDateStatus  string    // текстовое значение режима работы фильтра для статуса в subtitle
+	filterByDateStatus  string    // текстовое значение режима работы фильтра для статуса
 
 	// Текст для фильтрации список журналов
 	filterListText string
@@ -400,7 +398,6 @@ func showConfig() {
 	fmt.Printf("  titleColor:               %s\n", config.Interface.TitleColor)
 	fmt.Printf("  selectedFrameColor:       %s\n", config.Interface.SelectedFrameColor)
 	fmt.Printf("  selectedTitleColor:       %s\n", config.Interface.SelectedTitleColor)
-	fmt.Printf("  statusColor:              %s\n", config.Interface.StatusColor)
 	fmt.Printf("  errorColor:               %s\n", config.Interface.ErrorColor)
 
 	fmt.Println("ssh:")
@@ -1244,12 +1241,6 @@ func runGoCui(mock bool) {
 		app.selectedTitleColor = gocui.ColorGreen
 	}
 
-	lowerStatusColor := strings.ToLower(config.Interface.StatusColor)
-	app.statusColor, ok = mapColorFromConfig[lowerStatusColor]
-	if !ok {
-		app.statusColor = gocui.ColorYellow
-	}
-
 	lowerErrorColor := strings.ToLower(config.Interface.ErrorColor)
 	app.errorColor, ok = mapColorFromConfig[lowerErrorColor]
 	if !ok {
@@ -1515,7 +1506,8 @@ func (app *App) layout(g *gocui.Gui) error {
 	}
 
 	// Окно для списка контейнеров Docker и Podman
-	if v, err := g.SetView("docker", 0, inputHeight+2*panelHeight, leftPanelWidth-1, maxY-1-1, 0); err != nil {
+	// В maxY -2 для статуса
+	if v, err := g.SetView("docker", 0, inputHeight+2*panelHeight, leftPanelWidth-1, maxY-1-2, 0); err != nil {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
@@ -1543,7 +1535,7 @@ func (app *App) layout(g *gocui.Gui) error {
 	}
 
 	// Интерфейс скролла в окне вывода лога (maxX-3 ширина окна - отступ слева)
-	if v, err := g.SetView("scrollLogs", maxX-3, 3, maxX-1, maxY-1-1, 0); err != nil {
+	if v, err := g.SetView("scrollLogs", maxX-3, 3, maxX-1, maxY-1-2, 0); err != nil {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
@@ -1563,7 +1555,7 @@ func (app *App) layout(g *gocui.Gui) error {
 	}
 
 	// Окно для вывода записей выбранного журнала (maxX-2 для отступа скролла и 8 для продолжения углов)
-	if v, err := g.SetView("logs", leftPanelWidth+1, 3, maxX-1-2, maxY-1-1, 8); err != nil {
+	if v, err := g.SetView("logs", leftPanelWidth+1, 3, maxX-1-2, maxY-1-2, 8); err != nil {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
@@ -1575,14 +1567,22 @@ func (app *App) layout(g *gocui.Gui) error {
 	}
 
 	// Окно статуса внизу интерфейса (вместо Subtitle)
-	if v, err := g.SetView("status", -1, maxY-2, maxX, maxY, 8); err != nil {
+	if v, err := g.SetView("status", -1, maxY-3, maxX, maxY, 8); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
 		v.Frame = false // Отключаем рамку для статуса
-		v.FgColor = app.statusColor
+		v.FgColor = app.foregroundColor
 		fmt.Fprintf(v,
-			" Tail: %s lines | Update: %t (%d sec) | Color: %s | Filter by date: %s | Priority: %s | Timestamp: %t | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | SSH mode: %s",
+			" Tail: \033[32m%s\033[0m lines | "+
+				"Update: \033[32m%t\033[0m (\033[32m%d\033[0m sec) | "+
+				"Color mode: \033[32m%s\033[0m | "+
+				"Filter by date: \033[32m%s\033[0m | "+
+				"Priority for journald: \033[32m%s\033[0m | "+
+				"Show timestamp: \033[32m%t\033[0m \n "+
+				"SSH mode: \033[32m%s\033[0m | "+
+				"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
+				"Kubernetes context/namespace: \033[32m%s\033[0m/\033[32m%s\033[0m",
 			app.logViewCount,
 			app.autoScroll,
 			app.logUpdateSeconds,
@@ -1590,11 +1590,11 @@ func (app *App) layout(g *gocui.Gui) error {
 			app.filterByDateStatus,
 			app.priority,
 			app.timestampDocker,
+			app.sshStatus,
 			app.dockerStreamLogsStatus,
 			app.dockerContext,
 			app.kubernetesContext,
 			app.kubernetesNamespaceStatus,
-			app.sshStatus,
 		)
 	}
 
@@ -5060,7 +5060,15 @@ func (app *App) updateStatus() {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: %s lines | Update: %t (%d sec) | Color: %s | Filter by date: %s | Priority: %s | Timestamp: %t | Docker mode/ctx: %s/%s | Kubernetes ctx/ns: %s/%s | SSH mode: %s",
+		" Tail: \033[32m%s\033[0m lines | "+
+			"Update: \033[32m%t\033[0m (\033[32m%d\033[0m sec) | "+
+			"Color mode: \033[32m%s\033[0m | "+
+			"Filter by date: \033[32m%s\033[0m | "+
+			"Priority for journald: \033[32m%s\033[0m | "+
+			"Show timestamp: \033[32m%t\033[0m \n "+
+			"SSH mode: \033[32m%s\033[0m | "+
+			"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
+			"Kubernetes context/namespace: \033[32m%s\033[0m/\033[32m%s\033[0m",
 		app.logViewCount,
 		app.autoScroll,
 		app.logUpdateSeconds,
@@ -5068,11 +5076,11 @@ func (app *App) updateStatus() {
 		app.filterByDateStatus,
 		app.priority,
 		app.timestampDocker,
+		app.sshStatus,
 		app.dockerStreamLogsStatus,
 		app.dockerContext,
 		app.kubernetesContext,
 		app.kubernetesNamespaceStatus,
-		app.sshStatus,
 	)
 }
 
@@ -5470,7 +5478,7 @@ func (app *App) commandLineRegex(regex *regexp.Regexp, color bool) {
 	}
 }
 
-// ---------------------------------------- Coloring ----------------------------------------
+// ---------------------------------------- Coloring/Highlighting ----------------------------------------
 
 // Функция для покраски вывода в режиме командной строки
 func (app *App) commandLineColor(fromFilter bool) {
