@@ -26,15 +26,14 @@ jobs:
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "head")
           fi
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
           PRE_TAG=$(git describe --abbrev=0 --tags "$LATEST_TAG^" 2>/dev/null || echo "")
           if [ -z "$PRE_TAG" ]; then
             DIFF=$(git log --oneline -n 50)
           else
             DIFF=$(git log "$PRE_TAG..$LATEST_TAG" --oneline)
           fi
-          echo "DIFF_DATA<<EOF" >> $GITHUB_ENV
-          echo "$DIFF" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          printf "DIFF_DATA<<EOF\n%s\nEOF\n" "$DIFF" >> $GITHUB_ENV
 
       - name: Generate report using AI
         id: ai_query
@@ -45,19 +44,19 @@ jobs:
           system-prompt: |
             You are a technical writer.
             Analyze the Git commit log and create a summary of the changes.
-            Focus on new features and bug fixes.
-            The summary must be in Markdown format in English and contain two key headings: "New Features" and "Fixes."
+            The summary must be in Markdown format in English and contain two key headings: "### New features" and "### Fixes"
+            No need to add a release title, I do that myself.
           prompt: |
-            Analyze these changes for release ${{ github.event.release.tag_name }}:
+            Analyze these changes for release ${{ env.LATEST_TAG }}:
             ${{ env.DIFF_DATA }}
 
       - name: Push report to git
         run: |
           REPORT_FILE="changelog.md"
-          echo -e "\n# Release ${{ github.event.release.tag_name }}\n" >> $REPORT_FILE
+          echo -e "\n## Release ${{ env.LATEST_TAG }}\n" >> $REPORT_FILE
           echo "${{ steps.ai_query.outputs.response }}" >> $REPORT_FILE
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add $REPORT_FILE
-          git commit -m "add ai report for ${{ github.event.release.tag_name }} release"
+          git commit -m "add ai report for ${{ env.LATEST_TAG }} release"
           git push
