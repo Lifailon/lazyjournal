@@ -59,3 +59,40 @@
 - Fixed forcetypeassert linter issue.
 - Fixed default values for custom path flag.
 - Updated audit example to handle contexts and namespaces.
+
+## Release 0.8.1
+
+### New features
+
+- Added commands for container control.
+- Introduced linters checks in the final report (also applied for wiki).
+- Added verbose option for linters check.
+- Added initialization for color map and update for color array in static compose configuration.
+- Provided examples for kubeconfig and audit.
+- Added support for Docker Compose information, stack logs, and filtering by timestamps.
+- Enabled new log list for Docker Compose stacks.
+- Added unique prefix coloring for containers and improved coloring for containers and pods status.
+- Added playground scripts and configuration (Killercoda playground).
+- Provided parameters for debugging and fast configuration options.
+- Added force commit option for wiki and upload all report functionality.
+- Enabled compose information in audit and forward kubectl config examples.
+- Improved log output and clear filter functionality.
+- Added return window for clear input events.
+
+### Fixes
+
+- Fixed mount for kubeconfig path.
+- Resolved errors in Docker unit tests.
+- Fixed kubectl issues in audit.
+- Addressed error when changing log after compose operations.
+- Fixed push and clone actions for wiki repository.
+- Resolved branch and URL issues for wiki integration.
+- Fixed path and merge problems during wiki updates.
+- Resolved error when pulling and merging to the wiki.
+- Fixed handling of nil elements in lists when using mouse.
+- Improved coloring for prefix container names in compose logs.
+- Updated version to 0.8.1 and improved linters execution.
+- Corrected table reports and merging reports for testing.
+- Improved error handling for pulling, pushing, cloning, and updating the wiki.
+- Removed branch requirement for wiki commit operations.
+- Updated report table formatting and params for various actions.
