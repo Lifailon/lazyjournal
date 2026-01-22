@@ -60,10 +60,18 @@ jobs:
             ${{ env.DIFF_DATA }}
 
       - name: Push report to git
+        env:
+          AI_RESPONSE: ${{ steps.ai_query.outputs.response }}
         run: |
           REPORT_FILE="changelog.md"
-          echo -e "\n## Release ${{ env.LATEST_TAG }}\n" >> $REPORT_FILE
-          echo "${{ steps.ai_query.outputs.response }}" >> $REPORT_FILE
+          REPORT_TEMP_FILE="changelog.tmp"
+          echo -e "\n## Release ${{ env.LATEST_TAG }}\n" > $REPORT_TEMP_FILE
+          echo "$AI_RESPONSE" >> $REPORT_TEMP_FILE
+          echo "\n" >> $REPORT_TEMP_FILE
+          if [ -f "$REPORT_FILE" ]; then
+            cat "$REPORT_FILE" >> $REPORT_TEMP_FILE
+          fi
+          mv $REPORT_TEMP_FILE $REPORT_FILE
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add $REPORT_FILE

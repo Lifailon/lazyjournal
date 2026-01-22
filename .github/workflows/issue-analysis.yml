@@ -35,6 +35,7 @@ jobs:
       - name: Post comment from AI
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
           AI_RESPONSE: ${{ steps.ai_query.outputs.response }}
         run: |
-          gh issue comment ${{ github.event.issue.number }} --body "$AI_RESPONSE"
+          gh issue comment "$ISSUE_NUMBER" --body "$AI_RESPONSE"
