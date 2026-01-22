@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Clone main repository
+      - name: Checkout main repository
         uses: actions/checkout@v4
 
       - name: Install Go
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Clone main repository
+      - name: Checkout main repository
         uses: actions/checkout@v4
 
       - name: Install Go
@@ -138,7 +138,7 @@ jobs:
     runs-on: macos-15
 
     steps:
-      - name: Clone main repository
+      - name: Checkout main repository
         uses: actions/checkout@v4
 
       - name: Install Go
@@ -183,7 +183,7 @@ jobs:
   Windows:
     runs-on: windows-2022
     steps:
-      - name: Clone main repository
+      - name: Checkout main repository
         uses: actions/checkout@v4
 
       - name: Install Go
@@ -239,7 +239,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [Linux, Docker, macOS, Windows]
     steps:
-      - name: Clone main repository
+      - name: Checkout main repository
         uses: actions/checkout@v4
 
       - name: Install Go
@@ -394,7 +394,7 @@ jobs:
           name: all-report
           path: all-report.md
 
-      - name: Clone Wiki repository
+      - name: Checkout Wiki repository
         if: ${{ github.event.inputs.Markdown == 'true' }}
         run: git clone https://github.com/Lifailon/lazyjournal.wiki wiki
 

@@ -54,7 +54,7 @@ jobs:
     name: Tests on ${{ github.event.inputs.Distro }}
 
     steps:
-      - name: Clone main repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Go
@@ -290,10 +290,7 @@ jobs:
     name: Build on ubuntu-latest
 
     steps:
-    - name: Clone repository
-      uses: actions/checkout@v4
-
-    - name: Clone main repository
+    - name: Checkout repository
       uses: actions/checkout@v4
 
     - name: Install Go

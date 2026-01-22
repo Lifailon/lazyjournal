@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Sending a request to AI
         id: ai_query
         uses: actions/ai-inference@v2
