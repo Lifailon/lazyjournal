@@ -54,7 +54,7 @@ jobs:
             You are a technical writer.
             Analyze the Git commit log and create a summary of the changes.
             The summary must be in Markdown format in English and contain two key headings: "### New features" and "### Fixes"
-            No need to add a release title, I do that myself.
+            There is no need to add a release title and commit numbers.
           prompt: |
             Analyze these changes for release ${{ env.LATEST_TAG }}:
             ${{ env.DIFF_DATA }}
@@ -65,9 +65,9 @@ jobs:
         run: |
           REPORT_FILE="changelog.md"
           REPORT_TEMP_FILE="changelog.tmp"
-          echo -e "\n## Release ${{ env.LATEST_TAG }}\n" > $REPORT_TEMP_FILE
+          echo -e "## Release ${{ env.LATEST_TAG }}\n" > $REPORT_TEMP_FILE
           echo "$AI_RESPONSE" >> $REPORT_TEMP_FILE
-          echo "\n" >> $REPORT_TEMP_FILE
+          echo -e "\n" >> $REPORT_TEMP_FILE
           if [ -f "$REPORT_FILE" ]; then
             cat "$REPORT_FILE" >> $REPORT_TEMP_FILE
           fi
