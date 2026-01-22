@@ -2,6 +2,11 @@ name: AI Release Analysis
 
 on:
   workflow_dispatch:
+    inputs:
+      Tag:
+        description: "Release tag name"
+        required: false
+        default: ""
   release:
     types: [published]
 
@@ -24,7 +29,11 @@ jobs:
         run: |
           LATEST_TAG="${{ github.event.release.tag_name }}"
           if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "head")
+            if [ -n "${{ github.event.inputs.Tag }}" ]; then
+              LATEST_TAG="${{ github.event.inputs.Tag }}"
+            else
+              LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "head")
+            fi
           fi
           echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
           PRE_TAG=$(git describe --abbrev=0 --tags "$LATEST_TAG^" 2>/dev/null || echo "")
