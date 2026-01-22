@@ -20,7 +20,7 @@ jobs:
         id: ai_query
         uses: actions/ai-inference@v2
         with:
-          model: DeepSeek-R1
+          model: gpt-4.1
           system-prompt: |
             You are a developer assistant.
             Your job is to analyze issues on GitHub and suggest solutions.
