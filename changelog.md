@@ -96,3 +96,47 @@
 - Improved error handling for pulling, pushing, cloning, and updating the wiki.
 - Removed branch requirement for wiki commit operations.
 - Updated report table formatting and params for various actions.
+
+## Release 0.8.0
+
+### New features
+
+- Added debug mode for advanced report.  
+- Coverage markdown report updated to include table and percent information.  
+- Output in TTY for logging tests.  
+- Docker Hub deploy merged into CI.  
+- Build system updated to remove Snap package and use Docker buildx (multi-arch support).  
+- Added download config functionality in install scripts.  
+- Added mount config option.  
+- Fast mode (demo) added.  
+- Enabled copying source code via SSH and running code remotely.  
+- Filtering lists by time enhanced and added last null line.  
+- Multithreaded build introduced.  
+- Added new flag for test and updated path logic.  
+- Short output format for filtering by timestamp introduced.  
+- Added notifications for info and error events.  
+- Comprehensive settings for all flags and structure for configuration added.  
+- Config file extended to manage hotkeys (switch, goto, up/down, left/right, closing with ESC, and Ctrl+C clear).  
+- Hotkeys configuration now uses YAML and supports structure for future extensibility.  
+- Color support for K3s logs and reading K8s pod logs across all namespaces.  
+- SSH mode for Docker containers introduced (with args and options).  
+- Stats for multiple files, remote OS detection, and custom stats from remote files added.
+
+### Fixes
+
+- TTYD and Docker CLI fixes for ARM architecture.
+- Entrypoint logic fixed.
+- Improved report table output presentation.
+- Logging fixes including for testing scenarios.
+- Timeout and shell reliability improved.
+- Variable handling during hash operations fixed.
+- Build process robustness increased and coverage info clarified.
+- Linters corrected and improved.
+- Install script paths corrected.
+- Path priority logic for config improved.
+- Flags priority logic fixed.
+- Dockerfile updated and old Dockerfile removed.
+- Improved visibility of config and info windows for tests.
+- Config file priority logic refined and error handling for flags fixed.
+- Reading Kubernetes pod logs from any namespace fixed.
+- Other minor fixes for SSH mode and associated configuration.
