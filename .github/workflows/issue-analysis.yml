@@ -2,7 +2,9 @@ name: AI Issue Analysis
 
 on:
   issues:
-    types: [opened]
+    types: [opened, edited, closed, reopened]
+  issue_comment:
+    types: [created]
 
 jobs:
   issue_analysis:
@@ -16,7 +18,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Send message to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_TO_CHANNEL }}
+          message: |
+            🔔 **Action**: ${{ github.event_name }} (${{ github.event.action }})
+
+            📁 **Repository**: ${{ github.repository }}
+            👤 **User**: ${{ github.actor }}
+            🔗 **Link**: ${{ github.event.comment.html_url || github.event.issue.html_url }}
+
+            📌 **Title**: ${{ github.event.issue.title }}
+            💬 **Description**:
+            ${{ github.event.comment.body || github.event.issue.body }}
+
       - name: Sending a request to AI
+        if: github.event_name == 'issues' && github.event.action == 'opened'
         id: ai_query
         uses: actions/ai-inference@v2
         with:
@@ -33,6 +52,7 @@ jobs:
             Description: ${{ github.event.issue.body }}
 
       - name: Post comment from AI
+        if: github.event_name == 'issues' && github.event.action == 'opened'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
