@@ -23,18 +23,20 @@ jobs:
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
           to: ${{ secrets.TELEGRAM_TO_CHANNEL }}
+          format: html
+          debug: true
           message: |
-            🔔 **Action**: ${{ github.event_name }} (${{ github.event.action }})
+            🔔 <b>Action</b>: ${{ github.event_name }} (${{ github.event.action }})
 
-            📁 **Repository**: ${{ github.repository }}
-            👤 **User**: ${{ github.actor }}
-            🔗 **Link**: ${{ github.event.comment.html_url || github.event.issue.html_url }}
+            📁 <b>Repository</b>: ${{ github.repository }}
+            👤 <b>From user</b>: ${{ github.actor }}
+            🔗 <a href="${{ github.event.comment.html_url || github.event.issue.html_url }}">Open an issue on GitHub</a>
 
-            📌 **Title**: ${{ github.event.issue.title }}
-            💬 **Description**:
+            📌 <b>Title</b>: ${{ github.event.issue.title }}
+            💬 <b>Description</b>:
             ${{ github.event.comment.body || github.event.issue.body }}
 
-      - name: Sending a request to AI
+      - name: Generate report using AI
         if: github.event_name == 'issues' && github.event.action == 'opened'
         id: ai_query
         uses: actions/ai-inference@v2
