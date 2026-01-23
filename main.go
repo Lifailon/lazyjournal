@@ -301,7 +301,7 @@ func showHelp() {
 	fmt.Println("    --version, -v              Show version")
 	fmt.Println("    --config, -g               Show configuration of hotkeys and settings (check values)")
 	fmt.Println("    --audit, -a                Show audit information")
-	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 50000)")
+	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 10000)")
 	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	fmt.Println("    --filter-symbols, -F       Minimum number of symbols for filtering output (range: 1-10, default: 3)")
 	fmt.Println("    --disable-autoupdate, -d   Disable streaming of new events (log is loaded once without automatic update)")
@@ -915,8 +915,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(configFlag, "g", false, "Show configuration of hotkeys and settings (check values)")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
-	tailFlag := flag.String("tail", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
-	flag.StringVar(tailFlag, "t", "50000", "Change the number of log lines to output (range: 200-200000, default: 50000)")
+	tailFlag := flag.String("tail", "10000", "Change the number of log lines to output (range: 200-200000, default: 10000)")
+	flag.StringVar(tailFlag, "t", "10000", "Change the number of log lines to output (range: 200-200000, default: 10000)")
 	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	minSymbolFilterFlag := flag.Int("filter-symbols", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
@@ -979,7 +979,7 @@ func runGoCui(mock bool) {
 	}
 
 	// Если значение в конфигурации не пустое и значение флага по умолчанию
-	if config.Settings.TailMode != "" && *tailFlag == "50000" {
+	if config.Settings.TailMode != "" && *tailFlag == "10000" {
 		tailFlag = &config.Settings.TailMode
 	}
 
@@ -1085,17 +1085,17 @@ func runGoCui(mock bool) {
 	// Проверяем значение флага на валидность
 	if *tailFlag == "200" || *tailFlag == "500" || *tailFlag == "1000" ||
 		*tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" ||
-		*tailFlag == "30000" || *tailFlag == "50000" || *tailFlag == "100000" ||
-		*tailFlag == "150000" || *tailFlag == "200000" {
+		*tailFlag == "30000" || *tailFlag == "40000" || *tailFlag == "50000" ||
+		*tailFlag == "100000" || *tailFlag == "150000" || *tailFlag == "200000" {
 		app.logViewCount = *tailFlag
 	} else {
 		if *tailFlag != config.Settings.TailMode {
 			// Если ошибка в флаге, возвращяем ошибку
-			fmt.Println("Available values for tail mode: 200, 500, 1000, 5000, 10000, 20000, 30000 50000, 100000, 150000 or 200000 (default: 50000 lines)")
+			fmt.Println("Available values for tail mode: 200, 500, 1000, 5000, 10000, 20000, 30000, 40000, 50000, 100000, 150000 or 200000 (default: 10000 lines)")
 			os.Exit(1)
 		} else {
 			// Если ошибка в конфигурации (или значение не задано), задаем значение по умолчанию
-			app.logViewCount = "50000"
+			app.logViewCount = "10000"
 		}
 	}
 
@@ -8209,7 +8209,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "      \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
 	fmt.Fprintln(helpView, "      \033[32mEnd\033[0m/\033[32mCtrl\033[0m+\033[32mE\033[0m - go to the end of the log.")
 	fmt.Fprintln(helpView, "      \033[32mHome\033[0m/\033[32mCtrl\033[0m+\033[32mA\033[0m - go to the top of the log.")
-	fmt.Fprintln(helpView, "      \033[32m[\033[0m/\033[32m]\033[0m - change the number of log lines to output (default: 50000, range: 200-200000).")
+	fmt.Fprintln(helpView, "      \033[32m[\033[0m/\033[32m]\033[0m - change the number of log lines to output (default: 10000, range: 200-200000).")
 	fmt.Fprintln(helpView, "      \033[32m{\033[0m/\033[32m}\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mU\033[0m - disable streaming of new events (log is loaded once without automatic update).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mR\033[0m - update the current log output manually (relevant in disable streaming mode).")
@@ -8634,6 +8634,8 @@ func (app *App) setCountLogViewUp(g *gocui.Gui, v *gocui.View) error {
 	case "20000":
 		app.logViewCount = "30000"
 	case "30000":
+		app.logViewCount = "40000"
+	case "40000":
 		app.logViewCount = "50000"
 	case "50000":
 		app.logViewCount = "100000"
@@ -8660,6 +8662,8 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 	case "100000":
 		app.logViewCount = "50000"
 	case "50000":
+		app.logViewCount = "40000"
+	case "40000":
 		app.logViewCount = "30000"
 	case "30000":
 		app.logViewCount = "20000"
