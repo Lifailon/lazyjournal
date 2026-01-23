@@ -43,12 +43,12 @@ on:
         description: 'Build binary'
         default: false
         type: boolean
-      Dockerfile:
-        description: 'Dockerfile linters check'
-        default: false
-        type: boolean
       Docker:
         description: 'Docker build and push on Docker Hub'
+        default: false
+        type: boolean
+      Dockerfile:
+        description: 'Dockerfile linters check'
         default: false
         type: boolean
 
@@ -56,9 +56,14 @@ run-name: CI on ${{ github.event.inputs.Distro }} [#${{ github.run_number }}]
 
 jobs:
   test:
+    name: Tests on ${{ github.event.inputs.Distro }}
+
     runs-on: ${{ github.event.inputs.Distro }}
 
-    name: Tests on ${{ github.event.inputs.Distro }}
+    env:
+      APP_VERSION: 'n/a'
+      LAST_COMMIT: 'n/a'
+      COVERAGE: 'n/a'
 
     steps:
       - name: Checkout repository
@@ -104,8 +109,8 @@ jobs:
           echo "- **Go unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Release check in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build binary**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Dockerfile linters check using [Hadolint](https://github.com/hadolint/hadolint)**: ${{ github.event.inputs.Dockerfile }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dockerfile linters check using [Hadolint](https://github.com/hadolint/hadolint)**: ${{ github.event.inputs.Dockerfile }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Update dependencies
         if: ${{ github.event.inputs.Update == 'true' }}
@@ -336,10 +341,10 @@ jobs:
             **Go unit testing**: ${{ github.event.inputs.Test }}
             **Release check in tmux**: ${{ github.event.inputs.Release }}
             **Build binary**: ${{ github.event.inputs.Binary }}
-            **Dockerfile linters check using Hadolint**: ${{ github.event.inputs.Dockerfile }}
             **Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}
+            **Dockerfile linters check using Hadolint**: ${{ github.event.inputs.Dockerfile }}
 
-            🚀 Result unit testing coverage: ${{ env.COVERAGE || 'n/a' }}
+            🚀 Result unit testing coverage: ${{ env.COVERAGE }}
 
   build:
     runs-on: ubuntu-latest

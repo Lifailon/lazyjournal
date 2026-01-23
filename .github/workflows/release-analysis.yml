@@ -18,6 +18,10 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    env:
+      LATEST_TAG: 'head'
+      DIFF_DATA: ''
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

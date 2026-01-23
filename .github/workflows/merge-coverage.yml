@@ -237,7 +237,16 @@ jobs:
 
   Merge:
     runs-on: ubuntu-latest
+
     needs: [Linux, Docker, macOS, Windows]
+
+    env:
+      LINUX_COVERAGE: "n/a"
+      DOCKER_COVERAGE: "n/a"
+      MAC_COVERAGE: "n/a"
+      WIN_COVERAGE: "n/a"
+      TOTAL_COVERAGE: "n/a"
+
     steps:
       - name: Checkout main repository
         uses: actions/checkout@v4
@@ -276,30 +285,36 @@ jobs:
           out=$(go tool cover -func linux-coverage.out)
           echo "# 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "LINUX_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "Linux coverage: $coverTotal"
-          echo "- **Linux**: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          echo "- 🐧 **Linux**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" > all-report.md
 
       - name: Check coverage report for Docker without root
         run: |
           out=$(go tool cover -func docker-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "DOCKER_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "Docker coverage: $coverTotal"
+          echo "- 🐳 **Docker**: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          cat "$GITHUB_STEP_SUMMARY" > all-report.md
 
       - name: Check coverage report for macOS
         run: |
           out=$(go tool cover -func macos-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "MAC_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "macOS coverage: $coverTotal"
-          echo "- **macOS**: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          echo "- 🍏 **macOS**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Check coverage report for Windows
         run: |
           out=$(go tool cover -func windows-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "WIN_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "Windows coverage: $coverTotal"
-          echo "- **Windows**: $coverTotal" >> $GITHUB_STEP_SUMMARY
+          echo "- 💻 **Windows**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Install go coverage merge
@@ -314,6 +329,7 @@ jobs:
           gocovmerge linux-coverage.out docker-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
           out=$(go tool cover -func merge-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "TOTAL_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "Total after merge coverage: $coverTotal"
           echo "- **Total after merge**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo "$out" | sed -E 's/.+\///' | sed "s/:/ /g" | head -n -1)
@@ -419,3 +435,24 @@ jobs:
           else
               echo "No changes to commit"
           fi
+
+      - name: Send report to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
+          format: markdown
+          message: |
+            🔔 **Action**: Merge coverage
+
+            📁 **Repository**: ${{ github.repository }}
+            👤 **User**: ${{ github.actor }}
+            🔗 **Build**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            Result unit testing coverage:
+            🐧 Linux: ${{ env.LINUX_COVERAGE }}
+            🐳 Docker: ${{ env.DOCKER_COVERAGE }}
+            🍏 macOS: ${{ env.MAC_COVERAGE }}
+            💻 Windows: ${{ env.WIN_COVERAGE }}
+            📚 Total: ${{ env.TOTAL_COVERAGE }}
