@@ -10,6 +10,8 @@ on:
   release:
     types: [published]
 
+run-name: "Release ${{ inputs.Tag || github.event.release.tag_name }}"
+
 jobs:
   release_analysis:
     permissions:
@@ -81,3 +83,14 @@ jobs:
           git add $REPORT_FILE
           git commit -m "add ai report for ${{ env.LATEST_TAG }} release"
           git push
+
+      - name: Send report to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          format: markdown
+          message: |
+            🔔 **Action**: ${{ env.LATEST_TAG }} release
+
+            ${{ steps.ai_query.outputs.response }}

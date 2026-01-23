@@ -6,6 +6,8 @@ on:
   issue_comment:
     types: [created]
 
+run-name: "Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}"
+
 jobs:
   issue_analysis:
     permissions:

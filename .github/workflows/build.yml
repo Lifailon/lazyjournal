@@ -52,7 +52,7 @@ on:
         default: false
         type: boolean
 
-run-name: CI on ${{ github.event.inputs.Distro }} [#${{ github.run_number }}]
+run-name: "Build #${{ github.run_number }} on ${{ github.event.inputs.Distro }}"
 
 jobs:
   test:
