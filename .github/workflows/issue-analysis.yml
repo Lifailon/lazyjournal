@@ -2,7 +2,7 @@ name: AI Issue Analysis
 
 on:
   issues:
-    types: [opened, edited]
+    types: [opened]
 
 jobs:
   issue_analysis:

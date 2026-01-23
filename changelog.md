@@ -26,8 +26,6 @@
 - Revised color mode and bat mode testing.
 - Checked and removed root directory references in coloring logic.
 
-
-
 ## Release 0.8.2
 
 ### New features

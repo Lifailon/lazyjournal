@@ -4,28 +4,31 @@ on:
   workflow_dispatch:
     inputs:
       Distro:
-        description: 'Select runner image' # https://github.com/actions/runner-images
+        description: 'Select runner image'
         required: true
         default: 'ubuntu-24.04'
         type: choice
+        # https://github.com/actions/runner-images
         options:
           - 'ubuntu-24.04'
+          - 'macos-26'
           - 'macos-15'
+          - 'windows-2025'
           - 'windows-2022'
       Update:
         description: 'Update dependencies'
         default: false
         type: boolean
       GoLangCI:
-        description: 'GoLangCI linters check'
+        description: 'Golangci linters check'
         default: false
         type: boolean
       GoCritic:
-        description: 'GoCritic linters check'
+        description: 'Gocritic linters check'
         default: false
         type: boolean
       GoSec:
-        description: 'GoSec linters check'
+        description: 'Gosec linters check'
         default: false
         type: boolean
       Test:
@@ -33,15 +36,19 @@ on:
         default: false
         type: boolean
       Release:
-        description: 'Release check'
+        description: 'Release check in tmux'
         default: false
         type: boolean
       Binary:
         description: 'Build binary'
         default: false
         type: boolean
+      Dockerfile:
+        description: 'Dockerfile linters check'
+        default: false
+        type: boolean
       Docker:
-        description: 'Build and publish on Docker Hub'
+        description: 'Docker build and push on Docker Hub'
         default: false
         type: boolean
 
@@ -80,13 +87,14 @@ jobs:
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: $version" >> $GITHUB_STEP_SUMMARY
           echo "- **Update dependencies**: ${{ github.event.inputs.Update }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **GoLangCI linters check**: ${{ github.event.inputs.GoLangCI }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Go critic linters check**: ${{ github.event.inputs.GoCritic }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Go security linters check**: ${{ github.event.inputs.GoSec }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **[Golangci](https://github.com/golangci/golangci-lint) linters check**: ${{ github.event.inputs.GoLangCI }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **[Go critic](https://github.com/go-critic/go-critic) linters check**: ${{ github.event.inputs.GoCritic }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **[Go security](https://github.com/securego/gosec) linters check**: ${{ github.event.inputs.GoSec }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Go unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Release Check**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release check in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build binary**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build and publish on Docker Hub**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dockerfile linters check using [Hadolint](https://github.com/hadolint/hadolint)**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Update dependencies
         if: ${{ github.event.inputs.Update == 'true' }}
@@ -378,7 +386,16 @@ jobs:
         driver: docker-container
         install: true
 
-    - name: Build and push Docker images for Linux on amd64 and arm64
+    - name: Dockerfile linters check
+      if: ${{ github.event.inputs.Docker == 'true' }}
+      run: docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=experimental=all" .
+
+    - name: Dockerfile linters check using Hadolint
+      if: ${{ github.event.inputs.Dockerfile == 'true' }}
+      continue-on-error: true
+      run: docker run --rm -i hadolint/hadolint:latest < Dockerfile
+
+    - name: Docker build and push on Docker Hub images for Debian-based on amd64 and arm64
       if: ${{ github.event.inputs.Docker == 'true' }}
       run: |
         # docker build -t lifailon/lazyjournal:latest .
