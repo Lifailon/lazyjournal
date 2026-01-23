@@ -1,13 +1,49 @@
 {
   "configurations": [
     {
-      "name": "Local debug",
+      "name": "Default [10K/5s]",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
       "args": []
+    },
+    {
+      "name": "Fast mode [1K/2s]",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-t", "1000", "-u", "2"]
+    },
+    {
+      "name": "Max lines [200K/10s]",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-t", "200000", "-u", "10"]
+    },
+    {
+      "name": "Show audit",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-a"]
+    },
+    {
+      "name": "Show config",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-g"]
     },
     {
       "name": "Remote debug",
@@ -28,7 +64,7 @@
       "args": ["-s", "lifailon@192.168.3.101 -p 2121"]
     },
     {
-      "name": "sudo SSH mode",
+      "name": "SSH sudo mode",
       "type": "go",
       "request": "launch",
       "mode": "debug",
@@ -46,58 +82,49 @@
       "args": ["-C", "hv-us-101"]
     },
     {
-      "name": "Kubernetes [default/default]",
+      "name": "Kubernetes [default/kube-system]",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
-      "args": ["-k", "default", "-n", "default"]
+      "args": ["-K", "default", "-n", "kube-system"]
     },
     {
-      "name": "Custom path [/var/lib]",
+      "name": "Custom path [pwd]",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
-      "args": ["-p", "/var/lib"]
+      "args": ["-p", "${pwd}"]
     },
     {
-      "name": "Fast [5K/2s]",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceFolder}/main.go",
-      "console": "integratedTerminal",
-      "args": ["-t", "5000", "-u", "2"]
-    },
-    {
-      "name": "Max [200K/10s]",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceFolder}/main.go",
-      "console": "integratedTerminal",
-      "args": ["-t", "200000", "-u", "10"]
-    },
-    {
-      "name": "Disable autoupdate",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceFolder}/main.go",
-      "console": "integratedTerminal",
-      "args": ["-e"]
-    },
-    {
-      "name": "Disable color",
+      "name": "Disable tail mode",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
       "args": ["-d"]
+    },
+    {
+      "name": "Disable color (highlighting)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-C", "disable"]
+    },
+    {
+      "name": "Only stream mode for Docker logs",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-o"]
     },
     {
       "name": "Disable mouse control",
@@ -109,22 +136,13 @@
       "args": ["-m"]
     },
     {
-      "name": "Docker disable timestamp and only stream",
+      "name": "Disable wrap mode",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
-      "args": ["-i", "-o"]
-    },
-    {
-      "name": "Audit",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceFolder}/main.go",
-      "console": "integratedTerminal",
-      "args": ["-a"]
-    },
+      "args": ["-w"]
+    }
   ]
 }

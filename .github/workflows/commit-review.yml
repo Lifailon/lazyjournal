@@ -6,7 +6,7 @@ on:
     branches:
       - main
 
-run-name: "Commit ${{ github.event.head_commit.id }}: ${{ github.event.head_commit.message }}"
+run-name: "Commit: ${{ github.event.head_commit.message }}"
 
 jobs:
   analyze_last_commit:
@@ -44,7 +44,8 @@ jobs:
 
             📁 **Repository**: ${{ github.repository }}
             👤 **User**: ${{ github.actor }}
-            💬 **Message**: ${{ github.event.commits[0].message }}
+
+            💬 **Message**: ${{ github.event.head_commit.message }}
 
       - name: Generate report using AI
         id: ai_query

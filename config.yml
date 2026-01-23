@@ -1,12 +1,12 @@
 # Default flag values (lower priority)
 settings:
-  tailMode: 50000
+  tailModeDisable: false
+  tailModeLines: 10000
   updateInterval: 5
   minSymbolFilter: 3
-  disableAutoUpdate: false
-  disableMouse: false
-  disableTimestamp: false
-  onlyStream: false
+  mouseDisable: false
+  wrapModeDisable: false
+  dockerStreamOnly: false
   dockerContext: default
   kubernetesContext: default
   kubernetesNamespace: all
@@ -64,7 +64,6 @@ interface:
   titleColor: default
   selectedFrameColor: green
   selectedTitleColor: green
-  statusColor: yellow
   errorColor: red
 
 # List of ssh hosts with flags for connection
