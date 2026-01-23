@@ -2,7 +2,7 @@ name: AI Issue Analysis
 
 on:
   issues:
-    types: [opened, edited, closed, reopened]
+    types: [opened, closed, reopened]
   issue_comment:
     types: [created]
 
@@ -26,11 +26,10 @@ jobs:
           debug: true
           format: markdown
           message: |
-            🔔 **Action**: ${{ github.event_name }} (${{ github.event.action }})
+            🔔 **Action**: ${{ github.event_name }} ${{ github.event.action }} [#${{ github.event.issue.number }}](${{ github.event.comment.html_url || github.event.issue.html_url }})
 
             📁 **Repository**: ${{ github.repository }}
             👤 **From user**: ${{ github.actor }}
-            🔗 **Link**: [GitHub issue #${{ github.event.issue.number }}](${{ github.event.comment.html_url || github.event.issue.html_url }})
 
             📌 **Title**: ${{ github.event.issue.title }}
             💬 **Description**:

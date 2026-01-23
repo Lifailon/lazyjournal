@@ -1,0 +1,68 @@
+name: AI Commit Review
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  analyze_last_commit:
+    permissions:
+      contents: read
+      models: read
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get diff from last commit
+        run: |
+          LAST_COMMIT=$(git rev-parse --short HEAD)
+          echo "LAST_COMMIT=$LAST_COMMIT" >> $GITHUB_ENV
+          DIFF=$(git diff HEAD^ HEAD)
+          printf "DIFF_DATA<<EOF\n%s\nEOF\n" "$DIFF" >> $GITHUB_ENV
+
+      - name: Send message to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          format: markdown
+          message: |
+            🔔 **Action**: commit (${{ env.LAST_COMMIT }})
+
+            📁 **Repository**: ${{ github.repository }}
+            👤 **User**: ${{ github.actor }}
+            💬 **Message**: ${{ github.event.commits[0].message }}
+            🔗 **Changes**: https://github.com/${{ github.repository }}/commit/${{github.sha}}
+
+      - name: Generate report using AI
+        id: ai_query
+        uses: actions/ai-inference@v2
+        with:
+          model: gpt-4.1
+          max-tokens: 2048
+          system-prompt: |
+            You are a technical reviewer.
+            Analyze the provided git diff of the latest commit.
+            Based on this analysis, provide a brief summary of the changes and detailed suggestions for improvements or refinements.
+            The response must be in Russian and valid for sending to Telegram in Markdown format.
+          prompt: |
+            Analyze the following code changes in commit ${{ env.LAST_COMMIT }}:
+            ${{ env.DIFF_DATA }}
+
+      - name: Send AI report to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          format: markdown
+          message: |
+            🔔 Report for ${{ env.LAST_COMMIT }} commit:
+            
+            ${{ steps.ai_query.outputs.response }}
