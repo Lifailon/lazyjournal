@@ -81,11 +81,22 @@ jobs:
       - name: Get build information
         shell: bash
         run: |
-          version=$(go run main.go -v)
+          DATETIME=$(date +"%d.%m.%Y %H:%M")
+          GO_VERSION=$(go version | awk '{print $3,"("$4")"}' | sed -e "s/go//g")
+          APP_VERSION=$(go run main.go -v)
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          LAST_COMMIT=$(git rev-parse --short HEAD)
+          echo "LAST_COMMIT=$LAST_COMMIT" >> $GITHUB_ENV
+          
           echo "## 🚀 Build Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Date**: $DATETIME" >> $GITHUB_STEP_SUMMARY
           echo "- **Build number**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go version**: $GO_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **App version**: $APP_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Last commit**: [$LAST_COMMIT](${{ github.server_url }}/${{ github.repository }}/commit/$LAST_COMMIT)" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Parameters" >> $GITHUB_STEP_SUMMARY
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: $version" >> $GITHUB_STEP_SUMMARY
           echo "- **Update dependencies**: ${{ github.event.inputs.Update }}" >> $GITHUB_STEP_SUMMARY
           echo "- **[Golangci](https://github.com/golangci/golangci-lint) linters check**: ${{ github.event.inputs.GoLangCI }}" >> $GITHUB_STEP_SUMMARY
           echo "- **[Go critic](https://github.com/go-critic/go-critic) linters check**: ${{ github.event.inputs.GoCritic }}" >> $GITHUB_STEP_SUMMARY
@@ -93,7 +104,7 @@ jobs:
           echo "- **Go unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Release check in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build binary**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Dockerfile linters check using [Hadolint](https://github.com/hadolint/hadolint)**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dockerfile linters check using [Hadolint](https://github.com/hadolint/hadolint)**: ${{ github.event.inputs.Dockerfile }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Update dependencies
@@ -232,7 +243,7 @@ jobs:
         shell: pwsh
         run: Get-Content test-report.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
 
-      # Release (Flags and TMUX)
+      # Release check (flags and tmux)
 
       - name: Install binary from last commit on GitHub
         if: ${{ github.event.inputs.Release == 'true' }}
@@ -291,6 +302,44 @@ jobs:
           sleep 3
           tmux capture-pane -p
           tmux kill-session -t test-session
+
+      # Telegram
+
+      - name: Get coverage result
+        continue-on-error: true
+        run: |
+          COVERAGE=$(cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g")
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+
+      - name: Send report to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
+          format: markdown
+          message: |
+            🔔 **Action**: CI (Build and Testing)
+
+            📁 **Repository**: ${{ github.repository }}
+            👤 **User**: ${{ github.actor }}
+            🔗 **Build**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            ⭐️ **Version**: ${{ env.APP_VERSION }}
+            💬 **Last commit**: [${{ env.LAST_COMMIT }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ env.LAST_COMMIT }})
+            
+            Parameters:
+            **OS**: ${{ github.event.inputs.Distro }}
+            **Update dependencies**: ${{ github.event.inputs.Update }}
+            **Golangci linters check**: ${{ github.event.inputs.GoLangCI }}
+            **Go critic linters check**: ${{ github.event.inputs.GoCritic }}
+            **Go security linters check**: ${{ github.event.inputs.GoSec }}
+            **Go unit testing**: ${{ github.event.inputs.Test }}
+            **Release check in tmux**: ${{ github.event.inputs.Release }}
+            **Build binary**: ${{ github.event.inputs.Binary }}
+            **Dockerfile linters check using Hadolint**: ${{ github.event.inputs.Dockerfile }}
+            **Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}
+
+            🚀 Result unit testing coverage: ${{ env.COVERAGE || 'n/a' }}
 
   build:
     runs-on: ubuntu-latest
