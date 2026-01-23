@@ -1,4 +1,4 @@
-# Build source code for different architectures
+# build source code for different architectures
 FROM golang:1.23-alpine3.20 AS build
 WORKDIR /lazyjournal
 COPY go.mod go.sum ./
@@ -26,8 +26,8 @@ RUN ARCH=$(case ${TARGETARCH} in \
 RUN latest=$(curl -sL https://dl.k8s.io/release/stable.txt) && \
     curl -fsSL https://cdn.dl.k8s.io/release/${latest}/bin/linux/${TARGETARCH}/kubectl -o /bin/kubectl
 
-# Build docker cli
-FROM golang:1.23-alpine3.20 AS docker-build
+# docker-cli-build
+FROM golang:1.23-alpine3.20 AS docker-cli-build
 RUN apk add -U -q --progress --no-cache git bash coreutils gcc musl-dev
 WORKDIR /go/src/github.com/docker/cli
 RUN git clone --branch v27.0.3 --single-branch --depth 1 https://github.com/docker/cli .
@@ -39,7 +39,7 @@ ENV DISABLE_WARN_OUTSIDE_CONTAINER=1
 RUN ./scripts/build/binary
 RUN mv build/docker-${TARGETOS}-${TARGETARCH} build/docker
 
-# Final image
+# build final image
 FROM debian:bookworm-slim
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
@@ -52,7 +52,7 @@ COPY --from=build /bin/lazyjournal /bin/lazyjournal
 COPY --from=build /bin/ttyd /bin/ttyd
 COPY --from=build /bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
 COPY --from=build /bin/kubectl /bin/kubectl
-COPY --from=docker-build /go/src/github.com/docker/cli/build/docker /bin/docker
+COPY --from=docker-cli-build /go/src/github.com/docker/cli/build/docker /bin/docker
 
 WORKDIR /lazyjournal
 COPY config.yml entrypoint.sh ./
