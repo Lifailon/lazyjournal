@@ -50,7 +50,7 @@ type Settings struct {
 	MinSymbolFilter     string `yaml:"minSymbolFilter"`
 	MouseDisable        string `yaml:"mouseDisable"`
 	WrapModeDisable     string `yaml:"wrapModeDisable"`
-	OnlyStream          string `yaml:"onlyStream"`
+	DockerStreamOnly    string `yaml:"dockerStreamOnly"`
 	DockerContext       string `yaml:"dockerContext"`
 	KubernetesContext   string `yaml:"kubernetesContext"`
 	KubernetesNamespace string `yaml:"kubernetesNamespace"`
@@ -292,7 +292,9 @@ type App struct {
 }
 
 func showHelp() {
-	fmt.Println("lazyjournal - A TUI for reading logs from journald, auditd, file system, Docker containers, Podman and Kubernetes pods.")
+	fmt.Println("lazyjournal - A TUI for viewing logs from journald, auditd, file system, Docker and Podman containers, Compose stacks and Kubernetes pods")
+	fmt.Println("with supports log highlighting and several filtering modes.")
+	fmt.Println()
 	fmt.Println("Source code: https://github.com/Lifailon/lazyjournal")
 	fmt.Println("If you have problems with the application, please open issue: https://github.com/Lifailon/lazyjournal/issues")
 	fmt.Println()
@@ -302,12 +304,12 @@ func showHelp() {
 	fmt.Println("    --config, -g               Show configuration of hotkeys and settings (check values)")
 	fmt.Println("    --audit, -a                Show audit information")
 	fmt.Println("    --tail-mode-disable, -d    Disable streaming of new events (log is loaded once without update)")
-	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 10K)")
-	fmt.Println("    --update, -u               Change the update interval of the log output (range: 2-10, default: 5)")
+	fmt.Println("    --tail-lines, -t           Change the number of log lines to output (range: 200-200000, default: 10K)")
+	fmt.Println("    --update-interval, -u      Change the update interval of the log output (range: 2-10, default: 5)")
 	fmt.Println("    --filter-symbols, -F       Minimum number of symbols for filtering output (range: 1-10, default: 3)")
 	fmt.Println("    --mouse-disable, -m        Disable mouse control support")
 	fmt.Println("    --wrap-disable, -w    		Disable wrap mode in log content")
-	fmt.Println("    --only-stream, -o          Force reading of Docker container logs in stream mode (by default from the file system)")
+	fmt.Println("    --docker-stream-only, -o   Force reading of Docker container logs in stream mode (by default from the file system)")
 	fmt.Println("    --docker-context, -D       Use the specified Docker context (default: default)")
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
 	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
@@ -345,7 +347,7 @@ func showConfig() {
 	fmt.Printf("  minSymbolFilter:          %s\n", config.Settings.MinSymbolFilter)
 	fmt.Printf("  mouseDisable:             %s\n", config.Settings.MouseDisable)
 	fmt.Printf("  wrapModeDisable:          %s\n", config.Settings.WrapModeDisable)
-	fmt.Printf("  onlyStream:               %s\n", config.Settings.OnlyStream)
+	fmt.Printf("  dockerStreamOnly:         %s\n", config.Settings.DockerStreamOnly)
 	fmt.Printf("  dockerContext:            %s\n", config.Settings.DockerContext)
 	fmt.Printf("  kubernetesContext:        %s\n", config.Settings.KubernetesContext)
 	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
@@ -809,6 +811,22 @@ var mapColorFromConfig = map[string]gocui.Attribute{
 	"white":   gocui.ColorWhite,
 }
 
+// Карта для хранения сокращенных значений количества логов для статуса
+var logViewCountMap = map[string]string{
+	"200":    "200",
+	"500":    "500",
+	"1000":   "1K",
+	"5000":   "5K",
+	"10000":  "10K",
+	"20000":  "20K",
+	"30000":  "30K",
+	"40000":  "40K",
+	"50000":  "50K",
+	"100000": "100K",
+	"150000": "150K",
+	"200000": "200K",
+}
+
 // Функция для опредиления название удаленной системы с timeout в 5 секунд
 func remoteGetOS(sshOptions []string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -919,9 +937,9 @@ func runGoCui(mock bool) {
 	flag.BoolVar(audit, "a", false, "Show audit information")
 	disableScroll := flag.Bool("tail-mode-disable", false, "Disable streaming of new events (log is loaded once without update)")
 	flag.BoolVar(disableScroll, "d", false, "Disable streaming of new events (log is loaded once without update)")
-	tailFlag := flag.String("tail", "10000", "Change the number of log lines to output (range: 200-200000, default: 10K)")
+	tailFlag := flag.String("tail-lines", "10000", "Change the number of log lines to output (range: 200-200000, default: 10K)")
 	flag.StringVar(tailFlag, "t", "10000", "Change the number of log lines to output (range: 200-200000, default: 10K)")
-	updateFlag := flag.Int("update", 5, "Change the update interval of the log output (range: 2-10, default: 5)")
+	updateFlag := flag.Int("update-interval", 5, "Change the update interval of the log output (range: 2-10, default: 5)")
 	flag.IntVar(updateFlag, "u", 5, "Change the update interval of the log output (range: 2-10, default: 5)")
 	minSymbolFilterFlag := flag.Int("filter-symbols", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
 	flag.IntVar(minSymbolFilterFlag, "F", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
@@ -929,7 +947,7 @@ func runGoCui(mock bool) {
 	flag.BoolVar(mouseDisable, "m", false, "Disable mouse control support")
 	wrapModeDisable := flag.Bool("wrap-disable", false, "Disable wrap mode in log content")
 	flag.BoolVar(wrapModeDisable, "w", false, "Disable wrap mode in log content")
-	dockerStreamFlag := flag.Bool("only-stream", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
+	dockerStreamFlag := flag.Bool("docker-stream-only", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
 	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
 	dockerContextFlag := flag.String("docker-context", "default", "Use the specified Docker context (default: default)")
 	flag.StringVar(dockerContextFlag, "D", "default", "Use the specified Docker context (default: default)")
@@ -1020,8 +1038,8 @@ func runGoCui(mock bool) {
 		}
 	}
 
-	if config.Settings.OnlyStream != "" && !*dockerStreamFlag {
-		if strings.EqualFold(config.Settings.OnlyStream, "true") {
+	if config.Settings.DockerStreamOnly != "" && !*dockerStreamFlag {
+		if strings.EqualFold(config.Settings.DockerStreamOnly, "true") {
 			trueFlag := true
 			dockerStreamFlag = &trueFlag
 		}
@@ -1586,7 +1604,7 @@ func (app *App) layout(g *gocui.Gui) error {
 				"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 				"Kubernetes context/namespace: \033[32m%s\033[0m/\033[32m%s\033[0m",
 			app.autoScroll,
-			app.logViewCount,
+			logViewCountMap[app.logViewCount],
 			app.logUpdateSeconds,
 			app.colorMode,
 			app.filterByDateStatus,
@@ -4220,7 +4238,6 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	} else {
 		containerId = app.lastContainerId
 	}
-	// Создаем контекст выполнения удаленных команд по ssh (timeout 5s)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// Читаем журналы Docker из файловой системы в формате JSON (если не отключено флагом и docker context default)
@@ -4836,7 +4853,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 // Функция для получения массива из названия контейнеров в заданном проекте Compose
 func (app *App) getContainersFromCompose(projectName string) []string {
 	var cmd *exec.Cmd
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if app.sshMode {
 		if app.dockerCompose == "docker-compose" {
@@ -5072,7 +5089,7 @@ func (app *App) updateStatus() {
 			"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 			"Kubernetes context/namespace: \033[32m%s\033[0m/\033[32m%s\033[0m",
 		app.autoScroll,
-		app.logViewCount,
+		logViewCountMap[app.logViewCount],
 		app.logUpdateSeconds,
 		app.colorMode,
 		app.filterByDateStatus,
@@ -8171,7 +8188,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help
-	width, height := 108, 42
+	width, height := 108, 43
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -8197,7 +8214,8 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "                  \033[32m                    |___/\033[0m")
 	fmt.Fprintln(helpView, "\n    Version: "+app.wordColor(programVersion))
 	fmt.Fprintln(helpView, "\n    Hotkeys description (default values):")
-	fmt.Fprintln(helpView, "\n      \033[32mTab\033[0m - switch to next window.")
+	fmt.Fprintln(helpView, "\n      \033[32mF2\033[0m - interface for ssh manager and contexts switching.")
+	fmt.Fprintln(helpView, "      \033[32mTab\033[0m - switch to next window.")
 	fmt.Fprintln(helpView, "      \033[32mShift\033[0m+\033[32mTab\033[0m - return to previous window.")
 	fmt.Fprintln(helpView, "      \033[32mUp\033[0m/\033[32mPgUp\033[0m/\033[32mk\033[0m and \033[32mDown\033[0m/\033[32mPgDown\033[0m/\033[32mj\033[0m - move up and down through all journal lists and log output,")
 	fmt.Fprintln(helpView, "      as well as changing the filtering mode in the filter window.")
@@ -8546,7 +8564,7 @@ func (app *App) nextViewManager(g *gocui.Gui, v *gocui.View, views []string) err
 // Функция для получения списка контекстов Docker
 func (app *App) getDockerContext() []string {
 	var cmd *exec.Cmd
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if app.sshMode {
 		cmd = exec.CommandContext(
@@ -8570,7 +8588,7 @@ func (app *App) getDockerContext() []string {
 // Функция для получения списка контекстов Kubernetes
 func (app *App) getKubernetesContext() []string {
 	var cmd *exec.Cmd
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if app.sshMode {
 		cmd = exec.CommandContext(
@@ -8594,7 +8612,7 @@ func (app *App) getKubernetesContext() []string {
 // Функция для получения списка контекстов Kubernetes
 func (app *App) getKubernetesNamespace() []string {
 	var cmd *exec.Cmd
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if app.sshMode {
 		cmd = exec.CommandContext(
