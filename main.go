@@ -44,10 +44,10 @@ type Config struct {
 
 // Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
 type Settings struct {
-	TailMode            string `yaml:"tailMode"`
+	TailModeDisable     string `yaml:"tailModeDisable"`
+	TailModeLines       string `yaml:"tailModeLines"`
 	UpdateInterval      string `yaml:"updateInterval"`
 	MinSymbolFilter     string `yaml:"minSymbolFilter"`
-	AutoUpdateDisable   string `yaml:"autoUpdateDisable"`
 	MouseDisable        string `yaml:"mouseDisable"`
 	WrapModeDisable     string `yaml:"wrapModeDisable"`
 	OnlyStream          string `yaml:"onlyStream"`
@@ -301,18 +301,18 @@ func showHelp() {
 	fmt.Println("    --version, -v              Show version")
 	fmt.Println("    --config, -g               Show configuration of hotkeys and settings (check values)")
 	fmt.Println("    --audit, -a                Show audit information")
-	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 10000)")
-	fmt.Println("    --update, -u               Change the auto refresh interval of the log output (range: 2-10, default: 5)")
+	fmt.Println("    --tail-mode-disable, -d    Disable streaming of new events (log is loaded once without update)")
+	fmt.Println("    --tail, -t                 Change the number of log lines to output (range: 200-200000, default: 10K)")
+	fmt.Println("    --update, -u               Change the update interval of the log output (range: 2-10, default: 5)")
 	fmt.Println("    --filter-symbols, -F       Minimum number of symbols for filtering output (range: 1-10, default: 3)")
-	fmt.Println("    --disable-autoupdate, -d   Disable streaming of new events (log is loaded once without automatic update)")
-	fmt.Println("    --disable-mouse, -m        Disable mouse control support")
-	fmt.Println("    --disable-timestamp, -i    Disable timestamp for Docker logs")
+	fmt.Println("    --mouse-disable, -m        Disable mouse control support")
+	fmt.Println("    --wrap-disable, -w    		Disable wrap mode in log content")
 	fmt.Println("    --only-stream, -o          Force reading of Docker container logs in stream mode (by default from the file system)")
 	fmt.Println("    --docker-context, -D       Use the specified Docker context (default: default)")
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
 	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
 	fmt.Println("    --path, -p                 Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
-	fmt.Println("    --color, -C                Color mode (available values: default, tailspin, bat or disable)")
+	fmt.Println("    --color, -C                Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
@@ -326,7 +326,7 @@ func showConfig() {
 	// Читаем конфигурацию (извлекаем путь и ошибки)
 	configPath, err := config.getConfig()
 
-	fmt.Println("path:", configPath)
+	fmt.Println("configPath:", configPath)
 	fmt.Println("---")
 
 	// Проверяем конфигурацию на ошибки
@@ -339,10 +339,10 @@ func showConfig() {
 	// fmt.Println(string(configData))
 	// Выводим полученные значения из конфигурации (форматированный вывод) с проверкой на пустые значения
 	fmt.Println("settings:")
-	fmt.Printf("  tailMode:                 %s\n", config.Settings.TailMode)
+	fmt.Printf("  tailModeDisable:          %s\n", config.Settings.TailModeDisable)
+	fmt.Printf("  tailModeLines:            %s\n", config.Settings.TailModeLines)
 	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
 	fmt.Printf("  minSymbolFilter:          %s\n", config.Settings.MinSymbolFilter)
-	fmt.Printf("  autoUpdateDisable:        %s\n", config.Settings.AutoUpdateDisable)
 	fmt.Printf("  mouseDisable:             %s\n", config.Settings.MouseDisable)
 	fmt.Printf("  wrapModeDisable:          %s\n", config.Settings.WrapModeDisable)
 	fmt.Printf("  onlyStream:               %s\n", config.Settings.OnlyStream)
@@ -401,10 +401,12 @@ func showConfig() {
 	fmt.Printf("  selectedTitleColor:       %s\n", config.Interface.SelectedTitleColor)
 	fmt.Printf("  errorColor:               %s\n", config.Interface.ErrorColor)
 
-	fmt.Println("ssh:")
-	fmt.Printf("  hosts:\n")
-	for _, sshHost := range config.Ssh.Hosts {
-		fmt.Printf("    - %s\n", sshHost)
+	if len(config.Ssh.Hosts) >= 1 {
+		fmt.Println("ssh:")
+		fmt.Printf("  hosts:\n")
+		for _, sshHost := range config.Ssh.Hosts {
+			fmt.Printf("    - %s\n", sshHost)
+		}
 	}
 }
 
@@ -915,14 +917,14 @@ func runGoCui(mock bool) {
 	flag.BoolVar(configFlag, "g", false, "Show configuration of hotkeys and settings (check values)")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
-	tailFlag := flag.String("tail", "10000", "Change the number of log lines to output (range: 200-200000, default: 10000)")
-	flag.StringVar(tailFlag, "t", "10000", "Change the number of log lines to output (range: 200-200000, default: 10000)")
-	updateFlag := flag.Int("update", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
-	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
+	disableScroll := flag.Bool("tail-mode-disable", false, "Disable streaming of new events (log is loaded once without update)")
+	flag.BoolVar(disableScroll, "d", false, "Disable streaming of new events (log is loaded once without update)")
+	tailFlag := flag.String("tail", "10000", "Change the number of log lines to output (range: 200-200000, default: 10K)")
+	flag.StringVar(tailFlag, "t", "10000", "Change the number of log lines to output (range: 200-200000, default: 10K)")
+	updateFlag := flag.Int("update", 5, "Change the update interval of the log output (range: 2-10, default: 5)")
+	flag.IntVar(updateFlag, "u", 5, "Change the update interval of the log output (range: 2-10, default: 5)")
 	minSymbolFilterFlag := flag.Int("filter-symbols", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
 	flag.IntVar(minSymbolFilterFlag, "F", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
-	disableScroll := flag.Bool("auto-update-disable", false, "Disable streaming of new events (log is loaded once without automatic update)")
-	flag.BoolVar(disableScroll, "d", false, "Disable streaming of new events (log is loaded once without automatic update)")
 	mouseDisable := flag.Bool("mouse-disable", false, "Disable mouse control support")
 	flag.BoolVar(mouseDisable, "m", false, "Disable mouse control support")
 	wrapModeDisable := flag.Bool("wrap-disable", false, "Disable wrap mode in log content")
@@ -937,8 +939,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
 	pathFlag := flag.String("path", "/opt", "Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
 	flag.StringVar(pathFlag, "p", "/opt", "Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
-	colorModeFlag := flag.String("color", "default", "Color mode (available values: default, tailspin, bat or disable)")
-	flag.StringVar(colorModeFlag, "C", "default", "Color mode (available values: default, tailspin, bat or disable)")
+	colorModeFlag := flag.String("color", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
+	flag.StringVar(colorModeFlag, "C", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
 	flag.BoolVar(commandColor, "c", false, "ANSI coloring in command line mode")
 	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
@@ -978,9 +980,16 @@ func runGoCui(mock bool) {
 		fmt.Println(errConfig)
 	}
 
-	// Если значение в конфигурации не пустое и значение флага по умолчанию
-	if config.Settings.TailMode != "" && *tailFlag == "10000" {
-		tailFlag = &config.Settings.TailMode
+	// Берем значение из конфигурации, если значение в конфигурации НЕ пустое и значение флага по умолчанию
+	if config.Settings.TailModeDisable != "" && !*disableScroll {
+		if strings.EqualFold(config.Settings.TailModeDisable, "true") {
+			trueFlag := true
+			disableScroll = &trueFlag
+		}
+	}
+
+	if config.Settings.TailModeLines != "" && *tailFlag == "10000" {
+		tailFlag = &config.Settings.TailModeLines
 	}
 
 	if config.Settings.UpdateInterval != "" && *updateFlag == 5 {
@@ -994,13 +1003,6 @@ func runGoCui(mock bool) {
 		minSymbolFilterInt, err := strconv.Atoi(config.Settings.MinSymbolFilter)
 		if err == nil {
 			minSymbolFilterFlag = &minSymbolFilterInt
-		}
-	}
-
-	if config.Settings.AutoUpdateDisable != "" && !*disableScroll {
-		if strings.EqualFold(config.Settings.AutoUpdateDisable, "true") {
-			trueFlag := true
-			disableScroll = &trueFlag
 		}
 	}
 
@@ -1089,9 +1091,9 @@ func runGoCui(mock bool) {
 		*tailFlag == "100000" || *tailFlag == "150000" || *tailFlag == "200000" {
 		app.logViewCount = *tailFlag
 	} else {
-		if *tailFlag != config.Settings.TailMode {
+		if *tailFlag != config.Settings.TailModeLines {
 			// Если ошибка в флаге, возвращяем ошибку
-			fmt.Println("Available values for tail mode: 200, 500, 1000, 5000, 10000, 20000, 30000, 40000, 50000, 100000, 150000 or 200000 (default: 10000 lines)")
+			fmt.Println("Available values for tail mode: 200, 500, 1000, 5000, 10000, 20000, 30000, 40000, 50000, 100000, 150000 or 200000 (default: 10K lines)")
 			os.Exit(1)
 		} else {
 			// Если ошибка в конфигурации (или значение не задано), задаем значение по умолчанию
@@ -1574,8 +1576,8 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Frame = false // Отключаем рамку для статуса
 		v.FgColor = app.foregroundColor
 		fmt.Fprintf(v,
-			" Tail: \033[32m%s\033[0m lines | "+
-				"Update: \033[32m%t\033[0m (\033[32m%d\033[0m sec) | "+
+			" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
+				"Update interval: \033[32m%d\033[0m sec | "+
 				"Color mode: \033[32m%s\033[0m | "+
 				"Filter by date: \033[32m%s\033[0m | "+
 				"Priority for journald: \033[32m%s\033[0m | "+
@@ -1583,8 +1585,8 @@ func (app *App) layout(g *gocui.Gui) error {
 				"SSH mode: \033[32m%s\033[0m | "+
 				"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 				"Kubernetes context/namespace: \033[32m%s\033[0m/\033[32m%s\033[0m",
-			app.logViewCount,
 			app.autoScroll,
+			app.logViewCount,
 			app.logUpdateSeconds,
 			app.colorMode,
 			app.filterByDateStatus,
@@ -5060,8 +5062,8 @@ func (app *App) updateStatus() {
 	}
 	vStatus.Clear()
 	fmt.Fprintf(vStatus,
-		" Tail: \033[32m%s\033[0m lines | "+
-			"Update: \033[32m%t\033[0m (\033[32m%d\033[0m sec) | "+
+		" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
+			"Update interval: \033[32m%d\033[0m sec | "+
 			"Color mode: \033[32m%s\033[0m | "+
 			"Filter by date: \033[32m%s\033[0m | "+
 			"Priority for journald: \033[32m%s\033[0m | "+
@@ -5069,8 +5071,8 @@ func (app *App) updateStatus() {
 			"SSH mode: \033[32m%s\033[0m | "+
 			"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 			"Kubernetes context/namespace: \033[32m%s\033[0m/\033[32m%s\033[0m",
-		app.logViewCount,
 		app.autoScroll,
+		app.logViewCount,
 		app.logUpdateSeconds,
 		app.colorMode,
 		app.filterByDateStatus,
@@ -7749,7 +7751,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// tail mode (Alt+Left/Right)
+	// tail mode "[" and "]"
 	// Переключение для количества строк вывода
 	customTailMore, altMode := getHotkey(config.Hotkeys.TailModeMore, "]")
 	if err := app.gui.SetKeybinding("", customTailMore, altMode, app.setCountLogViewUp); err != nil {
@@ -7760,7 +7762,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// update interval Shift+Left/Right
+	// update interval "{" and "}"
 	// Увеличение фоновго интервала обновления журнала
 	customUpdateIntervalMore, altMode := getHotkey(config.Hotkeys.UpdateIntervalMore, "}")
 	if err := app.gui.SetKeybinding("", customUpdateIntervalMore, altMode, func(g *gocui.Gui, v *gocui.View) error {
@@ -8209,9 +8211,9 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "      \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
 	fmt.Fprintln(helpView, "      \033[32mEnd\033[0m/\033[32mCtrl\033[0m+\033[32mE\033[0m - go to the end of the log.")
 	fmt.Fprintln(helpView, "      \033[32mHome\033[0m/\033[32mCtrl\033[0m+\033[32mA\033[0m - go to the top of the log.")
-	fmt.Fprintln(helpView, "      \033[32m[\033[0m/\033[32m]\033[0m - change the number of log lines to output (default: 10000, range: 200-200000).")
-	fmt.Fprintln(helpView, "      \033[32m{\033[0m/\033[32m}\033[0m - change the auto refresh interval of the log output (default: 5, range: 2-10).")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mU\033[0m - disable streaming of new events (log is loaded once without automatic update).")
+	fmt.Fprintln(helpView, "      \033[32m[\033[0m/\033[32m]\033[0m - change the number of log lines to output (range: 200-200000, default: 10K).")
+	fmt.Fprintln(helpView, "      \033[32m{\033[0m/\033[32m}\033[0m - change the update interval of the log output (range: 2-10, default: 5).")
+	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mU\033[0m - disable streaming of new events (log is loaded once without update).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mR\033[0m - update the current log output manually (relevant in disable streaming mode).")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mQ\033[0m - update all log lists.")
 	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - switch color mode between default, tailspin, bat or disable.")
