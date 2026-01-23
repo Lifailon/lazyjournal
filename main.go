@@ -47,9 +47,9 @@ type Settings struct {
 	TailMode            string `yaml:"tailMode"`
 	UpdateInterval      string `yaml:"updateInterval"`
 	MinSymbolFilter     string `yaml:"minSymbolFilter"`
-	DisableAutoUpdate   string `yaml:"disableAutoUpdate"`
-	DisableMouse        string `yaml:"disableMouse"`
-	DisableTimestamp    string `yaml:"disableTimestamp"`
+	AutoUpdateDisable   string `yaml:"autoUpdateDisable"`
+	MouseDisable        string `yaml:"mouseDisable"`
+	WrapModeDisable     string `yaml:"wrapModeDisable"`
 	OnlyStream          string `yaml:"onlyStream"`
 	DockerContext       string `yaml:"dockerContext"`
 	KubernetesContext   string `yaml:"kubernetesContext"`
@@ -168,6 +168,7 @@ type App struct {
 	colorMode              string   // режим покраски (default/tailspin/bat/disable)
 	colorActionsDisable    bool     // отключить покраску для действий
 	mouseSupport           bool     // включение/отключение поддержки мыши
+	wrapSupport            bool     // включение/отключение встроенного переноса строк в окне содержимого логов
 	dockerStreamLogs       bool     // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
 	dockerStreamLogsStatus string   // отображаемый режим чтения журнала Docker в статусе (в зависимости от прав доступа и флага)
 	dockerStreamMode       string   // переменная для хранения режима чтения потоков (stream, stdout или stderr)
@@ -341,9 +342,9 @@ func showConfig() {
 	fmt.Printf("  tailMode:                 %s\n", config.Settings.TailMode)
 	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
 	fmt.Printf("  minSymbolFilter:          %s\n", config.Settings.MinSymbolFilter)
-	fmt.Printf("  disableAutoUpdate:        %s\n", config.Settings.DisableAutoUpdate)
-	fmt.Printf("  disableMouse:             %s\n", config.Settings.DisableMouse)
-	fmt.Printf("  disableTimestamp:         %s\n", config.Settings.DisableTimestamp)
+	fmt.Printf("  autoUpdateDisable:        %s\n", config.Settings.AutoUpdateDisable)
+	fmt.Printf("  mouseDisable:             %s\n", config.Settings.MouseDisable)
+	fmt.Printf("  wrapModeDisable:          %s\n", config.Settings.WrapModeDisable)
 	fmt.Printf("  onlyStream:               %s\n", config.Settings.OnlyStream)
 	fmt.Printf("  dockerContext:            %s\n", config.Settings.DockerContext)
 	fmt.Printf("  kubernetesContext:        %s\n", config.Settings.KubernetesContext)
@@ -837,6 +838,7 @@ func runGoCui(mock bool) {
 		fastMode:                     true,
 		testMode:                     false,
 		mouseSupport:                 true,
+		wrapSupport:                  true,
 		dockerStreamLogs:             false,
 		dockerStreamMode:             "stream",
 		dockerContext:                "default",
@@ -919,12 +921,12 @@ func runGoCui(mock bool) {
 	flag.IntVar(updateFlag, "u", 5, "Change the auto refresh interval of the log output (range: 2-10, default: 5)")
 	minSymbolFilterFlag := flag.Int("filter-symbols", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
 	flag.IntVar(minSymbolFilterFlag, "F", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
-	disableScroll := flag.Bool("disable-autoupdate", false, "Disable streaming of new events (log is loaded once without automatic update)")
+	disableScroll := flag.Bool("auto-update-disable", false, "Disable streaming of new events (log is loaded once without automatic update)")
 	flag.BoolVar(disableScroll, "d", false, "Disable streaming of new events (log is loaded once without automatic update)")
-	disableMouse := flag.Bool("disable-mouse", false, "Disable mouse control support")
-	flag.BoolVar(disableMouse, "m", false, "Disable mouse control support")
-	disableTimeStamp := flag.Bool("disable-timestamp", false, "Disable timestamp for Docker logs")
-	flag.BoolVar(disableTimeStamp, "i", false, "Disable timestamp for Docker logs")
+	mouseDisable := flag.Bool("mouse-disable", false, "Disable mouse control support")
+	flag.BoolVar(mouseDisable, "m", false, "Disable mouse control support")
+	wrapModeDisable := flag.Bool("wrap-disable", false, "Disable wrap mode in log content")
+	flag.BoolVar(wrapModeDisable, "w", false, "Disable wrap mode in log content")
 	dockerStreamFlag := flag.Bool("only-stream", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
 	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
 	dockerContextFlag := flag.String("docker-context", "default", "Use the specified Docker context (default: default)")
@@ -995,24 +997,24 @@ func runGoCui(mock bool) {
 		}
 	}
 
-	if config.Settings.DisableAutoUpdate != "" && !*disableScroll {
-		if strings.EqualFold(config.Settings.DisableAutoUpdate, "true") {
+	if config.Settings.AutoUpdateDisable != "" && !*disableScroll {
+		if strings.EqualFold(config.Settings.AutoUpdateDisable, "true") {
 			trueFlag := true
 			disableScroll = &trueFlag
 		}
 	}
 
-	if config.Settings.DisableMouse != "" && !*disableMouse {
-		if strings.EqualFold(config.Settings.DisableMouse, "true") {
+	if config.Settings.MouseDisable != "" && !*mouseDisable {
+		if strings.EqualFold(config.Settings.MouseDisable, "true") {
 			trueFlag := true
-			disableMouse = &trueFlag
+			mouseDisable = &trueFlag
 		}
 	}
 
-	if config.Settings.DisableTimestamp != "" && !*disableTimeStamp {
-		if strings.EqualFold(config.Settings.DisableTimestamp, "true") {
+	if config.Settings.WrapModeDisable != "" && !*wrapModeDisable {
+		if strings.EqualFold(config.Settings.WrapModeDisable, "true") {
 			trueFlag := true
-			disableTimeStamp = &trueFlag
+			wrapModeDisable = &trueFlag
 		}
 	}
 
@@ -1126,12 +1128,12 @@ func runGoCui(mock bool) {
 		app.autoScroll = false
 	}
 
-	if *disableMouse {
+	if *mouseDisable {
 		app.mouseSupport = false
 	}
 
-	if *disableTimeStamp {
-		app.timestampDocker = false
+	if *wrapModeDisable {
+		app.wrapSupport = false
 	}
 
 	if *dockerStreamFlag {
@@ -1349,9 +1351,7 @@ func runGoCui(mock bool) {
 	g.SetManagerFunc(app.layout)
 
 	// Включить поддержку мыши
-	if app.mouseSupport {
-		g.Mouse = true
-	}
+	g.Mouse = app.mouseSupport
 
 	// Цветовая схема GUI
 	g.FgColor = app.foregroundColor // foreground (цвет текста по умолчанию)
@@ -1560,7 +1560,7 @@ func (app *App) layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Title = "Logs"
-		v.Wrap = true
+		v.Wrap = app.wrapSupport
 		v.Autoscroll = false
 		v.FrameColor = app.frameColor
 		v.TitleColor = app.titleColor
