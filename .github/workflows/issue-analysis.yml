@@ -22,18 +22,18 @@ jobs:
         uses: appleboy/telegram-action@master
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
-          to: ${{ secrets.TELEGRAM_TO_CHANNEL }}
-          format: html
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           debug: true
+          format: markdown
           message: |
-            🔔 <b>Action</b>: ${{ github.event_name }} (${{ github.event.action }})
+            🔔 **Action**: ${{ github.event_name }} (${{ github.event.action }})
 
-            📁 <b>Repository</b>: ${{ github.repository }}
-            👤 <b>From user</b>: ${{ github.actor }}
-            🔗 <a href="${{ github.event.comment.html_url || github.event.issue.html_url }}">Open an issue on GitHub</a>
+            📁 **Repository**: ${{ github.repository }}
+            👤 **From user**: ${{ github.actor }}
+            🔗 **Link**: [GitHub issue #${{ github.event.issue.number }}](${{ github.event.comment.html_url || github.event.issue.html_url }})
 
-            📌 <b>Title</b>: ${{ github.event.issue.title }}
-            💬 <b>Description</b>:
+            📌 **Title**: ${{ github.event.issue.title }}
+            💬 **Description**:
             ${{ github.event.comment.body || github.event.issue.body }}
 
       - name: Generate report using AI
