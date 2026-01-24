@@ -297,7 +297,7 @@ jobs:
           echo "DOCKER_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "Docker coverage: $coverTotal"
           echo "- 🐳 **Docker**: $coverTotal" >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" > all-report.md
+          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Check coverage report for macOS
         run: |
@@ -336,6 +336,7 @@ jobs:
           title="File Line Function Coverage"
           separator="- - - -"
           echo "# 📚 Merge test results" >> $GITHUB_STEP_SUMMARY
+          echo "Test coverage results for all functions:" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo -e "$title\n$separator\n$mdReport")
           echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
@@ -401,7 +402,7 @@ jobs:
           cat "test-linux-report.md" >> all-report.md
           echo "# 🍏 macOS" >> all-report.md
           cat "test-macos-report.md" >> all-report.md
-          echo "# 🏠 Windows" >> all-report.md
+          echo "# 💻 Windows" >> all-report.md
           cat "test-windows-report.md" >> all-report.md
 
       - name: Upload final report
