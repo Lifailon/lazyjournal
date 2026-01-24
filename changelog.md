@@ -1,3 +1,41 @@
+## Release 0.8.4
+
+### New features
+
+- Added AI-powered pipelines for PR and commit review.
+- Introduced automated AI analysis for releases and issues.
+- Implemented the ability to send build, CI, release, and issue reports to Telegram.
+- Added line reduction feature for tail mode in status view; updated default line value to 40,000 for tail.
+- Provided additional flags in configuration, such as disabling wrap mode and timestamp, as well as handling list of SSH hosts and prefix options for container names.
+- Enhanced container log retrieval capabilities, including for all containers and with improved pod/container name prefixing.
+- Expanded support for redrawing windows when changing OS.
+- Improved error handling for SSH connection and output processing.
+- Added base interface and context handling for manager, including nextView and status management.
+- Introduced hotkey support and functionality to fill out context and namespace for manager.
+- Added new viewing options for build paths and status views.
+- Enabled new jobs, run-names, and pipeline organization within workflows.
+- Provided docker and compose context usage in SSH mode.
+- Implemented timeout features for SSH mode and for docker/compose commands.
+- Enhanced journalctl command handling with service name arguments and "all mode" for logs.
+- Added priority indicators for commands and improved status color coding.
+- Extended analysis with a specific tag parameter and updated AI model (GPT-4.1) for issue analysis.
+- Added documentation on DeepWiki and improved config path handling.
+- Added interface for managing host commands in SSH mode status.
+
+### Fixes
+
+- Resolved coloring issues for container names, statuses, and service name arguments in compose and journalctl commands.
+- Fixed comment formatting for linter checks.
+- Addressed processing and handling of SSH connection errors.
+- Corrected Telegram notifications for issue alerts and improved messaging for HTML issues.
+- Fixed switch behavior for Kubernetes namespace changes.
+- Amended default key handling for tail and update features.
+- Corrected status titles and fixed status logic for improved reliability.
+- Removed outdated roadmap documentation.
+- Ordered release report addition for better workflow clarity.
+- Improved status updates and prefix handling in compose and Kubernetes environments.
+
+
 ## Release 0.8.3
 
 ### New features
