@@ -352,7 +352,7 @@ jobs:
     name: Docker build on ${{ github.event.inputs.Distro }}
 
     env:
-      VERSION: 'n/a'
+      VERSION: 'latest'
 
     steps:
     - name: Checkout repository
