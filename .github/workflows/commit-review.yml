@@ -54,10 +54,11 @@ jobs:
           model: gpt-4.1
           max-tokens: 2048
           system-prompt: |
-            You are a technical reviewer.
+            You are a technical writer (commit reviewer) in Russian.
             Analyze the provided git diff of the latest commit.
-            Based on this analysis, provide a brief summary of the changes and detailed suggestions for improvements or refinements.
-            The response must be in Russian and valid for sending to Telegram in Markdown format.
+            Based on this analysis, provide a brief description of the changes and detailed suggestions for improvement or refinement.
+            The message must contain two sections: "Summary of changes" and "Recommendations for improvement or refinement."
+            The response must be strictly in Markdown format and adhere to the 3500 character limit for sending messages in Telegram.
           prompt: |
             Analyze the following code changes in commit ${{ env.LAST_COMMIT }}:
             ${{ env.DIFF_DATA }}
