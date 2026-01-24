@@ -292,10 +292,9 @@ type App struct {
 }
 
 func showHelp() {
-	fmt.Println("lazyjournal - A TUI for viewing logs from journald, auditd, file system, Docker and Podman containers, Compose stacks and Kubernetes pods")
-	fmt.Println("with supports log highlighting and several filtering modes.")
+	fmt.Println("lazyjournal - A TUI for viewing logs from journald, auditd, file system, Docker and Podman containers,")
+	fmt.Println("Compose stacks and Kubernetes pods with supports log highlighting and several filtering modes.")
 	fmt.Println()
-	fmt.Println("Source code: https://github.com/Lifailon/lazyjournal")
 	fmt.Println("If you have problems with the application, please open issue: https://github.com/Lifailon/lazyjournal/issues")
 	fmt.Println()
 	fmt.Println("  Flags:")
@@ -308,7 +307,7 @@ func showHelp() {
 	fmt.Println("    --update-interval, -u      Change the update interval of the log output (range: 2-10, default: 5)")
 	fmt.Println("    --filter-symbols, -F       Minimum number of symbols for filtering output (range: 1-10, default: 3)")
 	fmt.Println("    --mouse-disable, -m        Disable mouse control support")
-	fmt.Println("    --wrap-disable, -w    		Disable wrap mode in log content")
+	fmt.Println("    --wrap-disable, -w         Disable wrap mode in log content")
 	fmt.Println("    --docker-stream-only, -o   Force reading of Docker container logs in stream mode (by default from the file system)")
 	fmt.Println("    --docker-context, -D       Use the specified Docker context (default: default)")
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")

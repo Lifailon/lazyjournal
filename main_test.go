@@ -53,7 +53,7 @@ func TestWinFiles(t *testing.T) {
 			app := &App{
 				selectPath:       tc.selectPath,
 				testMode:         true,
-				logViewCount:     "50000",
+				logViewCount:     "10000",
 				logUpdateSeconds: 5,
 				getOS:            "windows",
 				// Режим и текст для фильтрации
@@ -128,7 +128,7 @@ func TestWinEvents(t *testing.T) {
 
 	app := &App{
 		testMode:           true,
-		logViewCount:       "50000",
+		logViewCount:       "10000",
 		logUpdateSeconds:   5,
 		getOS:              "windows",
 		systemDisk:         "C",
@@ -192,7 +192,7 @@ func TestUnixFiles(t *testing.T) {
 			app := &App{
 				selectPath:         tc.selectPath,
 				testMode:           true,
-				logViewCount:       "50000",
+				logViewCount:       "10000",
 				logUpdateSeconds:   5,
 				getOS:              "linux",
 				userName:           "lifailon",
@@ -262,7 +262,7 @@ func TestLinuxJournal(t *testing.T) {
 			app := &App{
 				selectUnits:        tc.journalName,
 				testMode:           true,
-				logViewCount:       "50000",
+				logViewCount:       "10000",
 				logUpdateSeconds:   5,
 				getOS:              "linux",
 				selectFilterMode:   "fuzzy",
@@ -326,7 +326,7 @@ func TestDockerContainer(t *testing.T) {
 			app := &App{
 				selectContainerizationSystem: tc.selectContainerizationSystem,
 				testMode:                     true,
-				logViewCount:                 "50000",
+				logViewCount:                 "10000",
 				logUpdateSeconds:             5,
 				selectFilterMode:             "fuzzy",
 				filterText:                   "",
@@ -370,7 +370,7 @@ func TestColor(t *testing.T) {
 
 	app := &App{
 		testMode:           true,
-		logViewCount:       "50000",
+		logViewCount:       "10000",
 		logUpdateSeconds:   5,
 		selectPath:         "/home/",
 		filterListText:     "color",
@@ -434,7 +434,7 @@ func TestExtColor(t *testing.T) {
 	app := &App{
 		testMode:         true,
 		colorMode:        "tailspin",
-		logViewCount:     "50000",
+		logViewCount:     "10000",
 		logUpdateSeconds: 5,
 		selectPath:       "/home/",
 		filterListText:   "color",
@@ -485,7 +485,7 @@ func TestFilter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app := &App{
 				testMode:           true,
-				logViewCount:       "50000",
+				logViewCount:       "10000",
 				logUpdateSeconds:   5,
 				selectPath:         "/home/",
 				filterListText:     "color",
@@ -566,7 +566,7 @@ func TestCommandColor(t *testing.T) {
 		selectPath:                   "/var/log/",
 		selectContainerizationSystem: "docker",
 		selectFilterMode:             "default",
-		logViewCount:                 "50000",
+		logViewCount:                 "10000",
 		logUpdateSeconds:             5,
 		journalListFrameColor:        gocui.ColorDefault,
 		fileSystemFrameColor:         gocui.ColorDefault,
@@ -649,7 +649,7 @@ func TestCommandFuzzyFilter(t *testing.T) {
 		selectPath:                   "/var/log/",
 		selectContainerizationSystem: "docker",
 		selectFilterMode:             "default",
-		logViewCount:                 "50000",
+		logViewCount:                 "10000",
 		logUpdateSeconds:             5,
 		journalListFrameColor:        gocui.ColorDefault,
 		fileSystemFrameColor:         gocui.ColorDefault,
@@ -695,7 +695,7 @@ func TestCommandRegexFilter(t *testing.T) {
 		selectPath:                   "/var/log/",
 		selectContainerizationSystem: "docker",
 		selectFilterMode:             "default",
-		logViewCount:                 "50000",
+		logViewCount:                 "10000",
 		logUpdateSeconds:             5,
 		journalListFrameColor:        gocui.ColorDefault,
 		fileSystemFrameColor:         gocui.ColorDefault,
@@ -751,7 +751,7 @@ func TestMockInterface(t *testing.T) {
 		selectPath:                   "/var/log/",
 		selectContainerizationSystem: "docker",
 		selectFilterMode:             "default",
-		logViewCount:                 "50000",
+		logViewCount:                 "10000",
 		logUpdateSeconds:             5,
 		journalListFrameColor:        gocui.ColorDefault,
 		fileSystemFrameColor:         gocui.ColorDefault,
@@ -890,11 +890,21 @@ func TestMockInterface(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	// F1
+	// Check help (F1)
 	app.showInterfaceHelp(g)
 	app.closeHelp(g)
+	if debug {
+		t.Log("\033[32mPASS\033[0m: test help interface (F1)")
+	}
 
-	// Проверяем покраску
+	// Check ssh and context manager (F2)
+	app.showInterfaceManager(g)
+	app.closeManager(g)
+	if debug {
+		t.Log("\033[32mPASS\033[0m: test ssh and context manager interface (F2)")
+	}
+
+	// Check highlighting (coloring)
 	app.currentLogLines = []string{
 		"http://127.0.0.1:8443",
 		"https://github.com/Lifailon/lazyjournal",
@@ -912,7 +922,7 @@ func TestMockInterface(t *testing.T) {
 	app.applyFilter(true)
 	time.Sleep(3 * time.Second)
 	if debug {
-		t.Log("\033[32mPASS\033[0m: test coloring")
+		t.Log("\033[32mPASS\033[0m: test highlighting (coloring)")
 	}
 
 	// Обновить вывод лога
@@ -1257,71 +1267,95 @@ func TestMockInterface(t *testing.T) {
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 	if v, err := g.View("logs"); err == nil {
-		// Default: 50000
-		// Вверх
+		// Up tail
 		if debug {
-			t.Log("\033[33mDEBUG\033[0m: Up tail (Ctrl+X)")
+			t.Log("\033[33mDEBUG\033[0m: Up tail")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 100000")
+			t.Log("\033[32mPASS\033[0m: Tail 20K")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 150000")
+			t.Log("\033[32mPASS\033[0m: Tail 30K")
+		}
+		app.setCountLogViewUp(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 40K")
+		}
+		app.setCountLogViewUp(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 50K")
+		}
+		app.setCountLogViewUp(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 100K")
+		}
+		app.setCountLogViewUp(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 150K")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 200000")
+			t.Log("\033[32mPASS\033[0m: Tail 200K")
 		}
-		// Вниз
+		// Down tail
 		if debug {
-			t.Log("\033[33mDEBUG\033[0m: Down tail (Ctrl+Z)")
-		}
-		app.setCountLogViewDown(g, v)
-		time.Sleep(1 * time.Second)
-		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 150000")
+			t.Log("\033[33mDEBUG\033[0m: Down tail")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 100000")
+			t.Log("\033[32mPASS\033[0m: Tail 150K")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 50000")
+			t.Log("\033[32mPASS\033[0m: Tail 100K")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 30000")
+			t.Log("\033[32mPASS\033[0m: Tail 50K")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 20000")
+			t.Log("\033[32mPASS\033[0m: Tail 40K")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 10000")
+			t.Log("\033[32mPASS\033[0m: Tail 30K")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 5000")
+			t.Log("\033[32mPASS\033[0m: Tail 20K")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 1000")
+			t.Log("\033[32mPASS\033[0m: Tail 10K (default)")
+		}
+		app.setCountLogViewDown(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 5K")
+		}
+		app.setCountLogViewDown(g, v)
+		time.Sleep(1 * time.Second)
+		if debug {
+			t.Log("\033[32mPASS\033[0m: Tail 1K")
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
@@ -1335,9 +1369,9 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			t.Log("\033[32mPASS\033[0m: Tail 200")
 		}
-		// Вверх
+		// Up tail (return)
 		if debug {
-			t.Log("\033[33mDEBUG\033[0m: Up tail (Ctrl+X)")
+			t.Log("\033[33mDEBUG\033[0m: Up tail (return)")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
@@ -1347,81 +1381,65 @@ func TestMockInterface(t *testing.T) {
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 1000")
+			t.Log("\033[32mPASS\033[0m: Tail 1K")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 5000")
+			t.Log("\033[32mPASS\033[0m: Tail 5K")
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 10000")
+			t.Log("\033[32mPASS\033[0m: Tail 10K")
 		}
-		app.setCountLogViewUp(g, v)
-		time.Sleep(1 * time.Second)
-		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 20000")
-		}
-		app.setCountLogViewUp(g, v)
-		time.Sleep(1 * time.Second)
-		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 30000")
-		}
-		app.setCountLogViewUp(g, v)
-		time.Sleep(1 * time.Second)
-		if debug {
-			t.Log("\033[32mPASS\033[0m: Tail 50000")
-		}
-		// Поднять журнал на 1
+		// Up logs output on 1
 		if debug {
 			t.Log("\033[33mDEBUG\033[0m: Up logs output on 1")
 		}
 		app.scrollUpLogs(1)
 		time.Sleep(1 * time.Second)
-		// Поднять журнал на 10
+		// Up logs output on 10
 		if debug {
 			t.Log("\033[33mDEBUG\033[0m: Up logs output on 10 (Shift+Up)")
 		}
 		app.scrollUpLogs(10)
 		time.Sleep(1 * time.Second)
-		// Поднять журнал на 500
+		// Up logs output on 500
 		if debug {
 			t.Log("\033[33mDEBUG\033[0m: Up logs output on 500 (Alt+Up)")
 		}
 		app.scrollUpLogs(500)
 		time.Sleep(1 * time.Second)
-		// Поднять журнал еще на 500
 		app.scrollUpLogs(500)
 		time.Sleep(1 * time.Second)
-		// Опустить журнал на 1
+		// Down logs output on 1
 		if debug {
 			t.Log("\033[33mDEBUG\033[0m: Down logs output on 1")
 		}
 		app.scrollDownLogs(1)
 		time.Sleep(1 * time.Second)
-		// Опустить журнал на 10
+		// Down logs output on 10
 		if debug {
 			t.Log("\033[33mDEBUG\033[0m: Down logs output on 10 (Shift+Down)")
 		}
 		app.scrollDownLogs(10)
 		time.Sleep(1 * time.Second)
-		// Опустить журнал на 500
+		// Down logs output on 500
 		if debug {
-			t.Log("\033[33mDEBUG\033[0m: Down logs output on 10 (Alt+Down)")
+			t.Log("\033[33mDEBUG\033[0m: Down logs output on 500 (Alt+Down)")
 		}
 		app.scrollDownLogs(500)
 		time.Sleep(1 * time.Second)
-		// Поднять журнал в самый вверх
+		// Move log output to top
 		if debug {
-			t.Log("\033[33mDEBUG\033[0m: Up logs output (Ctrl+A/Home)")
+			t.Log("\033[33mDEBUG\033[0m: Move log output to top (Ctrl+A/Home)")
 		}
 		app.pageUpLogs()
 		time.Sleep(1 * time.Second)
-		// Опустить журнал в самый низ
+		// Move log output to down
 		if debug {
-			t.Log("\033[33mDEBUG\033[0m: Down logs output (Ctrl+E/End)")
+			t.Log("\033[33mDEBUG\033[0m: Move log output to down (Ctrl+E/End)")
 		}
 		app.updateLogsView(true)
 		time.Sleep(1 * time.Second)
