@@ -56,7 +56,7 @@ run-name: "Build #${{ github.run_number }} on ${{ github.event.inputs.Distro }}"
 
 jobs:
   test:
-    name: Tests on ${{ github.event.inputs.Distro }}
+    name: Testing on ${{ github.event.inputs.Distro }}
 
     runs-on: ${{ github.event.inputs.Distro }}
 
@@ -349,7 +349,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    name: Build on ubuntu-latest
+    name: Docker build on ${{ github.event.inputs.Distro }}
+
+    env:
+      VERSION: 'n/a'
 
     steps:
     - name: Checkout repository
@@ -463,3 +466,18 @@ jobs:
           --platform linux/amd64,linux/arm64 \
           -t lifailon/lazyjournal:$version \
           --push .
+
+    - name: Send report to Telegram
+      uses: appleboy/telegram-action@master
+      with:
+        token: ${{ secrets.TELEGRAM_API_TOKEN }}
+        to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+        debug: true
+        format: markdown
+        message: |
+          🔔 **Action**: build docker image
+
+          📁 **Repository**: ${{ github.repository }}
+          👤 **User**: ${{ github.actor }}
+          
+          🔗 **Docker Hub tag**: [${{ env.VERSION }}](https://hub.docker.com/layers/lifailon/lazyjournal/${{ env.VERSION }})

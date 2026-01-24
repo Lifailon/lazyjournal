@@ -89,6 +89,7 @@ jobs:
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
           to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
           format: markdown
           message: |
             🔔 **Action**: ${{ env.LATEST_TAG }} release

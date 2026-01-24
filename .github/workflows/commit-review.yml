@@ -38,6 +38,7 @@ jobs:
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
           to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
           format: markdown
           message: |
             🔔 **Action**: commit [${{ env.LAST_COMMIT }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
@@ -68,6 +69,7 @@ jobs:
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
           to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
           format: markdown
           message: |
             🔔 Report for ${{ env.LAST_COMMIT }} commit from AI
