@@ -1,0 +1,86 @@
+name: Snapcraft Build and Push 
+
+on:
+  workflow_dispatch:
+    inputs:
+      Snapcraft:
+        description: 'Publish to Snapcraft'
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.25
+
+    - name: Install packages for build
+      run: |
+        sudo apt update
+        sudo apt install -y snapd
+        snap version
+        sudo snap install snapcraft --classic
+        snapcraft version
+
+    - name: Generate snapcraft config
+      run: |
+          cat <<'EOF' > snapcraft.yaml
+          name: lazyjournal
+          version: 'latest'
+          summary: A TUI for reading logs from journald, auditd, file system and containers.
+          description: |
+            Terminal user interface for reading logs from journald, auditd, file system, Docker and Podman containers, as well Kubernetes pods for quick viewing and filtering with fuzzy find, regex support and coloring the output, written in Go with the gocui.
+          base: core20
+          confinement: classic
+          architectures:
+            - amd64
+          apps:
+            lazyjournal:
+              command: bin/lazyjournal
+          parts:
+            lazyjournal:
+                plugin: dump
+                source: .
+                override-build: |
+                  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/lazyjournal-latest-linux-amd64
+                  mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+                  cp ./bin/lazyjournal-latest-linux-amd64 $SNAPCRAFT_PART_INSTALL/bin/lazyjournal
+          EOF
+
+    - name: Build snap package for amd64 and arm64
+      run: |
+        version=$(go run main.go -v)
+        sed -i "s/latest/$version/g" snapcraft.yaml
+        mkdir packages
+        for arch in amd64 arm64; do
+          sed -i "s/latest/$arch/g" snapcraft.yaml
+          snapcraft --destructive-mode
+          mv *.snap packages/lazyjournal-$version-$arch.snap
+          sed -i "s/$arch/latest/g" snapcraft.yaml
+        done
+
+    - name: Check install snap package
+      run: |
+        sudo snap install packages/*-amd64.snap --dangerous --classic
+        lazyjournal --version
+        snap remove lazyjournal
+
+    - name: Upload snap package
+      uses: actions/upload-artifact@v4
+      with:
+        name: snap-package
+        path: lazyjournal*.snap
+
+    - name: Login and push to Snapcraft
+      if: ${{ github.event.inputs.Snapcraft == 'true' }}
+      run: |
+        # snapcraft export-login --snaps lazyjournal snap-login.txt
+        export SNAPCRAFT_STORE_CREDENTIALS="${{ secrets.SNAPCRAFT_SECRET }}"
+        snapcraft push packages/*-amd64.snap
