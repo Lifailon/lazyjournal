@@ -427,7 +427,7 @@ jobs:
       run: |
         # sudo dpkg -i bin/lazyjournal-$VERSION-amd64.deb
         # sudo dpkg -r lazyjournal
-        sudo apt install -y bin/lazyjournal-$VERSION-amd64.deb
+        sudo apt install -y ./bin/lazyjournal-$VERSION-amd64.deb
         lazyjournal -v
         sudo apt remove -y lazyjournal
 
