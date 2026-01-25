@@ -17,8 +17,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (main branch and 1 last commits)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: main
 
       - name: Send message to Telegram
         uses: appleboy/telegram-action@master

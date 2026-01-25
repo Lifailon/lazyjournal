@@ -21,7 +21,7 @@ jobs:
       DIFF_DATA: ''
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (main branch and 2 last commits)
         uses: actions/checkout@v4
         with:
           fetch-depth: 2

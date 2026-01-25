@@ -1,4 +1,4 @@
-name: Docker Build and Push from specified commit
+name: Build Docker image and Push from specified commit
 
 on:
   workflow_dispatch:
@@ -14,12 +14,12 @@ on:
 
 jobs:
   build:
-    name: Build on ubuntu-latest
+    name: Docker build on ubuntu-latest
 
     runs-on: ubuntu-latest
 
     steps:
-      - name: Clone main repository
+      - name: Checkout repository (main branch and all commits)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
