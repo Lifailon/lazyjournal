@@ -68,6 +68,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: main
 
       - name: Install Go
         uses: actions/setup-go@v5
@@ -357,6 +360,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+        ref: main
 
     - name: Install Go
       uses: actions/setup-go@v5
@@ -421,20 +427,22 @@ jobs:
     - name: Check install deb package
       if: ${{ github.event.inputs.Binary == 'true' }}
       run: |
-        sudo dpkg -i bin/lazyjournal-$version-amd64.deb
+        # sudo dpkg -i bin/lazyjournal-$version-amd64.deb
+        # sudo dpkg -r lazyjournal
+        sudo apt install -y bin/lazyjournal-$version-amd64.deb
         lazyjournal -v
-        sudo dpkg -r lazyjournal
+        sudo apt remove -y lazyjournal
 
     - name: Update version to README for install deb package
       if: ${{ github.event.inputs.README == 'true' }}
       run: | 
         version=$VERSION
-        sed -iE "s|releases/download/[0-9.]+/lazyjournal-[0-9.]+-|releases/download/$version/lazyjournal-$version-|" README.md
+        sed -i -E "s|releases/download/[0-9.]+/lazyjournal-[0-9.]+-|releases/download/$version/lazyjournal-$version-|" README.md
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add $REPORT_FILE
+        git add README.md
         git commit -m "update version on $version for install deb package"
-        git push
+        git push origin main
 
     - name: Upload binaries
       if: ${{ github.event.inputs.Binary == 'true' }}
