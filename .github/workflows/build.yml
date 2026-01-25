@@ -378,7 +378,7 @@ jobs:
         go mod verify
         go build -v ./...
 
-    - name: Get version in env for build
+    - name: Get app version in gh env for build
       run: |
         version=$(go run main.go -v)
         echo "VERSION=$version" >> $GITHUB_ENV
@@ -386,13 +386,12 @@ jobs:
     - name: Build binaries
       if: ${{ github.event.inputs.Binary == 'true' }}
       run: |
-        version=$VERSION
         mkdir -p bin
         architectures=("amd64" "arm64")
         oss=("linux" "darwin" "openbsd" "freebsd" "windows")
         for arch in "${architectures[@]}"; do
             for os in "${oss[@]}"; do
-                binName="bin/lazyjournal-$version-$os-$arch"
+                binName="bin/lazyjournal-$VERSION-$os-$arch"
                 if [[ "$os" == "windows" ]]; then
                     binName="$binName.exe"
                 fi
@@ -400,48 +399,46 @@ jobs:
             done 
         done
         ls -lh bin
-        echo "ARTIFACT_NAME=lazyjournal-$version" >> $GITHUB_ENV
+        echo "ARTIFACT_NAME=lazyjournal-$VERSION" >> $GITHUB_ENV
 
     - name: Build deb package
       if: ${{ github.event.inputs.Binary == 'true' }}
       run: |
-        version=$VERSION
         rm -f lazyjournal
         mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
         architectures=("amd64" "arm64")
         for arch in "${architectures[@]}"; do
             rm -f lazyjournal/usr/local/bin/lazyjournal
-            cp bin/lazyjournal-$version-linux-$arch lazyjournal/usr/local/bin/lazyjournal
+            cp bin/lazyjournal-$VERSION-linux-$arch lazyjournal/usr/local/bin/lazyjournal
             rm -f lazyjournal/DEBIAN/control
             echo "Package: lazyjournal" > lazyjournal/DEBIAN/control
-            echo "Version: $version" >> lazyjournal/DEBIAN/control
+            echo "Version: $VERSION" >> lazyjournal/DEBIAN/control
             echo "Architecture: $arch" >> lazyjournal/DEBIAN/control
             echo "Maintainer: https://github.com/Lifailon" >> lazyjournal/DEBIAN/control
             echo "Description: TUI for viewing logs from journald, auditd, file system, Docker and Podman containers, Compose stacks and Kubernetes pods." >> lazyjournal/DEBIAN/control
-            dpkg-deb --build lazyjournal lazyjournal-$version-$arch.deb
-            dpkg-deb --contents lazyjournal-$version-$arch.deb
-            mv lazyjournal-$version-$arch.deb bin/lazyjournal-$version-$arch.deb
+            dpkg-deb --build lazyjournal lazyjournal-$VERSION-$arch.deb
+            dpkg-deb --contents lazyjournal-$VERSION-$arch.deb
+            mv lazyjournal-$VERSION-$arch.deb bin/lazyjournal-$VERSION-$arch.deb
         done
         ls -lh bin/*.deb
 
     - name: Check install deb package
       if: ${{ github.event.inputs.Binary == 'true' }}
       run: |
-        # sudo dpkg -i bin/lazyjournal-$version-amd64.deb
+        # sudo dpkg -i bin/lazyjournal-$VERSION-amd64.deb
         # sudo dpkg -r lazyjournal
-        sudo apt install -y bin/lazyjournal-$version-amd64.deb
+        sudo apt install -y bin/lazyjournal-$VERSION-amd64.deb
         lazyjournal -v
         sudo apt remove -y lazyjournal
 
     - name: Update version to README for install deb package
       if: ${{ github.event.inputs.README == 'true' }}
       run: | 
-        version=$VERSION
-        sed -i -E "s|releases/download/[0-9.]+/lazyjournal-[0-9.]+-|releases/download/$version/lazyjournal-$version-|" README.md
+        sed -i -E "s|releases/download/[0-9.]+/lazyjournal-[0-9.]+-|releases/download/$VERSION/lazyjournal-$VERSION-|" README.md
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add README.md
-        git commit -m "update version on $version for install deb package"
+        git commit -m "update version on $VERSION for install deb package"
         git push origin main
 
     - name: Upload binaries
@@ -485,10 +482,9 @@ jobs:
           --platform linux/amd64,linux/arm64 \
           -t lifailon/lazyjournal:latest \
           --push .
-        version=$VERSION
         docker buildx build \
           --platform linux/amd64,linux/arm64 \
-          -t lifailon/lazyjournal:$version \
+          -t lifailon/lazyjournal:$VERSION \
           --push .
 
     - name: Send report to Telegram
