@@ -115,8 +115,7 @@ This command will run a script that will download the latest binary (auto-detect
 If you are using Ubuntu or any other Debian-based system, you can also download the `deb` package to manage installation and removal:
 
 ```bash
-VERSION=$(curl -sSL -H 'Accept: application/json' https://github.com/Lifailon/lazyjournal/releases/latest | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
-curl -L -sS https://github.com/Lifailon/lazyjournal/releases/download/$VERSION/lazyjournal-$VERSION-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
+curl -sSL https://github.com/Lifailon/lazyjournal/releases/download/0.8.4/lazyjournal-0.8.4-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
 sudo apt install /tmp/lazyjournal.deb && rm /tmp/lazyjournal.deb
 ```
 
@@ -157,7 +156,7 @@ Download the [docker-compose](/docker-compose.yml) file and run the container us
 
 ```bash
 mkdir lazyjournal && cd lazyjournal
-curl https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/docker-compose.yml -o docker-compose.yml
+curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/docker-compose.yml -o docker-compose.yml
 docker compose up -d
 docker exec -it lazyjournal lazyjournal
 ```

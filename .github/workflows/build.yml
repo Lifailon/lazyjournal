@@ -43,12 +43,12 @@ on:
         description: 'Build binary'
         default: false
         type: boolean
-      Docker:
-        description: 'Docker build and push on Docker Hub'
+      README:
+        description: 'Update version in README'
         default: false
         type: boolean
-      Dockerfile:
-        description: 'Dockerfile linters check'
+      Docker:
+        description: 'Docker build and push on Docker Hub'
         default: false
         type: boolean
 
@@ -109,8 +109,8 @@ jobs:
           echo "- **Go unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Release check in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build binary**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Dockerfile linters check using [Hadolint](https://github.com/hadolint/hadolint)**: ${{ github.event.inputs.Dockerfile }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Update version in README**: ${{ github.event.inputs.README }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Update dependencies
         if: ${{ github.event.inputs.Update == 'true' }}
@@ -341,15 +341,15 @@ jobs:
             **Go unit testing**: ${{ github.event.inputs.Test }}
             **Release check in tmux**: ${{ github.event.inputs.Release }}
             **Build binary**: ${{ github.event.inputs.Binary }}
-            **Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}
-            **Dockerfile linters check using Hadolint**: ${{ github.event.inputs.Dockerfile }}
+            **Update version in README**: ${{ github.event.inputs.README }}
+            **Docker Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}
 
             🚀 Result unit testing coverage: ${{ env.COVERAGE }}
 
   build:
     runs-on: ubuntu-latest
 
-    name: Docker build on ${{ github.event.inputs.Distro }}
+    name: Build on ${{ github.event.inputs.Distro }}
 
     env:
       VERSION: 'latest'
@@ -411,14 +411,30 @@ jobs:
             echo "Version: $version" >> lazyjournal/DEBIAN/control
             echo "Architecture: $arch" >> lazyjournal/DEBIAN/control
             echo "Maintainer: https://github.com/Lifailon" >> lazyjournal/DEBIAN/control
-            echo "Description: A TUI for reading logs from journald, auditd, file system, Docker and Podman containers, as well Kubernetes pods." >> lazyjournal/DEBIAN/control
+            echo "Description: TUI for viewing logs from journald, auditd, file system, Docker and Podman containers, Compose stacks and Kubernetes pods." >> lazyjournal/DEBIAN/control
             dpkg-deb --build lazyjournal lazyjournal-$version-$arch.deb
             dpkg-deb --contents lazyjournal-$version-$arch.deb
             mv lazyjournal-$version-$arch.deb bin/lazyjournal-$version-$arch.deb
         done
         ls -lh bin/*.deb
+
+    - name: Check install deb package
+      if: ${{ github.event.inputs.Binary == 'true' }}
+      run: |
         sudo dpkg -i bin/lazyjournal-$version-amd64.deb
+        lazyjournal -v
         sudo dpkg -r lazyjournal
+
+    - name: Update version to README for install deb package
+      if: ${{ github.event.inputs.README == 'true' }}
+      run: | 
+        version=$VERSION
+        sed -iE "s|releases/download/[0-9.]+/lazyjournal-[0-9.]+-|releases/download/$version/lazyjournal-$version-|" README.md
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add $REPORT_FILE
+        git commit -m "update version on $version for install deb package"
+        git push
 
     - name: Upload binaries
       if: ${{ github.event.inputs.Binary == 'true' }}
@@ -443,12 +459,12 @@ jobs:
         driver: docker-container
         install: true
 
-    - name: Dockerfile linters check
+    - name: Dockerfile basic linters check
       if: ${{ github.event.inputs.Docker == 'true' }}
       run: docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=experimental=all" .
 
     - name: Dockerfile linters check using Hadolint
-      if: ${{ github.event.inputs.Dockerfile == 'true' }}
+      if: ${{ github.event.inputs.Docker == 'true' }}
       continue-on-error: true
       run: docker run --rm -i hadolint/hadolint:latest < Dockerfile
 
@@ -468,6 +484,7 @@ jobs:
           --push .
 
     - name: Send report to Telegram
+      if: ${{ github.event.inputs.Docker == 'true' }}
       uses: appleboy/telegram-action@master
       with:
         token: ${{ secrets.TELEGRAM_API_TOKEN }}
