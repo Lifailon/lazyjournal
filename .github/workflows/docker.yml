@@ -3,6 +3,14 @@ name: Docker build and push from specified commit
 on:
   workflow_dispatch:
     inputs:
+      Lint:
+        description: 'Dockerfile basic linters check'
+        default: false
+        type: boolean
+      Hadolint:
+        description: 'Dockerfile hadolint check'
+        default: false
+        type: boolean
       Commit:
         description: "Commit for git checkout"
         required: true
@@ -11,14 +19,6 @@ on:
         description: "Version for docker tag"
         required: true
         default: ""
-      Lint:
-        description: 'Dockerfile basic linters check'
-        default: false
-        type: boolean
-      Hadolint:
-        description: 'Dockerfile linters check using Hadolint'
-        default: false
-        type: boolean
 
 jobs:
   build:
@@ -36,6 +36,14 @@ jobs:
       - name: Checkout the specified commit
         run: git checkout ${{ github.event.inputs.Commit }}
 
+      - name: Dockerfile basic linters check
+        if: ${{ github.event.inputs.Lint == 'true' }}
+        run: docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=experimental=all" .
+
+      - name: Dockerfile hadolint check
+        if: ${{ github.event.inputs.Hadolint == 'true' }}
+        run: docker run --rm -i hadolint/hadolint:latest < Dockerfil
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -47,16 +55,6 @@ jobs:
         with:
           driver: docker-container
           install: true
-
-      - name: Dockerfile basic linters check
-        if: ${{ github.event.inputs.Lint == 'true' }}
-        continue-on-error: true
-        run: docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=experimental=all" .
-
-      - name: Dockerfile linters check using Hadolint
-        if: ${{ github.event.inputs.Hadolint == 'true' }}
-        continue-on-error: true
-        run: docker run --rm -i hadolint/hadolint:latest < Dockerfil
 
       - name: Build and push Docker images for Linux on amd64 and arm64
         run: |

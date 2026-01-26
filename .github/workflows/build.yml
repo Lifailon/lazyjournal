@@ -513,10 +513,11 @@ jobs:
           # curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/docker-compose.yml -o docker-compose.yml
           docker compose up -d
           docker exec lazyjournal lazyjournal -v
-          script -e -c "timeout 10s docker exec -t lazyjournal lazyjournal" /dev/null || [ $? -eq 124 ]
+          script -e -c "timeout 10s docker exec -t lazyjournal lazyjournal" interface.log || [ $? -eq 124 ]
+          cat interface.log
 
       - name: Send report to Telegram
-        if: ${{ github.event.inputs.DockerPush == 'true' }}
+        if: ${{ github.event.inputs.Hadolint == 'true' || github.event.inputs.DockerPush == 'true' || github.event.inputs.DockerPull == 'true' }}
         uses: appleboy/telegram-action@master
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
