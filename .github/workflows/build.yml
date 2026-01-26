@@ -19,16 +19,8 @@ on:
         description: 'Update dependencies'
         default: false
         type: boolean
-      GoLangCI:
-        description: 'Golangci linters check'
-        default: false
-        type: boolean
-      GoCritic:
-        description: 'Gocritic linters check'
-        default: false
-        type: boolean
-      GoSec:
-        description: 'Gosec linters check'
+      Linters:
+        description: 'Go linters check'
         default: false
         type: boolean
       Test:
@@ -36,19 +28,27 @@ on:
         default: false
         type: boolean
       Release:
-        description: 'Release check in tmux'
+        description: 'Check flags and release in tmux'
         default: false
         type: boolean
       Binary:
-        description: 'Build binary'
+        description: 'Build binary and deb packages'
         default: false
         type: boolean
       README:
         description: 'Update version in README'
         default: false
         type: boolean
-      Docker:
+      Hadolint:
+        description: 'Dockerfile linters check'
+        default: false
+        type: boolean
+      DockerPush:
         description: 'Docker build and push on Docker Hub'
+        default: false
+        type: boolean
+      DockerPull:
+        description: 'Docker container check (pull and run)'
         default: false
         type: boolean
 
@@ -106,14 +106,14 @@ jobs:
           echo "### Parameters" >> $GITHUB_STEP_SUMMARY
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Update dependencies**: ${{ github.event.inputs.Update }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **[Golangci](https://github.com/golangci/golangci-lint) linters check**: ${{ github.event.inputs.GoLangCI }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **[Go critic](https://github.com/go-critic/go-critic) linters check**: ${{ github.event.inputs.GoCritic }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **[Go security](https://github.com/securego/gosec) linters check**: ${{ github.event.inputs.GoSec }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go linters check using [Golangci](https://github.com/golangci/golangci-lint), [GoCritic](https://github.com/go-critic/go-critic) and [GoSec](https://github.com/securego/gosec)**: ${{ github.event.inputs.Linters }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Go unit testing**: ${{ github.event.inputs.Test }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Release check in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build binary**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Check flags and release in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build binary and deb packages**: ${{ github.event.inputs.Binary }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Update version in README**: ${{ github.event.inputs.README }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Docker Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dockerfile linters check**: ${{ github.event.inputs.Hadolint }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker Build and push on Docker Hub**: ${{ github.event.inputs.DockerPush }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker container check (pull and run)**: ${{ github.event.inputs.DockerPull }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Update dependencies
         if: ${{ github.event.inputs.Update == 'true' }}
@@ -121,22 +121,22 @@ jobs:
 
       # Linters
 
-      - name: Main linters check
-        if: ${{ github.event.inputs.GoLangCI == 'true' }}
+      - name: Golangci linters check
+        if: ${{ github.event.inputs.Linters == 'true' }}
         continue-on-error: true
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
           golangci-lint run -v ./main.go
 
-      - name: Critic linters check
-        if: ${{ github.event.inputs.GoCritic == 'true' }}
+      - name: Go critic linters check
+        if: ${{ github.event.inputs.Linters == 'true' }}
         continue-on-error: true
         run: |
           go install github.com/go-critic/go-critic/cmd/gocritic@latest
           gocritic check -v -enableAll ./main.go
 
-      - name: Security linters check
-        if: ${{ github.event.inputs.GoSec == 'true' }}
+      - name: Go security linters check
+        if: ${{ github.event.inputs.Linters == 'true' }}
         continue-on-error: true
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
@@ -148,7 +148,7 @@ jobs:
         if: ${{ (github.event.inputs.Release == 'true' || github.event.inputs.Test == 'true') && github.event.inputs.Distro != 'macos-15' && github.event.inputs.Distro != 'windows-2022' }}
         run: |
           version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
-          curl -L "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          curl -sSL "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
           sed "s/TTYD=false/TTYD=true/" docker-compose.yml -i
@@ -337,15 +337,15 @@ jobs:
             
             Parameters:
             **OS**: ${{ github.event.inputs.Distro }}
-            **Update dependencies**: ${{ github.event.inputs.Update }}
-            **Golangci linters check**: ${{ github.event.inputs.GoLangCI }}
-            **Go critic linters check**: ${{ github.event.inputs.GoCritic }}
-            **Go security linters check**: ${{ github.event.inputs.GoSec }}
-            **Go unit testing**: ${{ github.event.inputs.Test }}
-            **Release check in tmux**: ${{ github.event.inputs.Release }}
-            **Build binary**: ${{ github.event.inputs.Binary }}
-            **Update version in README**: ${{ github.event.inputs.README }}
-            **Docker Build and push on Docker Hub**: ${{ github.event.inputs.Docker }}
+            **Update dependencies**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}
+            **Go linters check**: ${{ github.event.inputs.Linters == 'true' && '✅' || '❌' }}
+            **Go unit testing**: ${{ github.event.inputs.Test == 'true' && '✅' || '❌' }}
+            **Check flags and release in tmux**: ${{ github.event.inputs.Release == 'true' && '✅' || '❌' }}
+            **Build binary and deb packages**: ${{ github.event.inputs.Binary == 'true' && '✅' || '❌' }}
+            **Update version in README**: ${{ github.event.inputs.README == 'true' && '✅' || '❌' }}
+            **Dockerfile linters check**: ${{ github.event.inputs.Hadolint == 'true' && '✅' || '❌' }}
+            **Docker Build and push on Docker Hub**: ${{ github.event.inputs.DockerPush == 'true' && '✅' || '❌' }}
+            **Docker container check (pull and run)**: ${{ github.event.inputs.DockerPull == 'true' && '✅' || '❌' }}
 
             🚀 Result unit testing coverage: ${{ env.COVERAGE }}
 
@@ -358,147 +358,181 @@ jobs:
       VERSION: 'latest'
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
-        ref: main
+      - name: Checkout repository (main branch and 1 last commits)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: main
 
-    - name: Install Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 1.25
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25
 
-    - name: Install dependencies
-      run: |
-        go fmt ./...
-        go vet ./...
-        go get ./...
-        go mod tidy
-        go mod verify
-        go build -v ./...
+      - name: Install dependencies
+        run: |
+          go fmt ./...
+          go vet ./...
+          go get ./...
+          go mod tidy
+          go mod verify
+          go build -v ./...
 
-    - name: Get app version in gh env for build
-      run: |
-        version=$(go run main.go -v)
-        echo "VERSION=$version" >> $GITHUB_ENV
+      - name: Get app version in gh env for build
+        run: |
+          version=$(go run main.go -v)
+          echo "VERSION=$version" >> $GITHUB_ENV
 
-    - name: Build binaries
-      if: ${{ github.event.inputs.Binary == 'true' }}
-      run: |
-        mkdir -p bin
-        architectures=("amd64" "arm64")
-        oss=("linux" "darwin" "openbsd" "freebsd" "windows")
-        for arch in "${architectures[@]}"; do
-            for os in "${oss[@]}"; do
-                binName="bin/lazyjournal-$VERSION-$os-$arch"
-                if [[ "$os" == "windows" ]]; then
-                    binName="$binName.exe"
-                fi
-                CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -o "$binName"
-            done 
-        done
-        ls -lh bin
-        echo "ARTIFACT_NAME=lazyjournal-$VERSION" >> $GITHUB_ENV
+      # Build binary and deb package
 
-    - name: Build deb package
-      if: ${{ github.event.inputs.Binary == 'true' }}
-      run: |
-        rm -f lazyjournal
-        mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
-        architectures=("amd64" "arm64")
-        for arch in "${architectures[@]}"; do
-            rm -f lazyjournal/usr/local/bin/lazyjournal
-            cp bin/lazyjournal-$VERSION-linux-$arch lazyjournal/usr/local/bin/lazyjournal
-            rm -f lazyjournal/DEBIAN/control
-            echo "Package: lazyjournal" > lazyjournal/DEBIAN/control
-            echo "Version: $VERSION" >> lazyjournal/DEBIAN/control
-            echo "Architecture: $arch" >> lazyjournal/DEBIAN/control
-            echo "Maintainer: https://github.com/Lifailon" >> lazyjournal/DEBIAN/control
-            echo "Description: TUI for viewing logs from journald, auditd, file system, Docker and Podman containers, Compose stacks and Kubernetes pods." >> lazyjournal/DEBIAN/control
-            dpkg-deb --build lazyjournal lazyjournal-$VERSION-$arch.deb
-            dpkg-deb --contents lazyjournal-$VERSION-$arch.deb
-            mv lazyjournal-$VERSION-$arch.deb bin/lazyjournal-$VERSION-$arch.deb
-        done
-        ls -lh bin/*.deb
+      - name: Build binaries
+        if: ${{ github.event.inputs.Binary == 'true' }}
+        run: |
+          mkdir -p bin
+          architectures=("amd64" "arm64")
+          oss=("linux" "darwin" "openbsd" "freebsd" "windows")
+          for arch in "${architectures[@]}"; do
+              for os in "${oss[@]}"; do
+                  binName="bin/lazyjournal-$VERSION-$os-$arch"
+                  if [[ "$os" == "windows" ]]; then
+                      binName="$binName.exe"
+                  fi
+                  CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -o "$binName"
+              done 
+          done
+          ls -lh bin
+          echo "ARTIFACT_NAME=lazyjournal-$VERSION" >> $GITHUB_ENV
 
-    - name: Check install deb package
-      if: ${{ github.event.inputs.Binary == 'true' }}
-      run: |
-        # sudo dpkg -i bin/lazyjournal-$VERSION-amd64.deb
-        # sudo dpkg -r lazyjournal
-        sudo apt install -y ./bin/lazyjournal-$VERSION-amd64.deb
-        lazyjournal -v
-        sudo apt remove -y lazyjournal
+      - name: Build deb package
+        if: ${{ github.event.inputs.Binary == 'true' }}
+        run: |
+          rm -f lazyjournal
+          mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
+          architectures=("amd64" "arm64")
+          for arch in "${architectures[@]}"; do
+              rm -f lazyjournal/usr/local/bin/lazyjournal
+              cp bin/lazyjournal-$VERSION-linux-$arch lazyjournal/usr/local/bin/lazyjournal
+              rm -f lazyjournal/DEBIAN/control
+              echo "Package: lazyjournal" > lazyjournal/DEBIAN/control
+              echo "Version: $VERSION" >> lazyjournal/DEBIAN/control
+              echo "Architecture: $arch" >> lazyjournal/DEBIAN/control
+              echo "Maintainer: https://github.com/Lifailon" >> lazyjournal/DEBIAN/control
+              echo "Description: TUI for viewing logs from journald, auditd, file system, Docker and Podman containers, Compose stacks and Kubernetes pods." >> lazyjournal/DEBIAN/control
+              dpkg-deb --build lazyjournal lazyjournal-$VERSION-$arch.deb
+              dpkg-deb --contents lazyjournal-$VERSION-$arch.deb
+              mv lazyjournal-$VERSION-$arch.deb bin/lazyjournal-$VERSION-$arch.deb
+          done
+          ls -lh bin/*.deb
 
-    - name: Update version to README for install deb package
-      if: ${{ github.event.inputs.README == 'true' }}
-      run: | 
-        sed -i -E "s|releases/download/[0-9.]+/lazyjournal-[0-9.]+-|releases/download/$VERSION/lazyjournal-$VERSION-|" README.md
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add README.md
-        git commit -m "update version on $VERSION for install deb package"
-        git push origin main
+      - name: Check install deb package
+        if: ${{ github.event.inputs.Binary == 'true' }}
+        run: |
+          # sudo dpkg -i bin/lazyjournal-$VERSION-amd64.deb
+          # sudo dpkg -r lazyjournal
+          sudo apt install -y ./bin/lazyjournal-$VERSION-amd64.deb
+          lazyjournal -v
+          sudo apt remove -y lazyjournal
 
-    - name: Upload binaries
-      if: ${{ github.event.inputs.Binary == 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.ARTIFACT_NAME }}
-        path: bin/
-      env:
-        ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+      - name: Upload binaries
+        if: ${{ github.event.inputs.Binary == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: bin/
+        env:
+          ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
 
-    - name: Login to Docker Hub
-      if: ${{ github.event.inputs.Docker == 'true' }}
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Update version to README for install deb package
+        if: ${{ github.event.inputs.README == 'true' && env.VERSION != '' }}
+        run: | 
+          sed -i -E "s|releases/download/[0-9.]+/lazyjournal-[0-9.]+-|releases/download/$VERSION/lazyjournal-$VERSION-|" README.md
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "update version on $VERSION for install deb package"
+          git push origin main
 
-    - name: Install Docker Buildx
-      if: ${{ github.event.inputs.Docker == 'true' }}
-      uses: docker/setup-buildx-action@v3
-      with:
-        driver: docker-container
-        install: true
+      # Docker
 
-    - name: Dockerfile basic linters check
-      if: ${{ github.event.inputs.Docker == 'true' }}
-      run: docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=experimental=all" .
+      - name: Dockerfile basic linters check
+        id: dockerfileLint
+        if: ${{ github.event.inputs.DockerPush == 'true' }}
+        run: docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=experimental=all" .
 
-    - name: Dockerfile linters check using Hadolint
-      if: ${{ github.event.inputs.Docker == 'true' }}
-      continue-on-error: true
-      run: docker run --rm -i hadolint/hadolint:latest < Dockerfile
+      - name: Dockerfile linters check using Hadolint
+        id: dockerfileHadolint
+        if: ${{ github.event.inputs.Hadolint == 'true' }}
+        continue-on-error: true
+        run: docker run --rm -i hadolint/hadolint:latest < Dockerfile
 
-    - name: Docker build and push on Docker Hub images for Debian-based on amd64 and arm64
-      if: ${{ github.event.inputs.Docker == 'true' }}
-      run: |
-        # docker build -t lifailon/lazyjournal:latest .
-        # docker push lifailon/lazyjournal:latest
-        docker buildx build \
-          --platform linux/amd64,linux/arm64 \
-          -t lifailon/lazyjournal:latest \
-          --push .
-        docker buildx build \
-          --platform linux/amd64,linux/arm64 \
-          -t lifailon/lazyjournal:$VERSION \
-          --push .
+      - name: Install Docker Buildx
+        if: ${{ github.event.inputs.DockerPush == 'true' }}
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+          install: true
 
-    - name: Send report to Telegram
-      if: ${{ github.event.inputs.Docker == 'true' }}
-      uses: appleboy/telegram-action@master
-      with:
-        token: ${{ secrets.TELEGRAM_API_TOKEN }}
-        to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
-        debug: true
-        format: markdown
-        message: |
-          🔔 **Action**: build docker image
+      - name: Login to Docker Hub
+        if: ${{ github.event.inputs.DockerPush == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-          📁 **Repository**: ${{ github.repository }}
-          👤 **User**: ${{ github.actor }}
-          
-          🔗 **Docker Hub tag**: [${{ env.VERSION }}](https://hub.docker.com/layers/lifailon/lazyjournal/${{ env.VERSION }})
+      - name: Docker build and push on Docker Hub images for Debian-based on amd64 and arm64
+        id: dockerPush
+        if: ${{ github.event.inputs.DockerPush == 'true' }}
+        run: |
+          # docker build -t lifailon/lazyjournal:latest .
+          # docker push lifailon/lazyjournal:latest
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t lifailon/lazyjournal:latest \
+            --push .
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t lifailon/lazyjournal:$VERSION \
+            --push .
+
+      - name: Install Docker Compose
+        if: ${{ github.event.inputs.DockerPull == 'true' }}
+        run: |
+          mkdir -p $HOME/.local/bin
+          version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
+          curl -sSL "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+          mkdir -p $HOME/.docker/cli-plugins
+          cp /usr/local/bin/docker-compose $HOME/.docker/cli-plugins/docker-compose
+          docker compose version
+
+      - name: Docker container check (pull and run)
+        id: dockerPull
+        if: ${{ github.event.inputs.DockerPull == 'true' }}
+        run: |
+          # mkdir lazyjournal && cd lazyjournal
+          # curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/docker-compose.yml -o docker-compose.yml
+          docker compose up -d
+          docker exec -it lazyjournal lazyjournal -v
+          timeout 10s docker exec -t lazyjournal lazyjournal || [ $? -eq 124 ]
+
+      - name: Send report to Telegram
+        if: ${{ github.event.inputs.DockerPush == 'true' }}
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
+          format: markdown
+          message: |
+            🔔 **Action**: docker build
+
+            📁 **Repository**: ${{ github.repository }}
+            👤 **User**: ${{ github.actor }}
+            
+            ✅ **Dockerfile linters check**: ${{ steps.dockerfileLint.outcome }}
+            ✅ **Dockerfile hadolint check**: ${{ steps.dockerfileHadolint.outcome }}
+            ✅ **Docker build and push**: ${{ steps.dockerPush.outcome }}
+            ✅ **Docker container check (pull and run)**: ${{ steps.dockerPull.outcome }}
+
+            🔗 **Docker Hub tag**: [${{ env.VERSION }}](https://hub.docker.com/layers/lifailon/lazyjournal/${{ env.VERSION }})
