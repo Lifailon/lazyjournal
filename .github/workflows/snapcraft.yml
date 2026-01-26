@@ -72,7 +72,7 @@ jobs:
       - name: Check install snap package
         run: |
           sudo snap install packages/*-amd64.snap --dangerous --classic
-          lazyjournal --version
+          lazyjournal -v
           snap remove lazyjournal
 
       - name: Upload snap package

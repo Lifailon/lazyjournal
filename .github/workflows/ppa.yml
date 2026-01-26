@@ -1,30 +1,48 @@
-name: Build deb package and Push to PPA
+name: Build deb package and push to PPA
 
 on:
   workflow_dispatch:
     inputs:
+      Runner:
+        description: 'Select runner image'
+        required: true
+        default: 'ubuntu-24.04'
+        type: choice
+        options:
+          - 'ubuntu-22.04' # jammy
+          - 'ubuntu-24.04' # noble
+      Distro:
+        description: 'Ubuntu distro name in changelog'
+        required: true
+        default: 'ubuntu-24.04'
+        type: choice
+        options:
+          - 'jammy'    # 22.04
+          - 'noble'    # 24.04
+          - 'questing' # 25.10
+          - 'resolute' # 26.04
+          - 'focal'    # 20.04
+          - 'bionic'   # 18.04
+          - 'xenial'   # 16.04
+          - 'trusty'   # 14.04
+      Version:
+        description: 'Version for build'
+        required: false
+        default: ""
+      Push:
+        description: 'Push to PPA'
+        default: false
+        type: boolean
       Install:
         description: 'Check install only'
         default: false
         type: boolean
-      Distro:
-        description: 'Ubuntu distro name in changelog'
-        required: true
-        default: 'jammy'
-        type: choice
-        options:
-          - 'jammy'
-          - 'noble'
-      Patch:
-        description: 'Update patch version in changelog'
-        default: 1
-        type: number
 
 jobs:
   test:
-    name: Build deb package and Push to PPA
+    name: Build deb package and push to PPA
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.inputs.Runner }}
 
     steps:
       - name: Checkout repository (main branch and 1 last commits)
@@ -77,19 +95,18 @@ jobs:
           echo -e "\n\033[33m>>> Rules\033[0m\n"
           cat debian/rules
 
-          echo -e "\n\033[33m>>> Update ubuntu distro name in changelog\033[0m\n"
-          # sed -i "1s/)[[:space:]]\+[^;]\+;/) jammy;/" debian/changelog
+          echo -e "\n\033[33m>>> Update distro name in changelog\033[0m\n"
           sed -i "1s/)[[:space:]]\+[^;]\+;/) ${{ github.event.inputs.Distro }};/" debian/changelog
           sed -i 's/(Closes: TODO)//' debian/changelog
           
-          echo -e "\n\033[33m>>> Update patch version in changelog\033[0m\n"
-          VERSION=$(cat debian/changelog | head -n 1 | sed -E "s/.+\(//" | sed -E "s/\).+//" | sed -E "s/-[0-9]+//")
-          # dch -v "$VERSION-${{ github.event.inputs.Patch }}" --distribution ${{ github.event.inputs.Distro }} "update distro"
-          # sed -i -E "s/$VERSION-[0-9]+/$VERSION-${{ github.event.inputs.Patch }}/" debian/changelog
-          sed -i -E "s/$VERSION-[0-9]+/0.8.4.2-1/" debian/changelog
-          mv ../lazyjournal_0.8.4.orig.tar.gz ../lazyjournal_0.8.4.2.orig.tar.gz
-          echo -e "\n\033[33m>>> Changelog\033[0m\n"
-          cat debian/changelog
+          if [ -n "${{ github.event.inputs.Version }}" ]; then
+            echo -e "\n\033[33m>>> Update version in changelog\033[0m\n"
+            VERSION=$(cat debian/changelog | head -n 1 | sed -E "s/.+\(//" | sed -E "s/\).+//" | sed -E "s/-[0-9]+//")
+            sed -i -E "s/$VERSION-/${{ github.event.inputs.Version }}-/" debian/changelog
+            mv ../lazyjournal_$$VERSION.orig.tar.gz ../lazyjournal_${{ github.event.inputs.Version }}.orig.tar.gz
+            echo -e "\n\033[33m>>> Changelog\033[0m\n"
+            cat debian/changelog
+          fi
 
           echo -e "\n\033[33m>>> Check build\033[0m\n"
           dpkg-buildpackage -us -uc -b
@@ -97,7 +114,20 @@ jobs:
           echo -e "\n\033[33m>>> Build changes\033[0m\n"
           rm -f ../*.upload ../*.changes
           debuild -S -sa -k"$DEBEMAIL"
-          ls ../*.changes
+          cd ..
+          ls *.changes
 
-          echo -e "\n\033[33m>>> Push to PPA\033[0m\n"
+      - name: Push to PPA
+        if: ${{ github.event.inputs.Install != 'true' && github.event.inputs.Push == 'true' }}
+        run: |
           dput ppa:lifailon/lazyjournal ../*.changes
+
+      - name: Check install package
+        if: ${{ github.event.inputs.Install == 'true' }}
+        run: |
+          sudo add-apt-repository -y ppa:lifailon/lazyjournal
+          sudo apt update
+          apt-cache policy lazyjournal
+          sudo apt install -y lazyjournal
+          lazyjournal -v
+          sudo apt remove -y lazyjournal
