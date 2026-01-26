@@ -1,4 +1,4 @@
-name: Build Docker image and Push from specified commit
+name: Docker build and push from specified commit
 
 on:
   workflow_dispatch:
@@ -11,6 +11,14 @@ on:
         description: "Version for docker tag"
         required: true
         default: ""
+      Lint:
+        description: 'Dockerfile basic linters check'
+        default: false
+        type: boolean
+      Hadolint:
+        description: 'Dockerfile linters check using Hadolint'
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -39,6 +47,16 @@ jobs:
         with:
           driver: docker-container
           install: true
+
+      - name: Dockerfile basic linters check
+        if: ${{ github.event.inputs.Lint == 'true' }}
+        continue-on-error: true
+        run: docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=experimental=all" .
+
+      - name: Dockerfile linters check using Hadolint
+        if: ${{ github.event.inputs.Hadolint == 'true' }}
+        continue-on-error: true
+        run: docker run --rm -i hadolint/hadolint:latest < Dockerfil
 
       - name: Build and push Docker images for Linux on amd64 and arm64
         run: |
