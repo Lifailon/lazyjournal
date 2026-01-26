@@ -111,8 +111,8 @@ jobs:
           echo "- **Check flags and release in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build binary and deb packages**: ${{ github.event.inputs.Binary == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Update version in README**: ${{ github.event.inputs.README == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Dockerfile linters check**: ${{ github.event.inputs.Hadolint == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Docker Build and push on Docker Hub**: ${{ github.event.inputs.DockerPush == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dockerfile [hadolint](https://github.com/hadolint/hadolint) check**: ${{ github.event.inputs.Hadolint == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker image build and push on Docker Hub**: ${{ github.event.inputs.DockerPush == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Docker container check (pull and run)**: ${{ github.event.inputs.DockerPull == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Update dependencies
@@ -344,7 +344,7 @@ jobs:
             **Build binary and deb packages**: ${{ github.event.inputs.Binary == 'true' && '✅' || '❌' }}
             **Update version in README**: ${{ github.event.inputs.README == 'true' && '✅' || '❌' }}
             **Dockerfile linters check**: ${{ github.event.inputs.Hadolint == 'true' && '✅' || '❌' }}
-            **Docker Build and push on Docker Hub**: ${{ github.event.inputs.DockerPush == 'true' && '✅' || '❌' }}
+            **Docker image build and push on Docker Hub**: ${{ github.event.inputs.DockerPush == 'true' && '✅' || '❌' }}
             **Docker container check (pull and run)**: ${{ github.event.inputs.DockerPull == 'true' && '✅' || '❌' }}
 
             🚀 Result unit testing coverage: ${{ env.COVERAGE || 'n/a' }}
@@ -456,7 +456,7 @@ jobs:
 
       - name: Dockerfile basic linters check
         id: dockerfileLint
-        if: ${{ github.event.inputs.DockerPush == 'true' }}
+        if: ${{ github.event.inputs.Hadolint == 'true' || github.event.inputs.DockerPush == 'true' }}
         run: docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=experimental=all" .
 
       - name: Dockerfile linters check using Hadolint
@@ -479,7 +479,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Docker build and push on Docker Hub images for Debian-based on amd64 and arm64
+      - name: Docker image build and push on Docker Hub
         id: dockerPush
         if: ${{ github.event.inputs.DockerPush == 'true' }}
         run: |
@@ -525,14 +525,14 @@ jobs:
           debug: true
           format: markdown
           message: |
-            🔔 **Action**: docker build
+            🔔 **Action**: Docker CI/CD
 
             📁 **Repository**: ${{ github.repository }}
             👤 **User**: ${{ github.actor }}
             
-            ✅ **Dockerfile linters check**: ${{ steps.dockerfileLint.outcome }}
-            ✅ **Dockerfile hadolint check**: ${{ steps.dockerfileHadolint.outcome }}
-            ✅ **Docker build and push**: ${{ steps.dockerPush.outcome }}
-            ✅ **Docker container check (pull and run)**: ${{ steps.dockerPull.outcome }}
+            ${{ steps.dockerfileLint.outcome == 'failure' && '❌' || '✅' }} **Dockerfile basic linters check**: ${{ steps.dockerfileLint.outcome }}
+            ${{ steps.dockerfileHadolint.outcome == 'failure' && '❌' || '✅' }} **Dockerfile hadolint check**: ${{ steps.dockerfileHadolint.outcome }}
+            ${{ steps.dockerPush.outcome == 'failure' && '❌' || '✅' }} **Docker image build and push on Docker Hub**: ${{ steps.dockerPush.outcome }}
+            ${{ steps.dockerPull.outcome == 'failure' && '❌' || '✅' }} **Docker container check (pull and run)**: ${{ steps.dockerPull.outcome }}
 
             🔗 **Docker Hub tag**: [${{ env.VERSION }}](https://hub.docker.com/layers/lifailon/lazyjournal/${{ env.VERSION }})

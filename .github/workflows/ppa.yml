@@ -1,0 +1,103 @@
+name: Build deb package and Push to PPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      Install:
+        description: 'Check install only'
+        default: false
+        type: boolean
+      Distro:
+        description: 'Ubuntu distro name in changelog'
+        required: true
+        default: 'jammy'
+        type: choice
+        options:
+          - 'jammy'
+          - 'noble'
+      Patch:
+        description: 'Update patch version in changelog'
+        default: 1
+        type: number
+
+jobs:
+  test:
+    name: Build deb package and Push to PPA
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (main branch and 1 last commits)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: main
+
+      - name: Install package tools
+        if: ${{ github.event.inputs.Install != 'true' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y devscripts debhelper dh-make-golang dput
+
+      - name: Import GPG key
+        if: ${{ github.event.inputs.Install != 'true' }}
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.PPA_GPG_PRIVATE_KEY }}
+
+      - name: Build deb package and publish to Launchpad PPA
+        if: ${{ github.event.inputs.Install != 'true' }}
+        run: |
+          export DEBFULLNAME="lifailon"
+          export DEBEMAIL="${{ secrets.PPA_EMAIL }}"
+          
+          echo -e "\n\033[33m>>> Debian template generation\033[0m\n"
+          dh-make-golang make github.com/Lifailon/lazyjournal
+          cd lazyjournal
+
+          echo -e "\n\033[33m>>> Download dependencies for offline build\033[0m\n"
+          go mod vendor
+          VERSION=$(ls ../*.orig.tar.gz | sed -E 's/.*_([0-9.]+)\.orig\.tar\.gz/\1/')
+          rm ../*.orig.tar.gz
+          tar --exclude-vcs -C .. -czf ../lazyjournal_$VERSION.orig.tar.gz lazyjournal
+          sed -i '1a export GOFLAGS=-mod=vendor' debian/rules
+
+          echo -e "\n\033[33m>>> Update go version\033[0m\n"
+          sed -i 's/golang-any/golang-1.23-go/' debian/control
+          sed -i '1a export PATH := /usr/lib/go-1.23/bin:$(PATH)' debian/rules
+
+          echo -e "\n\033[33m>>> Update debian control\033[0m\n"
+          sed -i 's/Section: TODO/Section: utils/' debian/control
+          sed -i -E 's/Architecture:.+/Architecture: any/' debian/control
+
+          echo -e "\n\033[33m>>> Skip go test and dwz in build\033[0m\n"
+          # export DEB_BUILD_OPTIONS=nocheck
+          printf "\noverride_dh_auto_test:\n\t:\n" >> debian/rules
+          printf "\noverride_dh_dwz:\n\t:\n" >> debian/rules
+          echo -e "\n\033[33m>>> Rules\033[0m\n"
+          cat debian/rules
+
+          echo -e "\n\033[33m>>> Update ubuntu distro name in changelog\033[0m\n"
+          # sed -i "1s/)[[:space:]]\+[^;]\+;/) jammy;/" debian/changelog
+          sed -i "1s/)[[:space:]]\+[^;]\+;/) ${{ github.event.inputs.Distro }};/" debian/changelog
+          sed -i 's/(Closes: TODO)//' debian/changelog
+          
+          echo -e "\n\033[33m>>> Update patch version in changelog\033[0m\n"
+          VERSION=$(cat debian/changelog | head -n 1 | sed -E "s/.+\(//" | sed -E "s/\).+//" | sed -E "s/-[0-9]+//")
+          # dch -v "$VERSION-${{ github.event.inputs.Patch }}" --distribution ${{ github.event.inputs.Distro }} "update distro"
+          # sed -i -E "s/$VERSION-[0-9]+/$VERSION-${{ github.event.inputs.Patch }}/" debian/changelog
+          sed -i -E "s/$VERSION-[0-9]+/0.8.4.2-1/" debian/changelog
+          mv ../lazyjournal_0.8.4.orig.tar.gz ../lazyjournal_0.8.4.2.orig.tar.gz
+          echo -e "\n\033[33m>>> Changelog\033[0m\n"
+          cat debian/changelog
+
+          echo -e "\n\033[33m>>> Check build\033[0m\n"
+          dpkg-buildpackage -us -uc -b
+
+          echo -e "\n\033[33m>>> Build changes\033[0m\n"
+          rm -f ../*.upload ../*.changes
+          debuild -S -sa -k"$DEBEMAIL"
+          ls ../*.changes
+
+          echo -e "\n\033[33m>>> Push to PPA\033[0m\n"
+          dput ppa:lifailon/lazyjournal ../*.changes
