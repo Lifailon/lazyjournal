@@ -6,21 +6,21 @@ on:
       Runner:
         description: 'Select runner image'
         required: true
-        default: 'ubuntu-24.04'
+        default: 'ubuntu-22.04'
         type: choice
         options:
-          - 'ubuntu-22.04' # jammy
           - 'ubuntu-24.04' # noble
+          - 'ubuntu-22.04' # jammy
       Distro:
         description: 'Ubuntu distro name in changelog'
         required: true
-        default: 'ubuntu-24.04'
+        default: 'jammy'
         type: choice
         options:
-          - 'jammy'    # 22.04
-          - 'noble'    # 24.04
-          - 'questing' # 25.10
           - 'resolute' # 26.04
+          - 'questing' # 25.10
+          - 'noble'    # 24.04
+          - 'jammy'    # 22.04
           - 'focal'    # 20.04
           - 'bionic'   # 18.04
           - 'xenial'   # 16.04

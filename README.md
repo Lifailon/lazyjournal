@@ -3,16 +3,17 @@
 </p>
 
 <p align="center">
-    <a href="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml"><img title="Actions Build"src="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml/badge.svg"></a>
-    <a href="https://github.com/Lifailon/lazyjournal/wiki"><img title="Go coverage report"src="https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg"></a>
-    <a href="https://goreportcard.com/report/github.com/Lifailon/lazyjournal"><img src="https://goreportcard.com/badge/github.com/Lifailon/lazyjournal" alt="Go Report"></a>
-    <a href="https://app.fossa.com/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal?ref=badge_shield&issueType=security" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal.svg?type=shield&issueType=security"/></a>
-<br>
-    <a href="https://github.com/Lifailon/lazyjournal/releases"><img title="GitHub Download" src="https://img.shields.io/github/downloads/lifailon/lazyjournal/total?logo=github&color=green&label=GitHub+Downloads"></a>
+    <a href="https://github.com/Lifailon/lazyjournal/releases"><img title="GitHub Download" src="https://img.shields.io/github/downloads/lifailon/lazyjournal/total?logo=github&color=green&label=Downloads"></a>
+    <a href="https://launchpad.net/~lifailon/+archive/ubuntu/lazyjournal"><img title="Ubuntu Launchpad PPA" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.launchpad.net%2F1.0%2F~lifailon%2F%2Barchive%2Fubuntu%2Flazyjournal%3Fws.op%3DgetPublishedSources%26distro_series%3Dhttps%3A%2F%2Fapi.launchpad.net%2F1.0%2Fubuntu%2Fjammy%26status%3DPublished&query=entries[0].source_package_version&label=Ubuntu+PPA&logo=ubuntu&color=orange"></a>
     <a href="https://formulae.brew.sh/formula/lazyjournal"><img title="Homebrew" src="https://img.shields.io/homebrew/v/lazyjournal?logo=homebrew&color=yellow&label=Homebrew"></a>
     <a href="https://anaconda.org/conda-forge/lazyjournal"><img title="Conda Forge" src="https://img.shields.io/conda/vn/conda-forge/lazyjournal?logo=anaconda&color=green&label=Conda"></a>
     <a href="https://aur.archlinux.org/packages/lazyjournal"><img title="Arch Linux" src="https://img.shields.io/aur/version/lazyjournal?logo=arch-linux&color=blue&label=AUR"></a>
     <a href="https://hub.docker.com/r/lifailon/lazyjournal"><img title="Docker Hub" src="https://img.shields.io/docker/image-size/lifailon/lazyjournal/latest?logo=docker&color=blue&label=Docker+Hub"></a>
+<br>
+    <a href="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml"><img title="Actions Build"src="https://github.com/Lifailon/lazyjournal/actions/workflows/build.yml/badge.svg"></a>
+    <a href="https://github.com/Lifailon/lazyjournal/wiki"><img title="Go coverage report"src="https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg"></a>
+    <a href="https://goreportcard.com/report/github.com/Lifailon/lazyjournal"><img src="https://goreportcard.com/badge/github.com/Lifailon/lazyjournal" alt="Go Report"></a>
+    <a href="https://app.fossa.com/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal?ref=badge_shield&issueType=security" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal.svg?type=shield&issueType=security"/></a>
 <br>
     <a href="https://github.com/avelino/awesome-go?tab=readme-ov-file#logging"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a>
     <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
@@ -87,7 +88,7 @@ A full list of all keywords can be found in the [color.log](/color.log) file (us
 
 ## Install
 
-Binaries are available for download on the [releases](https://github.com/Lifailon/lazyjournal/releases) page.
+Binaries are available for download on the GitHub [releases](https://github.com/Lifailon/lazyjournal/releases) page.
 
 <!--
 List of supported systems and architectures in which functionality is checked: 
@@ -110,9 +111,17 @@ curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh 
 
 This command will run a script that will download the latest binary (auto-detect OS and arch) from the GitHub repository to your home directory along with other executables (default path is `~/.local/bin/lazyjournal`) and configurations (`~/.config/lazyjournal/config.yml`) for the current user, and also grant execute permission.
 
-### Debian-based
+### apt (Ubuntu / Debian)
 
-If you are using Ubuntu or any other Debian-based system, you can also download the `deb` package to manage installation and removal:
+To install and remove packages on an Ubuntu system, you can use the `apt` package manager from the [PPA](https://launchpad.net/~lifailon/+archive/ubuntu/lazyjournal) repository:
+
+```bash
+sudo add-apt-repository -y ppa:lifailon/lazyjournal
+sudo apt update
+sudo apt install -y lazyjournal
+```
+
+Or download the `deb` package from the GitHub releases page for installation on any Debian-based system.
 
 ```bash
 curl -sSL https://github.com/Lifailon/lazyjournal/releases/download/0.8.4/lazyjournal-0.8.4-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
@@ -127,7 +136,7 @@ Use the following command to install `lazyjournal` using [Homebrew](https://form
 brew install lazyjournal
 ```
 
-### Conda / mamba / pixi (Linux / macOS / Windows)
+### Conda / Mamba / Pixi (Linux / macOS / Windows)
 
 If you use package managers like conda or mamba, you can install `lazyjournal` from [conda-forge](https://anaconda.org/conda-forge/lazyjournal):
 
