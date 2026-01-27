@@ -1,4 +1,4 @@
-name: PR check and AI analysis
+name: PR check and AI review
 
 on:
   workflow_dispatch:
@@ -11,6 +11,8 @@ run-name: "Pull Request #${{ github.event.pull_request.number }}: ${{ github.eve
 
 jobs:
   pr_tg_report:
+    name: Telegram report
+
     if: ${{ github.event_name == 'pull_request' }}
 
     runs-on: ubuntu-latest
@@ -35,6 +37,8 @@ jobs:
             ${{ github.event.comment.body || github.event.pull_request.body }}
 
   pr_unit_test:
+    name: Unit testing
+
     if: ${{ (github.event_name == 'pull_request' && github.event.action == 'opened') || github.event_name == 'workflow_dispatch' }}
 
     permissions:
@@ -97,22 +101,35 @@ jobs:
           rm /usr/local/bin/*.tar.gz
           tailspin --version
 
+      # - name: Install go-junit-report 
+      #   run: go install github.com/jstemmer/go-junit-report/v2@latest
+
+      - name: Install gotestsum for junit report
+        run: go install gotest.tools/gotestsum@latest
+
       - name: Go unit testing
         id: unitTesting
-        continue-on-error: true
         timeout-minutes: 10
-        run: sudo env "PATH=$PATH" go test -v -cover | tee test.log
+        run: | 
+          # sudo env "PATH=$PATH" go test -v -cover | tee test.log
+          # sudo env "PATH=$PATH" go test -v 2>&1 main.go | go-junit-report -set-exit-code > report.xml
+          sudo env "PATH=$PATH" gotestsum --junitfile report.xml main.go
 
-      - name: Get coverage result
-        continue-on-error: true
-        run: |
-          COVERAGE=$(cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g")
-          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
-          echo "## Test results" >> $GITHUB_STEP_SUMMARY
-          echo -e "Coverage: $COVERAGE" >> $GITHUB_STEP_SUMMARY
+      - name: Test report in summary
+        uses: test-summary/action@v2
+        if: always()
+        with:
+          paths: "report.xml"
+
+      - name: Publish JUnit Test Results
+        uses: mikepenz/action-junit-report@v6
+        if: always()
+        with:
+          report_paths: "report.xml"
 
       - name: Send message to Telegram
         uses: appleboy/telegram-action@master
+        if: always()
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
           to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
@@ -124,22 +141,21 @@ jobs:
             📁 **Repository**: ${{ github.repository }}
             👤 **From user**: ${{ github.actor }}
 
-            🧪 **Result**: ${{ steps.unitTesting.outcome }}
-            🧪 **Coverage**: ${{ env.COVERAGE }}
+            💡 **Result**: ${{ steps.unitTesting.outcome }}
 
       - name: Post AI comment on PR
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && always() }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           gh pr comment "$PR_NUMBER" --body "### Unit testing results
           
-          Status: ${{ steps.unitTesting.outcome }}
+          Status: ${{ steps.unitTesting.outcome }}"
 
-          Coverage: $COVERAGE"
+  pr_ai_review:
+    name: AI review
 
-  pr_ai_analysis:
     needs: [pr_tg_report, pr_unit_test]
 
     if: ${{ github.event_name == 'pull_request' && github.event.action == 'opened' }}
@@ -183,7 +199,8 @@ jobs:
             Responses should be brief and written in English.
           prompt: |
             PR Title: ${{ github.event.pull_request.title }}
-            PR Description: ${{ github.event.pull_request.body }}
+            PR Description:
+            ${{ github.event.pull_request.body }}
 
             Code diff:
             ${{ steps.pr_diff.outputs.diff }}
