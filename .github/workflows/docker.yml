@@ -1,8 +1,16 @@
-name: Docker build and push from specified commit
+name: Docker build and push
 
 on:
   workflow_dispatch:
     inputs:
+      Commit:
+        description: "Commit sha for git checkout"
+        required: false
+        default: ''
+      Tag:
+        description: "Custom tag for docker image"
+        required: false
+        default: ''
       Lint:
         description: 'Dockerfile basic linters check'
         default: false
@@ -11,14 +19,22 @@ on:
         description: 'Dockerfile hadolint check'
         default: false
         type: boolean
-      Commit:
-        description: "Commit for git checkout"
-        required: true
-        default: ""
-      Version:
-        description: "Version for docker tag"
-        required: true
-        default: ""
+      Build:
+        description: "Docker build only check"
+        required: false
+        type: boolean
+      Push:
+        description: 'Push on Docker Hub'
+        default: false
+        type: boolean
+      Latest:
+        description: 'Push latest image on Docker Hub'
+        default: false
+        type: boolean
+      Container:
+        description: 'Docker run container check'
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -26,40 +42,140 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    env:
+      VERSION: ''
+
     steps:
-      - name: Checkout repository (main branch and all commits)
+      - name: Checkout repository (custom branch and all commits)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: main
 
       - name: Checkout the specified commit
+        if: ${{ github.event.inputs.Commit != '' }}
         run: git checkout ${{ github.event.inputs.Commit }}
 
       - name: Dockerfile basic linters check
+        id: lint
         if: ${{ github.event.inputs.Lint == 'true' }}
         run: docker build --check --build-arg "BUILDKIT_DOCKERFILE_CHECK=experimental=all" .
 
       - name: Dockerfile hadolint check
+        id: hadolint
         if: ${{ github.event.inputs.Hadolint == 'true' }}
         run: docker run --rm -i hadolint/hadolint:latest < Dockerfil
 
+      - name: Docker build only check
+        id: build
+        if: ${{ github.event.inputs.Build == 'true' }}
+        run: docker build -t lifailon/lazyjournal:test .
+
+      - name: Install Go
+        if: ${{ github.event.inputs.Push == 'true' && github.event.inputs.Tag == '' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25
+
+      - name: Install dependencies
+        if: ${{ github.event.inputs.Push == 'true' && github.event.inputs.Tag == '' }}
+        run: |
+          go fmt ./...
+          go vet ./...
+          go get ./...
+          go mod tidy
+          go mod verify
+          go build -v ./...
+
+      - name: Get tag for build and push
+        if: ${{ github.event.inputs.Push == 'true' }}
+        env:
+          TAG: ${{ github.event.inputs.Tag }}
+        run: |
+          if [ -n "$TAG" ]; then
+            version="$TAG"
+          else
+            version=$(go run main.go -v)
+          fi
+          echo "VERSION=$version" >> $GITHUB_ENV
+
       - name: Login to Docker Hub
+        if: ${{ github.event.inputs.Push == 'true' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Install Docker Buildx
+        if: ${{ github.event.inputs.Push == 'true' }}
         uses: docker/setup-buildx-action@v3
         with:
           driver: docker-container
           install: true
 
-      - name: Build and push Docker images for Linux on amd64 and arm64
+      - name: Docker image build and push on Docker Hub using current version or custom tag
+        id: customPush
+        if: ${{ github.event.inputs.Push == 'true' && env.VERSION != '' }}
         run: |
-          version=${{ github.event.inputs.Version }}
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
-            -t lifailon/lazyjournal:$version \
+            -t lifailon/lazyjournal:$VERSION \
             --push .
+
+      - name: Docker image build and push on Docker Hub using latest tag
+        id: latestPush
+        if: ${{ github.event.inputs.Push == 'true' && github.event.inputs.Latest == 'true' }}
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t lifailon/lazyjournal:latest \
+            --push .
+
+      - name: Install Docker Compose
+        if: ${{ github.event.inputs.Container == 'true' }}
+        run: |
+          mkdir -p $HOME/.local/bin
+          version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
+          curl -sSL "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          mkdir -p $HOME/.docker/cli-plugins
+          cp /usr/local/bin/docker-compose $HOME/.docker/cli-plugins/docker-compose
+          docker compose version
+
+      - name: Docker run container check
+        id: containerCheck
+        if: ${{ github.event.inputs.Container == 'true' }}
+        run: |
+          # mkdir lazyjournal && cd lazyjournal
+          # curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/docker-compose.yml -o docker-compose.yml
+          docker compose up -d
+          docker exec lazyjournal lazyjournal -v
+          script -e -c "timeout 10s docker exec -t lazyjournal lazyjournal" interface.log || [ $? -eq 124 ]
+          cat interface.log
+
+      - name: Send report to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
+          format: markdown
+          message: |
+            🔔 **Action**: Docker CI/CD
+
+            📁 **Repository**: ${{ github.repository }}
+            👤 **User**: ${{ github.actor }}
+
+            Parameters:
+            **Current commit sha**: ${{ github.sha }}
+            **Commit sha for git checkout**: ${{ github.event.inputs.Commit != '' && github.event.inputs.Commit || github.sha }}
+            **Custom tag for docker image**: ${{ github.event.inputs.Tag != '' && github.event.inputs.Tag || env.VERSION }}
+
+            Results:
+            ${{ steps.lint.outcome == 'failure' && '❌' || '✅' }} **Dockerfile basic linters check**: ${{ steps.lint.outcome }}
+            ${{ steps.hadolint.outcome == 'failure' && '❌' || '✅' }} **Dockerfile hadolint check**: ${{ steps.hadolint.outcome }}
+            ${{ steps.build.outcome == 'failure' && '❌' || '✅' }} **Docker build only check**: ${{ steps.build.outcome }}
+            ${{ steps.customPush.outcome == 'failure' && '❌' || '✅' }} **Docker image build and push using custom tag**: ${{ steps.customPush.outcome }}
+            ${{ steps.latestPush.outcome == 'failure' && '❌' || '✅' }} **Docker image build and push using latest tag**: ${{ steps.latestPush.outcome }}
+            ${{ steps.containerCheck.outcome == 'failure' && '❌' || '✅' }} **Docker run container check**: ${{ steps.containerCheck.outcome }}
+
+            🔗 **Docker Hub**: [${{ env.VERSION }}](https://hub.docker.com/layers/lifailon/lazyjournal/${{ env.VERSION }})

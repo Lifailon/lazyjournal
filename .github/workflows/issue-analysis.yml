@@ -41,7 +41,7 @@ jobs:
             ${{ github.event.comment.body || github.event.issue.body }}
 
       - name: Generate report using AI
-        if: github.event_name == 'issues' && github.event.action == 'opened'
+        if: ${{ github.event_name == 'issues' && github.event.action == 'opened'}}
         id: ai_query
         uses: actions/ai-inference@v2
         with:
@@ -58,7 +58,7 @@ jobs:
             Description: ${{ github.event.issue.body }}
 
       - name: Post comment from AI
-        if: github.event_name == 'issues' && github.event.action == 'opened' && steps.ai_query.outputs.response != ''
+        if: ${{ github.event_name == 'issues' && github.event.action == 'opened' && steps.ai_query.outputs.response != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}

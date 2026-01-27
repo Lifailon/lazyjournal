@@ -28,7 +28,7 @@ on:
       Version:
         description: 'Version for build'
         required: false
-        default: ""
+        default: '' # 0.8.4 -> 0.8.4.1 -> 0.8.4.2
       Push:
         description: 'Push to PPA'
         default: false
@@ -103,7 +103,7 @@ jobs:
             echo -e "\n\033[33m>>> Update version in changelog\033[0m\n"
             VERSION=$(cat debian/changelog | head -n 1 | sed -E "s/.+\(//" | sed -E "s/\).+//" | sed -E "s/-[0-9]+//")
             sed -i -E "s/$VERSION-/${{ github.event.inputs.Version }}-/" debian/changelog
-            mv ../lazyjournal_$$VERSION.orig.tar.gz ../lazyjournal_${{ github.event.inputs.Version }}.orig.tar.gz
+            mv ../lazyjournal_$VERSION.orig.tar.gz ../lazyjournal_${{ github.event.inputs.Version }}.orig.tar.gz
             echo -e "\n\033[33m>>> Changelog\033[0m\n"
             cat debian/changelog
           fi
