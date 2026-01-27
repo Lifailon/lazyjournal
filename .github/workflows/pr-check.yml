@@ -1,0 +1,201 @@
+name: PR check and AI analysis
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  pull_request_review_comment:
+    types: [created]
+
+run-name: "Pull Request #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+
+jobs:
+  pr_tg_report:
+    if: ${{ github.event_name == 'pull_request' }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send message to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
+          format: markdown
+          message: |
+            🔔 **Action**: ${{ github.event_name }} ${{ github.event.action }} [#${{ github.event.pull_request.number }}](${{ github.event.comment.html_url || github.event.pull_request.html_url }})
+
+            📁 **Repository**: ${{ github.repository }}
+            🌿 **Branch**: ${{ github.event.pull_request.head.ref }} -> ${{ github.event.pull_request.base.ref }}
+            👤 **From user**: ${{ github.actor }}
+
+            📌 **Title**: ${{ github.event.pull_request.title }}
+            💬 **Description**:
+            ${{ github.event.comment.body || github.event.pull_request.body }}
+
+  pr_unit_test:
+    if: ${{ (github.event_name == 'pull_request' && github.event.action == 'opened') || github.event_name == 'workflow_dispatch' }}
+
+    permissions:
+      pull-requests: write
+      contents: read
+      models: read
+
+    runs-on: ubuntu-latest
+
+    env:
+      COVERAGE: 'n/a'
+
+    steps:
+      - name: Checkout repository (merge branch and 1 last commits)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25
+
+      - name: Install dependencies
+        run: |
+          go fmt ./...
+          go vet ./...
+          go get ./...
+          go mod tidy
+          go mod verify
+          go build -v ./...
+
+      - name: Start docker container
+        run: |
+          version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
+          curl -sSL "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+          sed "s/TTYD=false/TTYD=true/" docker-compose.yml -i
+          docker-compose up -d
+          docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
+
+      - name: Create pcap files
+        run: |
+          sudo tcpdump -i any -c 1 -w test.pcap
+          gzip -c test.pcap > test.pcap.gz
+          sudo tcpdump -i any -c 1 -w test.pcapng
+          gzip -c test.pcapng > test.pcapng.gz
+          ls -lh
+
+      - name: Install bat and tailspin
+        run: |
+          sudo apt install bat
+          bat --version || batcat --version || true
+          version=$(curl -s https://api.github.com/repos/bensadeh/tailspin/releases/latest | jq -r .tag_name)
+          curl -L "https://github.com/bensadeh/tailspin/releases/download/$version/tailspin-$(uname -m)-unknown-$(uname -s | tr '[:upper:]' '[:lower:]')-musl.tar.gz" -o /usr/local/bin/tailspin.tar.gz
+          tar -xzf /usr/local/bin/tailspin.tar.gz -C /usr/local/bin
+          mv /usr/local/bin/tspin /usr/local/bin/tailspin
+          chmod +x /usr/local/bin/tailspin
+          rm /usr/local/bin/*.tar.gz
+          tailspin --version
+
+      - name: Go unit testing
+        id: unitTesting
+        continue-on-error: true
+        timeout-minutes: 10
+        run: sudo env "PATH=$PATH" go test -v -cover | tee test.log
+
+      - name: Get coverage result
+        continue-on-error: true
+        run: |
+          COVERAGE=$(cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g")
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+          echo "## Test results" >> $GITHUB_STEP_SUMMARY
+          echo -e "Coverage: $COVERAGE" >> $GITHUB_STEP_SUMMARY
+
+      - name: Send message to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
+          format: markdown
+          message: |
+            🔔 **Action**: unit testing for pr [#${{ github.event.pull_request.number }}](${{ github.event.comment.html_url || github.event.pull_request.html_url }})
+
+            📁 **Repository**: ${{ github.repository }}
+            👤 **From user**: ${{ github.actor }}
+
+            🧪 **Result**: ${{ steps.unitTesting.outcome }}
+            🧪 **Coverage**: ${{ env.COVERAGE }}
+
+      - name: Post AI comment on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "### Unit testing results
+          
+          Status: ${{ steps.unitTesting.outcome }}
+
+          Coverage: $COVERAGE"
+
+  pr_ai_analysis:
+    needs: [pr_tg_report, pr_unit_test]
+
+    if: ${{ github.event_name == 'pull_request' && github.event.action == 'opened' }}
+
+    permissions:
+      pull-requests: write
+      contents: read
+      models: read
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (main branch and 1 last commits)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: main
+
+      - name: Get PR diff
+        id: pr_diff
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DIFF=$(gh pr diff ${{ github.event.pull_request.number }})
+          echo "diff<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Generate report using AI
+        id: ai_query
+        uses: actions/ai-inference@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          endpoint: https://models.github.ai/inference
+          model: gpt-4.1
+          max-tokens: 2048
+          system-prompt: |
+            You are a Pull Request Review Agent on GitHub.
+            Review the pull request and provide feedback.
+            Focus on potential bugs, security issues and code style.
+            Responses should be brief and written in English.
+          prompt: |
+            PR Title: ${{ github.event.pull_request.title }}
+            PR Description: ${{ github.event.pull_request.body }}
+
+            Code diff:
+            ${{ steps.pr_diff.outputs.diff }}
+            
+
+      - name: Post AI comment on PR
+        if: ${{ steps.ai_query.outputs.response != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          AI_RESPONSE: ${{ steps.ai_query.outputs.response }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "### AI Code Review
+          
+          $AI_RESPONSE"
