@@ -7,7 +7,7 @@ on:
   pull_request_review_comment:
     types: [created]
 
-run-name: "Pull Request #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+run-name: "${{ github.event_name == 'workflow_dispatch' && 'Unit testing only' || format('✅ Pull Request #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
 
 jobs:
   pr_tg_report:
@@ -147,9 +147,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh pr comment "$PR_NUMBER" --body "### Unit testing results
-          
-          Status: ${{ steps.unitTesting.outcome }}"
+          SUMMARY=$(cat $GITHUB_STEP_SUMMARY)
+          BODY=$(printf "### Unit testing results\n\nStatus: **${{ steps.unitTesting.outcome }}**\n\n$SUMMARY")
+          gh pr comment "$PR_NUMBER" --body "$BODY"
 
   pr_ai_review:
     name: AI review

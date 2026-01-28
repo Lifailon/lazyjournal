@@ -23,12 +23,12 @@ on:
         description: "Docker build only check"
         required: false
         type: boolean
-      Push:
-        description: 'Push on Docker Hub'
-        default: false
-        type: boolean
       Latest:
         description: 'Push latest image on Docker Hub'
+        default: false
+        type: boolean
+      Push:
+        description: 'Push custom tag on Docker Hub'
         default: false
         type: boolean
       Container:
@@ -44,6 +44,8 @@ jobs:
 
     env:
       VERSION: ''
+      SHORT_SHA: ''
+      CUSTOM_SHORT_SHA: ''
 
     steps:
       - name: Checkout repository (custom branch and all commits)
@@ -112,15 +114,6 @@ jobs:
           driver: docker-container
           install: true
 
-      - name: Docker image build and push on Docker Hub using current version or custom tag
-        id: customPush
-        if: ${{ github.event.inputs.Push == 'true' && env.VERSION != '' }}
-        run: |
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            -t lifailon/lazyjournal:$VERSION \
-            --push .
-
       - name: Docker image build and push on Docker Hub using latest tag
         id: latestPush
         if: ${{ github.event.inputs.Push == 'true' && github.event.inputs.Latest == 'true' }}
@@ -128,6 +121,15 @@ jobs:
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             -t lifailon/lazyjournal:latest \
+            --push .
+
+      - name: Docker image build and push on Docker Hub using current version or custom tag
+        id: customPush
+        if: ${{ github.event.inputs.Push == 'true' && env.VERSION != '' }}
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t lifailon/lazyjournal:$VERSION \
             --push .
 
       - name: Install Docker Compose
@@ -152,6 +154,13 @@ jobs:
           script -e -c "timeout 10s docker exec -t lazyjournal lazyjournal" interface.log || [ $? -eq 124 ]
           cat interface.log
 
+      - name: Short commit sha
+        run: |
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+          if [ -n "${{ github.event.inputs.Commit }}" ]; then
+            echo "CUSTOM_SHORT_SHA=$(echo ${{ github.event.inputs.Commit }} | cut -c1-7)" >> $GITHUB_ENV
+          fi
+
       - name: Send report to Telegram
         uses: appleboy/telegram-action@master
         with:
@@ -166,16 +175,14 @@ jobs:
             👤 **User**: ${{ github.actor }}
 
             Parameters:
-            **Current commit sha**: ${{ github.sha }}
-            **Commit sha for git checkout**: ${{ github.event.inputs.Commit != '' && github.event.inputs.Commit || github.sha }}
-            **Custom tag for docker image**: ${{ github.event.inputs.Tag != '' && github.event.inputs.Tag || env.VERSION }}
+            **Current commit sha**: ${{ format('[{1}](https://github.com/{0}/commit/{1})', github.repository, env.SHORT_SHA) }}
+            **Custom commit sha**: ${{ env.CUSTOM_SHORT_SHA != '' && format('[{1}](https://github.com/{0}/commit/{1})', github.repository, env.CUSTOM_SHORT_SHA) || '➖' }}
+            **Custom tag for docker image**: ${{ env.VERSION != '' && format('[{0}](https://hub.docker.com/layers/lifailon/lazyjournal/{0})', env.VERSION) || '➖' }}
 
             Results:
-            ${{ steps.lint.outcome == 'failure' && '❌' || '✅' }} **Dockerfile basic linters check**: ${{ steps.lint.outcome }}
-            ${{ steps.hadolint.outcome == 'failure' && '❌' || '✅' }} **Dockerfile hadolint check**: ${{ steps.hadolint.outcome }}
-            ${{ steps.build.outcome == 'failure' && '❌' || '✅' }} **Docker build only check**: ${{ steps.build.outcome }}
-            ${{ steps.customPush.outcome == 'failure' && '❌' || '✅' }} **Docker image build and push using custom tag**: ${{ steps.customPush.outcome }}
-            ${{ steps.latestPush.outcome == 'failure' && '❌' || '✅' }} **Docker image build and push using latest tag**: ${{ steps.latestPush.outcome }}
-            ${{ steps.containerCheck.outcome == 'failure' && '❌' || '✅' }} **Docker run container check**: ${{ steps.containerCheck.outcome }}
-
-            🔗 **Docker Hub**: [${{ env.VERSION }}](https://hub.docker.com/layers/lifailon/lazyjournal/${{ env.VERSION }})
+            ${{ steps.lint.outcome == 'success' && '✅' || (steps.lint.outcome == 'skipped' && '➖' || '❌') }} **Dockerfile basic linters check**: ${{ steps.lint.outcome }}
+            ${{ steps.hadolint.outcome == 'success' && '✅' || (steps.hadolint.outcome == 'skipped' && '➖' || '❌') }} **Dockerfile hadolint check**: ${{ steps.hadolint.outcome }}
+            ${{ steps.build.outcome == 'success' && '✅' || (steps.build.outcome == 'skipped' && '➖' || '❌') }} **Docker build only check**: ${{ steps.build.outcome }}
+            ${{ steps.latestPush.outcome == 'success' && '✅' || (steps.latestPush.outcome == 'skipped' && '➖' || '❌') }} **Docker image build and push using latest tag**: ${{ steps.latestPush.outcome }}
+            ${{ steps.customPush.outcome == 'success' && '✅' || (steps.customPush.outcome == 'skipped' && '➖' || '❌') }} **Docker image build and push using custom tag**: ${{ steps.customPush.outcome }}
+            ${{ steps.containerCheck.outcome == 'success' && '✅' || (steps.containerCheck.outcome == 'skipped' && '➖' || '❌') }} **Docker run container check**: ${{ steps.containerCheck.outcome }}
