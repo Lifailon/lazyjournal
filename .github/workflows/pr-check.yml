@@ -45,11 +45,9 @@ jobs:
       pull-requests: write
       contents: read
       models: read
+      checks: write
 
     runs-on: ubuntu-latest
-
-    env:
-      COVERAGE: 'n/a'
 
     steps:
       - name: Checkout repository (merge branch and 1 last commits)
@@ -112,16 +110,16 @@ jobs:
         timeout-minutes: 10
         run: | 
           # sudo env "PATH=$PATH" go test -v -cover | tee test.log
-          # sudo env "PATH=$PATH" go test -v 2>&1 main.go | go-junit-report -set-exit-code > report.xml
-          sudo env "PATH=$PATH" gotestsum --junitfile report.xml main.go
+          # sudo env "PATH=$PATH" go test -v 2>&1 ./... | go-junit-report -set-exit-code > report.xml
+          sudo env "PATH=$PATH" gotestsum --junitfile report.xml ./...
 
-      - name: Test report in summary
+      - name: Publish junit report in summary
         uses: test-summary/action@v2
         if: always()
         with:
           paths: "report.xml"
 
-      - name: Publish JUnit Test Results
+      - name: Publish junit report in annotations
         uses: mikepenz/action-junit-report@v6
         if: always()
         with:
