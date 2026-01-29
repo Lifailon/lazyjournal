@@ -37,20 +37,29 @@ run-debug: copy build-debug
 # Linters
 
 lint-install:
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-	go install github.com/go-critic/go-critic/cmd/gocritic@latest
-	go install github.com/securego/gosec/v2/cmd/gosec@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
 
-lint:
+lint-run: lint-install
 	golangci-lint run -v ./main.go
-	gocritic check -v -enableAll ./main.go
-	gosec -severity=high ./...
 
-lint-fix:
+lint-fix: lint-install
 	golangci-lint run --fix ./main.go
 
-lint-all:
-	golangci-lint run -v ./main.go --no-config --enable-all
+gocrit:
+	go install github.com/go-critic/go-critic/cmd/gocritic@latest
+	gocritic check -v -enableAll ./main.go
+
+gosec:
+	go install github.com/securego/gosec/v2/cmd/gosec@latest
+	gosec -severity=high ./...
+
+# Release
+
+goreleaser-install:
+	go install github.com/goreleaser/goreleaser/v2@latest
+
+release-check: goreleaser-install
+	goreleaser --clean --skip=publish --skip=validate
 
 # Tests
 
@@ -58,7 +67,7 @@ test-list:
 	@go test -list . ./...
 	@echo "\nTo run the selected test: \033[32mmake test n=TestMain*\033[0m\n"
 
-test:
+test-run:
 	go test -v -cover --run $(n) ./...
 
 test-all:
@@ -137,10 +146,6 @@ uninstall:
 docker-build:
 	@docker build -t lifailon/lazyjournal:latest .
 
-compose-up:
+docker-run:
 	@docker compose up -d
 	@docker exec -it lazyjournal lazyjournal
-
-compose-down:
-	@docker compose down
-	@docker rmi lifailon/lazyjournal

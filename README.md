@@ -362,9 +362,9 @@ Unit tests cover all main functions and interface operation.
 
 ```bash
 # Get a list of all tests
-make list
+make test-list
 # Run selected or all tests
-make test n=TestMockInterface
+make test-run n=TestMockInterface
 make test-all
 ```
 
