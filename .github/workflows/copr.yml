@@ -1,14 +1,14 @@
-name: Build rpm package and push to Fedora Copr
+name: Build rpm packages and push to Fedora Copr
 
 on:
   workflow_dispatch:
     inputs:
       Upload:
-        description: 'Upload snap packages to artifacts'
+        description: 'Upload rpm packages to artifacts'
         default: true
         type: boolean
       Push:
-        description: 'Publish to Snapcraft'
+        description: 'Publish to Copr'
         default: false
         type: boolean
 
@@ -28,7 +28,7 @@ jobs:
           go-version: 1.25
 
       - name: Add rpm format to goreleaser config
-        run: echo "      - rpm" >> .goreleaser.yaml
+        run: echo -e "\n      - rpm" >> .goreleaser.yaml
 
       - name: Build packages using goreleaser
         uses: goreleaser/goreleaser-action@v6

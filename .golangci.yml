@@ -1,51 +1,72 @@
-# https://golangci-lint.run/docs/configuration/file
-# https://golangci-lint.run/docs/linters
 version: "2"
+
 linters:
-  # default: none
-  # enable:
-  #   - errcheck
-  #   - gosimple
-  #   - govet
-  #   - ineffassign
-  #   - staticcheck
-  #   - unused
-  #   - err113
-  #   - unparam
-  #   - gocritic
-  #   - misspell
-  #   - perfsprint
-  default: all
-  disable:
-    - gosec
-    - makezero
-    - dupl
-    - wsl
-    - wsl_v5
-    - goconst
-    - gocognit
-    - gocyclo
-    - revive
-    - maintidx
-    - cyclop
-    - depguard
-    - forbidigo
-    - funlen
-    - godot
-    - lll
-    - mnd
-    - nestif
-    - nilerr
-    - nlreturn
-    - tagliatelle
-    - varnamelen
-    - wrapcheck
-    - ireturn
-    - nonamedreturns
-    - exhaustruct
-    - unconvert
+  default: none
+  enable:
+    # Default
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    # Autofix
+    - gocritic
+    - err113
+    - canonicalheader
     - copyloopvar
+    - dupword
+    - errorlint
+    - exptostd
+    - fatcontext
+    - ginkgolinter
+    - godot
+    - goheader
+    - iface
+    - importas
     - intrange
-    - paralleltest
-    - gochecknoglobals
-    - prealloc
+    - mirror
+    - misspell
+    - nakedret
+    - nlreturn
+    - nolintlint
+    - perfsprint
+    - protogetter
+    - sloglint
+    - staticcheck
+    - tagalign
+    - testifylint
+    - usestdlibvars
+    - usetesting
+    - whitespace
+    - wsl_v5
+
+  # default: all
+  # disable:
+  #   - revive
+  #   - cyclop
+  #   - gocyclo
+  #   - maintidx
+  #   - ireturn
+  #   - nonamedreturns
+  #   - depguard
+  #   - dupl
+  #   - exhaustruct
+  #   - forbidigo
+  #   - funlen
+  #   - gochecknoglobals
+  #   - gocognit
+  #   - goconst
+  #   - godoclint
+  #   - gosec
+  #   - lll
+  #   - makezero
+  #   - mnd
+  #   - nestif
+  #   - nilerr
+  #   - noctx
+  #   - noinlineerr
+  #   - prealloc
+  #   - tagliatelle
+  #   - unconvert
+  #   - varnamelen
+  #   - wrapcheck

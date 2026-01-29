@@ -55,12 +55,12 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: patch
 
-      - name: Create a GitHub release
-        uses: ncipollo/release-action@v1.20.0
-        with:
-          tag: ${{ steps.tag.outputs.new_tag }}
-          name: Release ${{ steps.tag.outputs.new_tag }}
-          body: ${{ steps.tag.outputs.changelog }}
+      # - name: Create GitHub release
+      #   uses: ncipollo/release-action@v1.20.0
+      #   with:
+      #     tag: ${{ steps.tag.outputs.new_tag }}
+      #     name: ${{ steps.tag.outputs.new_tag }}
+      #     body: ${{ steps.tag.outputs.changelog }}
 
       - name: Go release publish
         if: ${{ github.event_name == 'push' }}

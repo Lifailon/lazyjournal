@@ -1,4 +1,4 @@
-name: Build deb package and push to Ubuntu PPA
+name: Build deb packages and push to Ubuntu PPA
 
 on:
   workflow_dispatch:
@@ -34,7 +34,7 @@ on:
         required: false
         default: '' # 0.8.4 -> 0.8.4.1 -> 0.8.4.2
       Push:
-        description: 'Push to PPA'
+        description: 'Publish to PPA'
         default: false
         type: boolean
 

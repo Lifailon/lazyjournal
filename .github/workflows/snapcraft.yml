@@ -1,4 +1,4 @@
-name: Build snap package and push to Snapcraft
+name: Build snap packages and push to Snapcraft
 
 on:
   workflow_dispatch:
@@ -41,9 +41,9 @@ jobs:
             cat <<'EOF' > snapcraft.yaml
             name: lazyjournal
             version: 'latest'
-            summary: A TUI for reading logs from journald, auditd, file system and containers.
+            summary: TUI for viewing logs from system and containers.
             description: |
-              Terminal user interface for reading logs from journald, auditd, file system, Docker and Podman containers, as well Kubernetes pods for quick viewing and filtering with fuzzy find, regex support and coloring the output, written in Go with the gocui.
+              TUI for viewing logs from journald, auditd, file system, Docker and Podman containers, Compose stacks and Kubernetes pods.
             base: core20
             confinement: classic
             architectures:
