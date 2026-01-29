@@ -4,7 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       Update:
+        description: 'Update go version'
+        default: false
+        type: boolean
+      Version:
+        description: 'Version for Go'
+        required: false
+        default: ''
+      Modules:
         description: 'Update dependencies in modules'
+        default: false
+        type: boolean
+      Golangci:
+        description: 'Golangci linters check'
         default: false
         type: boolean
       Fix:
@@ -13,10 +25,6 @@ on:
         type: boolean
       PR:
         description: 'Create Pull Request'
-        default: false
-        type: boolean
-      Golangci:
-        description: 'Golangci linters check'
         default: false
         type: boolean
       Gocrit:
@@ -42,13 +50,13 @@ jobs:
 
     steps:
       - name: Checkout repository (main branch and 1 last commits)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
           ref: main
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25
 
@@ -61,35 +69,120 @@ jobs:
           go mod verify
           go build -v ./...
 
+      - name: Get build parameters to summary
+        shell: bash
+        run: |
+          echo "### Parameters" >> $GITHUB_STEP_SUMMARY
+          echo "- **Update go version**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Update dependencies in modules (`go.mod`)**: ${{ github.event.inputs.Modules == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Golangci linters fix in `main.go`**: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Create Pull Request**: ${{ github.event.inputs.PR == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go critical linters check**: ${{ github.event.inputs.Gocrit == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go security linters check**: ${{ github.event.inputs.Gosec == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+
       - name: Get app version in env
         run: |
           APP_VERSION=$(go run main.go -v)
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
 
+      - name: Update Go version
+        if: ${{ github.event.inputs.Update == 'true' && github.event.inputs.Version != '' }}
+        run: |
+          go mod edit -go=${{ github.event.inputs.Version }}
+          # go mod edit -toolchain=go${{ github.event.inputs.Version }}
+          go mod tidy
+
+      - name: Reinstall Go on new version
+        if: ${{ github.event.inputs.Update == 'true' && github.event.inputs.Version != '' }}
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ github.event.inputs.Version }}
+          cache: true
+
       - name: Update dependencies in modules
-        if: ${{ github.event.inputs.Update == 'true' }}
+        if: ${{ github.event.inputs.Modules == 'true' }}
         run: go get -u ./...
 
-      - name: Create Pull Request for update dependencies
-        if: ${{ github.event.inputs.Update == 'true' && github.event.inputs.PR == 'true' }}
+      - name: Create Pull Request for update go version amd dependencies
+        if: ${{ github.event.inputs.Modules == 'true' && github.event.inputs.PR == 'true' }}
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "actions: update dependencies"
           branch: "fix/${{ env.APP_VERSION }}-update"
-          title: "Updated dependencies (modules)"
-          body: "Updated dependencies in the `go.mod` and `go.sum` files."
+          title: "Updated dependencies"
+          body: "Updated go version and modules in `go.mod` and `go.sum` files."
           add-paths: |
             go.mod
             go.sum
 
       - name: Install golangci
-        if: ${{ github.event.inputs.Fix == 'true'|| github.event.inputs.golangci == 'true' }}
+        if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+
+      - name: Golangci check config
+        id: configCheck
+        if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
+        run: golangci-lint config verify --verbose
+
+      - name: Get linters for check to summary
+        if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
+        run: |
+          golangci-lint --version
+          version=$(golangci-lint --version | grep -Eo "[0-9.]+" | head -n 1)
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "Golangci version: $version" >> $GITHUB_STEP_SUMMARY
+          echo "Check config status: ${{ steps.configCheck.outcome }}"
+          golangci-lint linters
+          golangci-lint linters > linters.md
+          sed "s/Enabled by your configuration linters:/## Enabled linters/" -i linters.md
+          sed "s/Disabled by your configuration linters:/## Disabled linters/" -i linters.md
+          sed "s/ \[deprecated\]//g" -i linters.md
+          sed "s/. \[(.+)\]/ (**$1**)./g" -i linters.md
+          sed -E "s/\. \[(.+)\]/ (**\1**)./g" -i linters.md
+          linters=$(cat linters.md | awk -F ":" '/:/ {print "- [" $1"](https://golangci-lint.run/docs/linters/configuration/#"$1") -" $2":"$3; next} {print $0}')
+          echo "$linters" > linters.md
+
+      - name: Golangci install and linters check using action
+        id: golangci
+        if: ${{ github.event.inputs.golangci == 'true' }}
+        continue-on-error: true
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.8.0
+          args: ./main.go
+
+      - name: Get issues result from linters check to summary
+        if: ${{ github.event.inputs.golangci == 'true' }}
+        continue-on-error: true
+        run: |
+          echo "### Linters check results" >> $GITHUB_STEP_SUMMARY
+          golangci-lint run ./main.go > results.md
+          sed -n '/issues:/,$p' -i results.md
+          cat results.md >> $GITHUB_STEP_SUMMARY
 
       - name: Golangci linters fix in main.go
         if: ${{ github.event.inputs.Fix == 'true' }}
+        continue-on-error: true
         run: golangci-lint run --fix ./main.go
+
+      - name: Golangci linters check after fix
+        if: ${{ github.event.inputs.Fix == 'true' }}
+        continue-on-error: true
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.8.0
+          args: ./main.go
+
+      - name: Get issues result from linters check to summary after fix
+        if: ${{ github.event.inputs.Fix == 'true' }}
+        continue-on-error: true
+        run: |
+          echo "### Linters check results after fix" >> $GITHUB_STEP_SUMMARY
+          golangci-lint run ./main.go > results.md
+          sed -n '/issues:/,$p' -i results.md
+          cat results.md >> $GITHUB_STEP_SUMMARY
 
       - name: Create Pull Request for fix lint
         if: ${{ github.event.inputs.Fix == 'true' && github.event.inputs.PR == 'true' }}
@@ -102,21 +195,6 @@ jobs:
           body: "Automatically fixing linters with golangci from GitHub Actions."
           add-paths: |
             main.go
-
-      - name: Golangci lint action
-        id: golangci
-        if: ${{ github.event.inputs.golangci == 'true' }}
-        continue-on-error: true
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.8.0
-          args: -v ./main.go
-
-      # - name: Golangci linters check
-      #   id: golangci
-      #   if: ${{ github.event.inputs.golangci == 'true' }}
-      #   continue-on-error: true
-      #   run: golangci-lint run --out-format=github-actions -v ./main.go # --no-config --enable-all
 
       - name: Go critical linters check
         id: gocrit
@@ -148,10 +226,11 @@ jobs:
             👤 **User**: ${{ github.actor }}
             
             Parameters:
-            **Update dependencies in `go.mod`**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}
+            **Update go version**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}
+            **Update dependencies in modules (`go.mod`)**: ${{ github.event.inputs.Modules == 'true' && '✅' || '❌' }}
+            **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}
             **Golangci linters fix in `main.go`**: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}
             **Create Pull Request**: ${{ github.event.inputs.PR == 'true' && '✅' || '❌' }}
-            **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}
             **Go critical linters check**: ${{ github.event.inputs.Gocrit == 'true' && '✅' || '❌' }}
             **Go security linters check**: ${{ github.event.inputs.Gosec == 'true' && '✅' || '❌' }}
 

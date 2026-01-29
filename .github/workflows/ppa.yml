@@ -51,6 +51,11 @@ jobs:
           fetch-depth: 1
           ref: main
 
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.23
+
       - name: Check install package from PPA
         if: ${{ github.event.inputs.Install == 'true' }}
         run: |
