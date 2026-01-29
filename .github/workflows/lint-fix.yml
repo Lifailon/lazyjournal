@@ -104,7 +104,9 @@ jobs:
             main.go
 
       - name: Golangci lint action
+        id: golangci
         if: ${{ github.event.inputs.golangci == 'true' }}
+        continue-on-error: true
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest

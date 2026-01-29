@@ -124,7 +124,7 @@ jobs:
       - name: Go unit testing
         id: unitTesting
         timeout-minutes: 10
-        run: sudo env "PATH=$PATH" gotestsum --junitfile report.xml -- ./... -v -cover
+        run: sudo env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover
 
       - name: Publish junit report in summary
         uses: test-summary/action@v2
