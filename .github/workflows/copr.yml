@@ -2,14 +2,25 @@ name: Build rpm package and push to Fedora Copr
 
 on:
   workflow_dispatch:
+    inputs:
+      Upload:
+        description: 'Upload snap packages to artifacts'
+        default: true
+        type: boolean
+      Push:
+        description: 'Publish to Snapcraft'
+        default: false
+        type: boolean
 
 jobs:
   copr:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (all commits)
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Install Go
         uses: actions/setup-go@v6
@@ -25,10 +36,19 @@ jobs:
           distribution: goreleaser
           args: release --clean --skip=publish --skip=validate
 
+      - name: Upload rpm package
+        if: ${{ github.event.inputs.Upload == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-packages
+          path: dist/*.rpm
+
       - name: Install copr cli
+        if: ${{ github.event.inputs.Push == 'true' }}
         run: pip install copr-cli
 
       - name: Publish to Copr
+        if: ${{ github.event.inputs.Push == 'true' }}
         env:
           COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
         run: |

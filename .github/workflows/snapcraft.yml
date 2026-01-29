@@ -1,9 +1,13 @@
-name: Build snap package and Push to Snapcraft
+name: Build snap package and push to Snapcraft
 
 on:
   workflow_dispatch:
     inputs:
-      Snapcraft:
+      Upload:
+        description: 'Upload snap packages to artifacts'
+        default: true
+        type: boolean
+      Push:
         description: 'Publish to Snapcraft'
         default: false
         type: boolean
@@ -68,21 +72,23 @@ jobs:
             mv *.snap packages/lazyjournal-$version-$arch.snap
             sed -i "s/$arch/latest/g" snapcraft.yaml
           done
+          ls packages/*.snap
 
       - name: Check install snap package
         run: |
           sudo snap install packages/*-amd64.snap --dangerous --classic
           lazyjournal -v
-          snap remove lazyjournal
+          sudo snap remove lazyjournal
 
       - name: Upload snap package
+        if: ${{ github.event.inputs.Upload == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: snap-package
-          path: lazyjournal*.snap
+          name: snap-packages
+          path: packages/*.snap
 
       - name: Login and push to Snapcraft
-        if: ${{ github.event.inputs.Snapcraft == 'true' }}
+        if: ${{ github.event.inputs.Push == 'true' }}
         run: |
           # snapcraft export-login --snaps lazyjournal snap-login.txt
           export SNAPCRAFT_STORE_CREDENTIALS="${{ secrets.SNAPCRAFT_SECRET }}"

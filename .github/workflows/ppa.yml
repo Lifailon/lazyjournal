@@ -3,6 +3,10 @@ name: Build deb package and push to Ubuntu PPA
 on:
   workflow_dispatch:
     inputs:
+      Install:
+        description: 'Check install only from PPA'
+        default: false
+        type: boolean
       Runner:
         description: 'Select runner image'
         required: true
@@ -12,7 +16,7 @@ on:
           - 'ubuntu-24.04' # noble
           - 'ubuntu-22.04' # jammy
       Distro:
-        description: 'Ubuntu distro name in changelog'
+        description: 'Ubuntu distro name for build'
         required: true
         default: 'jammy'
         type: choice
@@ -33,10 +37,6 @@ on:
         description: 'Push to PPA'
         default: false
         type: boolean
-      Install:
-        description: 'Check install only'
-        default: false
-        type: boolean
 
 jobs:
   test:
@@ -50,6 +50,16 @@ jobs:
         with:
           fetch-depth: 1
           ref: main
+
+      - name: Check install package from PPA
+        if: ${{ github.event.inputs.Install == 'true' }}
+        run: |
+          sudo add-apt-repository -y ppa:lifailon/lazyjournal
+          sudo apt update
+          apt-cache policy lazyjournal
+          sudo apt install -y lazyjournal
+          lazyjournal -v
+          sudo apt remove -y lazyjournal
 
       - name: Install package tools
         if: ${{ github.event.inputs.Install != 'true' }}
@@ -121,13 +131,3 @@ jobs:
         if: ${{ github.event.inputs.Install != 'true' && github.event.inputs.Push == 'true' }}
         run: |
           dput ppa:lifailon/lazyjournal ../*.changes
-
-      - name: Check install package
-        if: ${{ github.event.inputs.Install == 'true' }}
-        run: |
-          sudo add-apt-repository -y ppa:lifailon/lazyjournal
-          sudo apt update
-          apt-cache policy lazyjournal
-          sudo apt install -y lazyjournal
-          lazyjournal -v
-          sudo apt remove -y lazyjournal

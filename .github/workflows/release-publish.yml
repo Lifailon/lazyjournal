@@ -23,8 +23,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (all commits)
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Install Go
         uses: actions/setup-go@v6
