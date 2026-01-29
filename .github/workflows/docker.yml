@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout repository (custom branch and all commits)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -74,7 +74,7 @@ jobs:
 
       - name: Install Go
         if: ${{ github.event.inputs.Push == 'true' && github.event.inputs.Tag == '' }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25
 
