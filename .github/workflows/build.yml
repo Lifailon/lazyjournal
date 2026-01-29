@@ -36,7 +36,7 @@ on:
         default: false
         type: boolean
 
-run-name: "Build #${{ github.run_number }} on ${{ github.event.inputs.Distro }}"
+run-name: "CI #${{ github.run_number }} on ${{ github.event.inputs.Distro }}"
 
 jobs:
   test:
@@ -134,14 +134,15 @@ jobs:
           rm /usr/local/bin/*.tar.gz
           tailspin --version
 
-      - name: Unit testing (all functions and mock interface) in Linux
+      - name: Install gotestsum for junit report
+        if: ${{ github.event.inputs.Test == 'true' }}
+        run: go install gotest.tools/gotestsum@latest
+
+      - name: Unit testing in Linux (all functions and mock interface)
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'ubuntu-24.04' }}
         continue-on-error: true
         timeout-minutes: 10
-        run: |
-          sudo env "PATH=$PATH" go test -v -cover | tee test.log
-          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
-          cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
+        run: sudo env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover | tee test.log
 
       # Unit testing for Docker without root
 
@@ -158,29 +159,18 @@ jobs:
           docker logs lazyjournal | go run main.go -c
           docker logs lazyjournal | go run main.go -f "start"
           docker logs lazyjournal | go run main.go -r "start|close"
-
-      - name: Create markdown report in Linux
-        if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'ubuntu-24.04' }}
-        continue-on-error: true
-        run: cat test-report.md >> $GITHUB_STEP_SUMMARY
+          docker logs lazyjournal | go run main.go -c -r "start|close"
 
       # Unit testing in macOS
 
-      - name: Unit testing (files, flags, cli and run main interface) in macOS
+      - name: Unit testing in macOS (files, flags, cli and run main interface)
         if: ${{ github.event.inputs.Test == 'true' && (github.event.inputs.Distro == 'macos-15' || github.event.inputs.Distro == 'macos-26') }}
         continue-on-error: true
         timeout-minutes: 5
         shell: bash
         run: |
-          sudo go test -v -cover --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" | tee test.log
-          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
-          cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
-
-      - name: Create markdown report in macOS
-        if: ${{ github.event.inputs.Test == 'true' && (github.event.inputs.Distro == 'macos-15' || github.event.inputs.Distro == 'macos-26') }}
-        continue-on-error: true
-        shell: bash
-        run: cat test-report.md >> $GITHUB_STEP_SUMMARY
+          env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover \
+            --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" | tee test.log
 
       # Unit testing in Windows
 
@@ -192,17 +182,47 @@ jobs:
           New-Item -Path "$env:APPDATA\test" -Type Directory
           "line test" | Out-File -FilePath "$env:APPDATA\test\test.log"
 
-      - name: Unit testing (events, files, flags, cli, main and mock interface) in Windows
+      - name: Unit testing in Windows (events, files, flags, cli, main and mock interface)
         if: ${{ github.event.inputs.Test == 'true' && (github.event.inputs.Distro == 'windows-2022' || github.event.inputs.Distro == 'windows-2025') }}
         continue-on-error: true
         timeout-minutes: 5
         shell: bash
         run: |
-          go test -v -cover --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" | tee test.log
-          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
-          cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g" >> $GITHUB_STEP_SUMMARY
+          env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover \
+            --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" | tee test.log
 
-      - name: Create markdown report in Windows
+      # Junit report
+
+      - name: Publish junit report in summary
+        uses: test-summary/action@v2
+        if: ${{ github.event.inputs.Test == 'true' }}
+        with:
+          paths: "report.xml"
+
+      - name: Publish junit report in annotations
+        uses: mikepenz/action-junit-report@v6
+        if: ${{ github.event.inputs.Test == 'true' }}
+        with:
+          report_paths: "report.xml"
+
+      # Markdown report
+
+      - name: Get coverage result
+        if: ${{ github.event.inputs.Test == 'true' }}
+        continue-on-error: true
+        run: |
+          COVERAGE=$(cat test.log | grep -E "^coverage: " | sed "s/coverage: //" | sed -E "s/ of.+//")
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "$COVERAGE" >> $GITHUB_STEP_SUMMARY
+
+      - name: Send markdown report to summary for Linux or macOS
+        if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'windows-2022' && github.event.inputs.Distro != 'windows-2025' }}
+        continue-on-error: true
+        shell: bash
+        run: cat test-report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Send markdown report to summary for Windows
         if: ${{ github.event.inputs.Test == 'true' && (github.event.inputs.Distro == 'windows-2022' || github.event.inputs.Distro == 'windows-2025') }}
         continue-on-error: true
         shell: pwsh
@@ -268,13 +288,7 @@ jobs:
           tmux capture-pane -p
           tmux kill-session -t test-session
 
-      # Telegram
-
-      - name: Get coverage result
-        continue-on-error: true
-        run: |
-          COVERAGE=$(cat test.log | tail -n 2 | head -n 1 | sed "s/coverage: //" | sed -E "s/of.+//g")
-          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+      # Telegram report
 
       - name: Send report to Telegram
         uses: appleboy/telegram-action@master
