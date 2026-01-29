@@ -166,8 +166,8 @@ jobs:
 
       - name: Unit testing in macOS (files, flags, cli and run main interface)
         if: ${{ github.event.inputs.Test == 'true' && (github.event.inputs.Distro == 'macos-15' || github.event.inputs.Distro == 'macos-26') }}
-        continue-on-error: true
         timeout-minutes: 5
+        continue-on-error: true
         shell: bash
         run: |
           env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover \
@@ -185,8 +185,8 @@ jobs:
 
       - name: Unit testing in Windows (events, files, flags, cli, main and mock interface)
         if: ${{ github.event.inputs.Test == 'true' && (github.event.inputs.Distro == 'windows-2022' || github.event.inputs.Distro == 'windows-2025') }}
-        continue-on-error: true
         timeout-minutes: 5
+        continue-on-error: true
         shell: bash
         run: |
           env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover \
@@ -195,6 +195,8 @@ jobs:
       # Build info report
 
       - name: Send build info report to summary
+        continue-on-error: true
+        shell: bash
         run: |
           cat build-info.md >> $GITHUB_STEP_SUMMARY
 
@@ -203,6 +205,7 @@ jobs:
       - name: Get coverage result
         if: ${{ github.event.inputs.Test == 'true' }}
         continue-on-error: true
+        shell: bash
         run: |
           COVERAGE=$(cat test.log | grep -E "^coverage: " | sed "s/coverage: //" | sed -E "s/ of.+//")
           echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV

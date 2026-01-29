@@ -1,0 +1,47 @@
+version: 2
+
+project_name: lazyjournal
+
+release:
+  name_template: '{{.Tag}}'
+
+checksum:
+  disable: true
+
+changelog:
+  use: git
+  sort: asc
+  format: "{{.SHA}}: {{.Message}}"
+  filters:
+    exclude:
+      - '.*workflow.*'
+      - '.*telegram.*'
+      - '.*report.*'
+      - '.*install.*'
+      - '.*package.*'
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+      - openbsd
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - name_template: "{{ .ProjectName }}-{{- .Version }}-{{- .Os }}-{{- .Arch }}"
+    formats:
+      - binary
+
+nfpms:
+  - file_name_template: "{{ .ProjectName }}-{{- .Version }}-{{- .Arch }}"
+    package_name: "{{ .ProjectName }}"
+    maintainer: "https://github.com/Lifailon"
+    description: "TUI for viewing logs from journald, auditd, file system, Docker and Podman containers, Compose stacks and Kubernetes pods."
+    formats:
+      - deb

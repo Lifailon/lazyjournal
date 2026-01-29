@@ -1,0 +1,78 @@
+name: Release Publish on GitHub
+
+on:
+  workflow_dispatch:
+    inputs:
+      Tag:
+        description: 'Create git tag for patch version'
+        default: false
+        type: boolean
+      Upload:
+        description: 'Upload artifacts'
+        default: false
+        type: boolean
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.25
+
+      - name: Install goreleaser
+        run: go install github.com/goreleaser/goreleaser/v2@latest
+
+      - name: Go release check
+        run: goreleaser --clean --skip=publish --skip=validate 2>&1 | tee goreleaser.log
+
+      - name: Upload results and changelog to summary
+        run: |
+          echo "## Results" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          cat goreleaser.log >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          cat dist/CHANGELOG.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Create git tag for patch version
+        if: ${{ github.event.inputs.Tag == 'true' }}
+        id: tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+
+      - name: Create a GitHub release
+        uses: ncipollo/release-action@v1.20.0
+        with:
+          tag: ${{ steps.tag.outputs.new_tag }}
+          name: Release ${{ steps.tag.outputs.new_tag }}
+          body: ${{ steps.tag.outputs.changelog }}
+
+      - name: Go release publish
+        if: ${{ github.event_name == 'push' }}
+        uses: goreleaser/goreleaser-action@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          distribution: goreleaser
+          args: release --clean
+
+      - name: Upload artifacts
+        if: ${{ github.event.inputs.Upload == 'true' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: binary-packages
+          path: dist/*
+          retention-days: 7

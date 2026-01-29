@@ -10,6 +10,14 @@ lazyjournal
 *.deb
 *.rpm
 
+# Goreleaser
+goreleaser.log
+/dist/
+
+# Linters
+linters.md
+results.md
+
 # Test reports
 *report.md
 *.out
