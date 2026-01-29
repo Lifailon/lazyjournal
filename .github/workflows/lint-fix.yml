@@ -83,11 +83,13 @@ jobs:
             go.mod
             go.sum
 
+      - name: Install golangci
+        if: ${{ github.event.inputs.Fix == 'true'|| github.event.inputs.golangci == 'true' }}
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest  
+
       - name: Golangci linters fix in main.go
         if: ${{ github.event.inputs.Fix == 'true' }}
-        run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest  
-          golangci-lint run --fix ./main.go
+        run: golangci-lint run --fix ./main.go
 
       - name: Create Pull Request for fix lint
         if: ${{ github.event.inputs.Fix == 'true' && github.event.inputs.PR == 'true' }}
@@ -101,16 +103,18 @@ jobs:
           add-paths: |
             main.go
 
-      # - name: Golangci lint action
-      #   uses: golangci/golangci-lint-action@v9
-      #   with:
-      #     version: latest
-
-      - name: Golangci linters check
-        id: golangci
+      - name: Golangci lint action
         if: ${{ github.event.inputs.golangci == 'true' }}
-        continue-on-error: true
-        run: golangci-lint run --out-format=github-actions -v ./main.go # --no-config --enable-all
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: -v ./main.go
+
+      # - name: Golangci linters check
+      #   id: golangci
+      #   if: ${{ github.event.inputs.golangci == 'true' }}
+      #   continue-on-error: true
+      #   run: golangci-lint run --out-format=github-actions -v ./main.go # --no-config --enable-all
 
       - name: Go critical linters check
         id: gocrit
