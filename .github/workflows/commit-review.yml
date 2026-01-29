@@ -66,6 +66,7 @@ jobs:
 
       - name: Send AI report to Telegram
         uses: appleboy/telegram-action@master
+        continue-on-error: true
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
           to: ${{ secrets.TELEGRAM_CHANNEL_ID }}

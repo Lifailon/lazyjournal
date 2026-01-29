@@ -19,7 +19,9 @@ jobs:
 
     steps:
       - name: Send message to Telegram
+        id: tg_msg
         uses: appleboy/telegram-action@master
+        continue-on-error: true
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
           to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
@@ -35,6 +37,23 @@ jobs:
             📌 **Title**: ${{ github.event.pull_request.title }}
             💬 **Description**:
             ${{ github.event.comment.body || github.event.pull_request.body }}
+
+      - name: Send action and title only to Telegram (if error sending description)
+        if: ${{ steps.tg_msg.outcome == 'failure' }}
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
+          format: markdown
+          message: |
+            🔔 **Action**: ${{ github.event_name }} ${{ github.event.action }} [#${{ github.event.pull_request.number }}](${{ github.event.comment.html_url || github.event.pull_request.html_url }})
+
+            📁 **Repository**: ${{ github.repository }}
+            🌿 **Branch**: ${{ github.event.pull_request.head.ref }} -> ${{ github.event.pull_request.base.ref }}
+            👤 **From user**: ${{ github.actor }}
+
+            📌 **Title**: ${{ github.event.pull_request.title }}
 
   pr_unit_test:
     name: Unit testing

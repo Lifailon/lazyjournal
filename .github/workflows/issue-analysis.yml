@@ -24,7 +24,9 @@ jobs:
           ref: main
 
       - name: Send message to Telegram
+        id: tg_msg
         uses: appleboy/telegram-action@master
+        continue-on-error: true
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
           to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
@@ -39,6 +41,23 @@ jobs:
             📌 **Title**: ${{ github.event.issue.title }}
             💬 **Description**:
             ${{ github.event.comment.body || github.event.issue.body }}
+
+      - name: Send action and title only to Telegram (if error sending description)
+        if: ${{ steps.tg_msg.outcome == 'failure' }}
+        uses: appleboy/telegram-action@master
+        continue-on-error: true
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
+          format: markdown
+          message: |
+            🔔 **Action**: ${{ github.event_name }} ${{ github.event.action }} [#${{ github.event.issue.number }}](${{ github.event.comment.html_url || github.event.issue.html_url }})
+
+            📁 **Repository**: ${{ github.repository }}
+            👤 **From user**: ${{ github.actor }}
+
+            📌 **Title**: ${{ github.event.issue.title }}
 
       - name: Generate report using AI
         if: ${{ github.event_name == 'issues' && github.event.action == 'opened'}}

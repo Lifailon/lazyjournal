@@ -32,6 +32,9 @@ jobs:
   lint:
     name: Linters check
 
+    permissions:
+      contents: read
+
     runs-on: ubuntu-latest
 
     env:
@@ -98,11 +101,16 @@ jobs:
           add-paths: |
             main.go
 
+      # - name: Golangci lint action
+      #   uses: golangci/golangci-lint-action@v9
+      #   with:
+      #     version: latest
+
       - name: Golangci linters check
         id: golangci
         if: ${{ github.event.inputs.golangci == 'true' }}
         continue-on-error: true
-        run: golangci-lint run -v ./main.go # --no-config --enable-all
+        run: golangci-lint run --out-format=github-actions -v ./main.go # --no-config --enable-all
 
       - name: Go critical linters check
         id: gocrit
