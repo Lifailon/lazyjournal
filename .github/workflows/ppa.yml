@@ -1,4 +1,4 @@
-name: Build deb package and push to PPA
+name: Build deb package and push to Ubuntu PPA
 
 on:
   workflow_dispatch:
