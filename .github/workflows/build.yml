@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       Distro:
-        description: 'Select runner image'
+        description: 'Select runner image for testing'
         required: true
         default: 'ubuntu-24.04'
         type: choice
@@ -206,8 +206,9 @@ jobs:
         run: |
           COVERAGE=$(cat test.log | grep -E "^coverage: " | sed "s/coverage: //" | sed -E "s/ of.+//")
           echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+          echo "---" >> $GITHUB_STEP_SUMMARY
           echo "## 🧪 Test report" >> $GITHUB_STEP_SUMMARY
-          echo "Coverage: $COVERAGE" >> $GITHUB_STEP_SUMMARY
+          echo "💡 **Coverage**: $COVERAGE" >> $GITHUB_STEP_SUMMARY
 
       # Junit report
 
@@ -299,8 +300,9 @@ jobs:
 
       # Telegram report
 
-      - name: Send report to Telegram
+      - name: Send report to Telegram only on Linux
         uses: appleboy/telegram-action@master
+        if: ${{ github.event.inputs.Distro == 'ubuntu-24.04' }}
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
           to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
@@ -328,7 +330,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    name: Build on ${{ github.event.inputs.Distro }}
+    name: Build on ubuntu-latest
+
+    if: ${{ github.event.inputs.Binary == 'true' || github.event.inputs.README == 'true' }}
 
     env:
       VERSION: 'latest'
@@ -362,7 +366,6 @@ jobs:
       # Build binary and deb package
 
       - name: Build binaries
-        if: ${{ github.event.inputs.Binary == 'true' }}
         run: |
           mkdir -p bin
           architectures=("amd64" "arm64")
@@ -380,7 +383,6 @@ jobs:
           echo "ARTIFACT_NAME=lazyjournal-$VERSION" >> $GITHUB_ENV
 
       - name: Build deb package
-        if: ${{ github.event.inputs.Binary == 'true' }}
         run: |
           rm -f lazyjournal
           mkdir -p lazyjournal/DEBIAN lazyjournal/usr/local/bin
@@ -401,7 +403,6 @@ jobs:
           ls -lh bin/*.deb
 
       - name: Check install deb package
-        if: ${{ github.event.inputs.Binary == 'true' }}
         run: |
           # sudo dpkg -i bin/lazyjournal-$VERSION-amd64.deb
           # sudo dpkg -r lazyjournal
