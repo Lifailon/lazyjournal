@@ -80,21 +80,22 @@ jobs:
           LAST_COMMIT=$(git rev-parse --short HEAD)
           echo "LAST_COMMIT=$LAST_COMMIT" >> $GITHUB_ENV
           
-          echo "## 🚀 Build Information" >> $GITHUB_STEP_SUMMARY
-          echo "- **Date**: $DATETIME" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build number**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Go version**: $GO_VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "- **App version**: $APP_VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "- **Last commit**: [$LAST_COMMIT](${{ github.server_url }}/${{ github.repository }}/commit/$LAST_COMMIT)" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### Parameters" >> $GITHUB_STEP_SUMMARY
-          echo "- **OS**: ${{ github.event.inputs.Distro }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Update dependencies in modules**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Go unit testing**: ${{ github.event.inputs.Test == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Check flags and release in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build binary and deb packages**: ${{ github.event.inputs.Binary == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Update version in README**: ${{ github.event.inputs.README == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Build Information" > build-info.md
 
+          echo "- **Date**: $DATETIME" >> build-info.md
+          echo "- **Build number**: #${{ github.run_number }}" >> build-info.md
+          echo "- **Go version**: $GO_VERSION" >> build-info.md
+          echo "- **App version**: $APP_VERSION" >> build-info.md
+          echo "- **Last commit**: [$LAST_COMMIT](${{ github.server_url }}/${{ github.repository }}/commit/$LAST_COMMIT)" >> build-info.md
+          
+          echo "### Parameters" >> build-info.md
+          echo "- **OS**: ${{ github.event.inputs.Distro }}" >> build-info.md
+          echo "- **Update dependencies in modules**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}" >> build-info.md
+          echo "- **Go unit testing**: ${{ github.event.inputs.Test == 'true' && '✅' || '❌' }}" >> build-info.md
+          echo "- **Check flags and release in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release == 'true' && '✅' || '❌' }}" >> build-info.md
+          echo "- **Build binary and deb packages**: ${{ github.event.inputs.Binary == 'true' && '✅' || '❌' }}" >> build-info.md
+          echo "- **Update version in README**: ${{ github.event.inputs.README == 'true' && '✅' || '❌' }}" >> build-info.md
+          
       - name: Update dependencies in modules
         if: ${{ github.event.inputs.Update == 'true' }}
         run: go get -u ./...
@@ -191,6 +192,23 @@ jobs:
           env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover \
             --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" | tee test.log
 
+      # Build info report
+
+      - name: Send build info report to summary
+        run: |
+          cat build-info.md >> $GITHUB_STEP_SUMMARY
+
+      # Coverage report
+
+      - name: Get coverage result
+        if: ${{ github.event.inputs.Test == 'true' }}
+        continue-on-error: true
+        run: |
+          COVERAGE=$(cat test.log | grep -E "^coverage: " | sed "s/coverage: //" | sed -E "s/ of.+//")
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+          echo "## 🧪 Test report" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage: $COVERAGE" >> $GITHUB_STEP_SUMMARY
+
       # Junit report
 
       - name: Publish junit report in summary
@@ -206,15 +224,6 @@ jobs:
           report_paths: "report.xml"
 
       # Markdown report
-
-      - name: Get coverage result
-        if: ${{ github.event.inputs.Test == 'true' }}
-        continue-on-error: true
-        run: |
-          COVERAGE=$(cat test.log | grep -E "^coverage: " | sed "s/coverage: //" | sed -E "s/ of.+//")
-          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
-          echo "## 🧪 Test Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "$COVERAGE" >> $GITHUB_STEP_SUMMARY
 
       - name: Send markdown report to summary for Linux or macOS
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro != 'windows-2022' && github.event.inputs.Distro != 'windows-2025' }}
