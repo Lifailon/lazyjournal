@@ -126,14 +126,14 @@ jobs:
         if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
         run: golangci-lint config verify --verbose
 
-      - name: Get linters for check to summary
+      - name: Get linters from config to summary
         if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
         run: |
           golangci-lint --version
           version=$(golangci-lint --version | grep -Eo "[0-9.]+" | head -n 1)
           echo "### Configuration" >> $GITHUB_STEP_SUMMARY
           echo "Golangci version: $version" >> $GITHUB_STEP_SUMMARY
-          echo "Check config status: ${{ steps.configCheck.outcome }}"
+          echo "Check config status: ${{ steps.configCheck.outcome }}" >> $GITHUB_STEP_SUMMARY
           golangci-lint linters
           golangci-lint linters > linters.md
           sed "s/Enabled by your configuration linters:/## Enabled linters/" -i linters.md
@@ -142,11 +142,11 @@ jobs:
           sed "s/. \[(.+)\]/ (**$1**)./g" -i linters.md
           sed -E "s/\. \[(.+)\]/ (**\1**)./g" -i linters.md
           linters=$(cat linters.md | awk -F ":" '/:/ {print "- [" $1"](https://golangci-lint.run/docs/linters/configuration/#"$1") -" $2":"$3; next} {print $0}')
-          echo "$linters" > linters.md
+          echo "$linters" >> $GITHUB_STEP_SUMMARY
 
-      - name: Golangci install and linters check using action
+      - name: Golangci linters check using Action
         id: golangci
-        if: ${{ github.event.inputs.golangci == 'true' }}
+        if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
         continue-on-error: true
         uses: golangci/golangci-lint-action@v9
         with:
@@ -154,11 +154,11 @@ jobs:
           args: ./main.go
 
       - name: Get issues result from linters check to summary
-        if: ${{ github.event.inputs.golangci == 'true' }}
+        if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
         continue-on-error: true
         run: |
           echo "### Linters check results" >> $GITHUB_STEP_SUMMARY
-          golangci-lint run ./main.go > results.md
+          golangci-lint run ./main.go > results.md || true
           sed -n '/issues:/,$p' -i results.md
           cat results.md >> $GITHUB_STEP_SUMMARY
 
@@ -180,7 +180,7 @@ jobs:
         continue-on-error: true
         run: |
           echo "### Linters check results after fix" >> $GITHUB_STEP_SUMMARY
-          golangci-lint run ./main.go > results.md
+          golangci-lint run ./main.go > results.md || true
           sed -n '/issues:/,$p' -i results.md
           cat results.md >> $GITHUB_STEP_SUMMARY
 
