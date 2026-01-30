@@ -66,7 +66,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y golang-1.23-go
-          go version
+          /usr/lib/go-1.23/bin/go version
 
       - name: Install dependencies for build deb package
         if: ${{ github.event.inputs.Install != 'true' }}
@@ -88,6 +88,7 @@ jobs:
       - name: Build deb package and publish to Launchpad PPA
         if: ${{ github.event.inputs.Install != 'true' }}
         run: |
+          export PATH="/usr/lib/go-1.23/bin:$PATH"
           export DEBFULLNAME="lifailon"
           export DEBEMAIL="${{ secrets.PPA_EMAIL }}"
           
