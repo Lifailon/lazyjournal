@@ -39,13 +39,8 @@ jobs:
       - name: Go release check
         run: goreleaser --clean --skip=publish --skip=validate 2>&1 | tee goreleaser.log
 
-      - name: Upload results and changelog to summary
-        run: |
-          echo "## Results" >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
-          cat goreleaser.log >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
-          cat dist/CHANGELOG.md >> $GITHUB_STEP_SUMMARY
+      - name: Upload changelog to summary
+        run: cat dist/CHANGELOG.md >> $GITHUB_STEP_SUMMARY
 
       - name: Create git tag for patch version
         if: ${{ github.event.inputs.Tag == 'true' }}

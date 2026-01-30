@@ -16,8 +16,12 @@ changelog:
     exclude:
       - '.*workflow.*'
       - '.*telegram.*'
+      - '.*golangci.*'
+      - '.*linter.*'
+      - '.*release.*'
       - '.*report.*'
       - '.*install.*'
+      - '.*build.*'
       - '.*package.*'
 
 builds:
