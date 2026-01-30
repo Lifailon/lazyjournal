@@ -35,7 +35,6 @@
 - Ordered release report addition for better workflow clarity.
 - Improved status updates and prefix handling in compose and Kubernetes environments.
 
-
 ## Release 0.8.3
 
 ### New features

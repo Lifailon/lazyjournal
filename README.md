@@ -354,7 +354,7 @@ make build
 ```
 
 > [!NOTE]
-> The repository uses AI-powered release analysis in the [changelog](/changelog.md) file and the commit review with sending reports to [Telegram channel](https://t.me/lazyjournal_actions).
+> The repository uses AI-powered release analysis in the [changelog](/CHANGELOG.md) file, as well review commits, PR and issues in [Actions](https://github.com/Lifailon/lazyjournal/actions).
 
 ### Testing
 

@@ -70,8 +70,8 @@ jobs:
         env:
           AI_RESPONSE: ${{ steps.ai_query.outputs.response }}
         run: |
-          REPORT_FILE="changelog.md"
-          REPORT_TEMP_FILE="changelog.tmp"
+          REPORT_FILE="CHANGELOG.md"
+          REPORT_TEMP_FILE="CHANGELOG.tmp"
           echo -e "## Release ${{ env.LATEST_TAG }}\n" > $REPORT_TEMP_FILE
           echo "$AI_RESPONSE" >> $REPORT_TEMP_FILE
           echo -e "\n" >> $REPORT_TEMP_FILE

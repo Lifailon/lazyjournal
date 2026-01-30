@@ -74,6 +74,7 @@ jobs:
           sudo apt-get install -y \
             devscripts \
             debhelper \
+            dh-golang \
             dh-make-golang \
             dput \
             golang-golang-x-text-dev \
