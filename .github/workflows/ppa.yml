@@ -88,10 +88,15 @@ jobs:
 
       - name: Build deb package and publish to Launchpad PPA
         if: ${{ github.event.inputs.Install != 'true' }}
+        env:
+          DEB_FULLNAME: "lifailon"
+          DEB_EMAIL: ${{ secrets.PPA_EMAIL }}
+          DISTRO: ${{ github.event.inputs.Distro }}
+          APP_VERSION: ${{ github.event.inputs.Version }}
         run: |
           export PATH="/usr/lib/go-1.23/bin:$PATH"
-          export DEBFULLNAME="lifailon"
-          export DEBEMAIL="${{ secrets.PPA_EMAIL }}"
+          export DEBFULLNAME="$DEB_FULLNAME"
+          export DEBEMAIL="$DEB_EMAIL"
           
           echo -e "\n\033[33m>>> Debian template generation\033[0m\n"
           dh-make-golang make github.com/Lifailon/lazyjournal
@@ -120,19 +125,20 @@ jobs:
           cat debian/rules
 
           echo -e "\n\033[33m>>> Update distro name in changelog\033[0m\n"
-          sed -i "1s/)[[:space:]]\+[^;]\+;/) ${{ github.event.inputs.Distro }};/" debian/changelog
+          sed -i "1s/)[[:space:]]\+[^;]\+;/) $DISTRO;/" debian/changelog
           sed -i 's/(Closes: TODO)//' debian/changelog
           
-          if [ -n "${{ github.event.inputs.Version }}" ]; then
+          if [ -n "$APP_VERSION" ]; then
             echo -e "\n\033[33m>>> Update version in changelog\033[0m\n"
             VERSION=$(cat debian/changelog | head -n 1 | sed -E "s/.+\(//" | sed -E "s/\).+//" | sed -E "s/-[0-9]+//")
-            sed -i -E "s/$VERSION-/${{ github.event.inputs.Version }}-/" debian/changelog
-            mv ../lazyjournal_$VERSION.orig.tar.gz ../lazyjournal_${{ github.event.inputs.Version }}.orig.tar.gz
+            sed -i -E "s/$VERSION-/$APP_VERSION-/" debian/changelog
+            mv ../lazyjournal_$VERSION.orig.tar.gz ../lazyjournal_$APP_VERSION.orig.tar.gz
             echo -e "\n\033[33m>>> Changelog\033[0m\n"
             cat debian/changelog
           fi
 
           echo -e "\n\033[33m>>> Check build\033[0m\n"
+          chmod -R +w .
           dpkg-buildpackage -us -uc -b
 
           echo -e "\n\033[33m>>> Build changes\033[0m\n"

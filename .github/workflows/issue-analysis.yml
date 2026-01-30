@@ -23,6 +23,18 @@ jobs:
           fetch-depth: 1
           ref: main
 
+      - name: Escape markdown characters
+        id: escape
+        run: |
+          ACTION=$(echo "${{ github.event_name }} ${{ github.event.action }}" | sed 's/_/\\_/g')
+          TITLE=$(echo "${{ github.event.issue.title }}" | sed 's/_/\\_/g')
+          DESCRIPTION_COMMENT=$(echo "${{ github.repository }}" | sed 's/_/\\_/g')          
+          DESCRIPTION_ISSUE=$(echo "${{ github.repository }}" | sed 's/_/\\_/g')          
+          echo "action=$ACTION" >> $GITHUB_OUTPUT
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "comment=$DESCRIPTION_COMMENT" >> $GITHUB_OUTPUT
+          echo "issue=$DESCRIPTION_ISSUE" >> $GITHUB_OUTPUT
+
       - name: Send message to Telegram
         id: tg_msg
         uses: appleboy/telegram-action@master
@@ -33,31 +45,14 @@ jobs:
           debug: true
           format: markdown
           message: |
-            🔔 **Action**: ${{ github.event_name }} ${{ github.event.action }} [#${{ github.event.issue.number }}](${{ github.event.comment.html_url || github.event.issue.html_url }})
+            🔔 **Action**: ${{ steps.escape.outputs.action }} [#${{ github.event.issue.number }}](${{ github.event.comment.html_url || github.event.issue.html_url }})
 
             📁 **Repository**: ${{ github.repository }}
             👤 **From user**: ${{ github.actor }}
 
             📌 **Title**: ${{ github.event.issue.title }}
             💬 **Description**:
-            ${{ github.event.comment.body || github.event.issue.body }}
-
-      - name: Send action and title only to Telegram (if error sending description)
-        if: ${{ steps.tg_msg.outcome == 'failure' }}
-        uses: appleboy/telegram-action@master
-        continue-on-error: true
-        with:
-          token: ${{ secrets.TELEGRAM_API_TOKEN }}
-          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
-          debug: true
-          format: markdown
-          message: |
-            🔔 **Action**: ${{ github.event_name }} ${{ github.event.action }} [#${{ github.event.issue.number }}](${{ github.event.comment.html_url || github.event.issue.html_url }})
-
-            📁 **Repository**: ${{ github.repository }}
-            👤 **From user**: ${{ github.actor }}
-
-            📌 **Title**: ${{ github.event.issue.title }}
+            ${{ steps.escape.outputs.comment || steps.escape.outputs.issue }}
 
       - name: Generate report using AI
         if: ${{ github.event_name == 'issues' && github.event.action == 'opened'}}
