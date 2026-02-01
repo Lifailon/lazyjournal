@@ -1596,6 +1596,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Autoscroll = false
 		v.FrameColor = app.frameColor
 		v.TitleColor = app.titleColor
+		v.Subtitle = "{ }"
 	}
 
 	// Окно статуса внизу интерфейса (вместо Subtitle)
@@ -2453,6 +2454,10 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		// app.filterText = ""
 		// Применяем текущий фильтр к записям для обновления вывода
 		app.applyFilter(false)
+		v, err := app.gui.View("logs")
+		if err == nil {
+			v.Subtitle = "{ " + selectUnits + "/" + serviceName + " }"
+		}
 	}
 }
 
@@ -3702,6 +3707,10 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 		if !app.testMode {
 			app.updateDelimiter(newUpdate)
 			app.applyFilter(false)
+			v, err := app.gui.View("logs")
+			if err == nil {
+				v.Subtitle = "{ " + logFullPath + " }"
+			}
 		}
 	}
 }
@@ -4635,7 +4644,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		default:
 			// Формируем опции для выполнения команды
 			cmdOptions := []string{}
-			// Добавляем название контекста
+			// #38 Добавляем название контекста с проверкой флага для Podman
 			if containerizationSystem == "docker" || (containerizationSystem == "podman" && app.podmanContext != "") {
 				cmdOptions = append(cmdOptions, "--context", app.dockerContext)
 			}
@@ -4649,7 +4658,6 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					"--since", sinceFilterTextNotSpace,
 					"--until", untilFilterTextNotSpace,
 				)
-
 			case app.sinceDateFilterMode && !app.untilDateFilterMode:
 				cmdOptions = append(
 					cmdOptions, "logs", "--timestamps", "--tail", app.logViewCount,
@@ -4667,7 +4675,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 			// Добавляем ssh параметры
 			if app.sshMode {
-				app.sshOptions = append(app.sshOptions, containerizationSystem)
+				cmdOptions = append([]string{containerizationSystem}, cmdOptions...)
 				cmdOptions = append(app.sshOptions, cmdOptions...)
 				// ssh sshOptions containerizationSystem cmdOptions containerId
 				cmd = exec.CommandContext(
@@ -4885,6 +4893,10 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	if !readFileContainer || (readFileContainer && app.updateFile) || containerizationSystem != "docker" {
 		app.updateDelimiter(newUpdate)
 		app.applyFilter(false)
+		v, err := app.gui.View("logs")
+		if err == nil {
+			v.Subtitle = "{ " + containerizationSystem + "/" + containerName + " }"
+		}
 	}
 }
 
