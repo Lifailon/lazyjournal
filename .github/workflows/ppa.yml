@@ -138,7 +138,7 @@ jobs:
           fi
 
           echo -e "\n\033[33m>>> Check build\033[0m\n"
-          chmod -R +w .
+          chmod -R 777 .
           dpkg-buildpackage -us -uc -b
 
           echo -e "\n\033[33m>>> Build changes\033[0m\n"
