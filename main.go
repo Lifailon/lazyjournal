@@ -52,6 +52,7 @@ type Settings struct {
 	WrapModeDisable     string `yaml:"wrapModeDisable"`
 	DockerStreamOnly    string `yaml:"dockerStreamOnly"`
 	DockerContext       string `yaml:"dockerContext"`
+	PodmanContext       string `yaml:"podmanContext"`
 	KubernetesContext   string `yaml:"kubernetesContext"`
 	KubernetesNamespace string `yaml:"kubernetesNamespace"`
 	CustomPath          string `yaml:"customPath"`
@@ -174,6 +175,7 @@ type App struct {
 	dockerStreamMode       string   // переменная для хранения режима чтения потоков (stream, stdout или stderr)
 
 	dockerContext             string
+	podmanContext             string
 	kubernetesContext         string
 	kubernetesNamespace       string
 	kubernetesNamespaceStatus string
@@ -310,10 +312,11 @@ func showHelp() {
 	fmt.Println("    --wrap-disable, -w         Disable wrap mode in log content")
 	fmt.Println("    --docker-stream-only, -o   Force reading of Docker container logs in stream mode (by default from the file system)")
 	fmt.Println("    --docker-context, -D       Use the specified Docker context (default: default)")
+	fmt.Println("    --podman-context, -P       Use the specified Podman context (not used by default)")
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
 	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
 	fmt.Println("    --path, -p                 Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
-	fmt.Println("    --color, -C                Highlighting mode for logs (available values: default, tailspin, bat or disable)")
+	fmt.Println("    --color-mode, -C           Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
 	fmt.Println("    --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
@@ -348,6 +351,7 @@ func showConfig() {
 	fmt.Printf("  wrapModeDisable:          %s\n", config.Settings.WrapModeDisable)
 	fmt.Printf("  dockerStreamOnly:         %s\n", config.Settings.DockerStreamOnly)
 	fmt.Printf("  dockerContext:            %s\n", config.Settings.DockerContext)
+	fmt.Printf("  podmanContext:            %s\n", config.Settings.PodmanContext)
 	fmt.Printf("  kubernetesContext:        %s\n", config.Settings.KubernetesContext)
 	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
@@ -861,6 +865,7 @@ func runGoCui(mock bool) {
 		dockerStreamLogs:             false,
 		dockerStreamMode:             "stream",
 		dockerContext:                "default",
+		podmanContext:                "nil",
 		kubernetesContext:            "default",
 		kubernetesNamespace:          "all",
 		startServices:                0, // начальная позиция списка юнитов
@@ -950,13 +955,15 @@ func runGoCui(mock bool) {
 	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
 	dockerContextFlag := flag.String("docker-context", "default", "Use the specified Docker context (default: default)")
 	flag.StringVar(dockerContextFlag, "D", "default", "Use the specified Docker context (default: default)")
+	podmanContextFlag := flag.String("podman-context", "", "Use the specified Podman context (not used by default)")
+	flag.StringVar(podmanContextFlag, "P", "", "Use the specified Podman context (not used by default)")
 	kubernetesContextFlag := flag.String("kubernetes-context", "default", "Use the specified Kubernetes context (default: default)")
 	flag.StringVar(kubernetesContextFlag, "K", "default", "Use the specified Kubernetes context (default: default)")
 	kubernetesNamespaceFlag := flag.String("namespace", "all", "Use the specified Kubernetes namespace (default: all)")
 	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
 	pathFlag := flag.String("path", "/opt", "Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
 	flag.StringVar(pathFlag, "p", "/opt", "Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
-	colorModeFlag := flag.String("color", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
+	colorModeFlag := flag.String("color-mode", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	flag.StringVar(colorModeFlag, "C", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
 	flag.BoolVar(commandColor, "c", false, "ANSI coloring in command line mode")
@@ -1046,6 +1053,11 @@ func runGoCui(mock bool) {
 
 	if config.Settings.DockerContext != "" && *dockerContextFlag == "default" {
 		dockerContextFlag = &config.Settings.DockerContext
+	}
+
+	// Если в конфигурации не задано значение и значение флага по умолчанию пустое, то присваиваем значение из конфигурации
+	if config.Settings.PodmanContext != "" && *podmanContextFlag == "" {
+		podmanContextFlag = &config.Settings.PodmanContext
 	}
 
 	if config.Settings.KubernetesContext != "" && *kubernetesContextFlag == "default" {
@@ -1177,6 +1189,7 @@ func runGoCui(mock bool) {
 	}
 
 	app.dockerContext = *dockerContextFlag
+	app.podmanContext = *podmanContextFlag
 
 	app.kubernetesContext = *kubernetesContextFlag
 	app.kubernetesNamespaceStatus = *kubernetesNamespaceFlag
@@ -3918,21 +3931,64 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 				)
 			}
 		}
+
+	case "podman":
+		// #38 Отключаем использование контекста в Podman, если он не задан
+		if app.podmanContext == "" {
+			if app.sshMode {
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						containerizationSystem,
+						"ps", "-a",
+						"--format", "'{{.ID}} {{.Names}} {{.State}}'",
+					)...)
+			} else {
+				cmd = exec.CommandContext(
+					ctx,
+					containerizationSystem,
+					"ps", "-a",
+					"--format", "{{.ID}} {{.Names}} {{.State}}",
+				)
+			}
+		} else {
+			if app.sshMode {
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh", append(app.sshOptions,
+						containerizationSystem,
+						"--context", app.dockerContext,
+						"ps", "-a",
+						"--format", "'{{.ID}} {{.Names}} {{.State}}'",
+					)...)
+			} else {
+				cmd = exec.CommandContext(
+					ctx,
+					containerizationSystem,
+					"--context", app.dockerContext,
+					"ps", "-a",
+					"--format", "{{.ID}} {{.Names}} {{.State}}",
+				)
+			}
+		}
+	// Docker case
 	default:
-		// Получаем список контейнеров из Docker или Podman
 		if app.sshMode {
 			cmd = exec.CommandContext(
 				ctx,
 				"ssh", append(app.sshOptions,
 					containerizationSystem,
-					"--context", app.dockerContext, "ps", "-a",
-					"--format", "'{{.ID}} {{.Names}} {{.State}}'", // добавляем кавычки для передаваемых через пробел параметров в ssh
+					"--context", app.dockerContext,
+					"ps", "-a",
+					// Добавляем кавычки для передаваемых через пробел параметров в ssh
+					"--format", "'{{.ID}} {{.Names}} {{.State}}'",
 				)...)
 		} else {
 			cmd = exec.CommandContext(
 				ctx,
 				containerizationSystem,
-				"--context", app.dockerContext, "ps", "-a",
+				"--context", app.dockerContext,
+				"ps", "-a",
 				"--format", "{{.ID}} {{.Names}} {{.State}}",
 			)
 		}
@@ -4575,80 +4631,63 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					}
 				}
 			}
+		// Podman and Docker case
 		default:
-			// docker/podman cli
+			// Формируем опции для выполнения команды
+			cmdOptions := []string{}
+			// Добавляем название контекста
+			if containerizationSystem == "docker" || (containerizationSystem == "podman" && app.podmanContext != "") {
+				cmdOptions = append(cmdOptions, "--context", app.dockerContext)
+			}
+			// Добавляем фильтрацию по времени
 			sinceFilterTextNotSpace := reSpace.ReplaceAllString(app.sinceFilterText, "T")
 			untilFilterTextNotSpace := reSpace.ReplaceAllString(app.untilFilterText, "T")
+			switch {
+			case app.sinceDateFilterMode && app.untilDateFilterMode:
+				cmdOptions = append(
+					cmdOptions, "logs", "--timestamps", "--tail", app.logViewCount,
+					"--since", sinceFilterTextNotSpace,
+					"--until", untilFilterTextNotSpace,
+				)
+
+			case app.sinceDateFilterMode && !app.untilDateFilterMode:
+				cmdOptions = append(
+					cmdOptions, "logs", "--timestamps", "--tail", app.logViewCount,
+					"--since", sinceFilterTextNotSpace,
+				)
+			case !app.sinceDateFilterMode && app.untilDateFilterMode:
+				cmdOptions = append(
+					cmdOptions, "logs", "--timestamps", "--tail", app.logViewCount,
+					"--until", untilFilterTextNotSpace,
+				)
+			default:
+				cmdOptions = append(
+					cmdOptions, "logs", "--timestamps", "--tail", app.logViewCount,
+				)
+			}
+			// Добавляем ssh параметры
 			if app.sshMode {
-				switch {
-				case app.sinceDateFilterMode && app.untilDateFilterMode:
-					cmd = exec.CommandContext(
-						ctx,
-						"ssh", append(app.sshOptions,
-							containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
-							"--since", sinceFilterTextNotSpace,
-							"--until", untilFilterTextNotSpace,
-							containerId,
-						)...,
-					)
-				case app.sinceDateFilterMode && !app.untilDateFilterMode:
-					cmd = exec.CommandContext(
-						ctx,
-						"ssh", append(app.sshOptions,
-							containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
-							"--since", sinceFilterTextNotSpace,
-							containerId,
-						)...,
-					)
-				case !app.sinceDateFilterMode && app.untilDateFilterMode:
-					cmd = exec.CommandContext(
-						ctx,
-						"ssh", append(app.sshOptions,
-							containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
-							"--until", untilFilterTextNotSpace,
-							containerId,
-						)...,
-					)
-				default:
-					cmd = exec.CommandContext(
-						ctx,
-						"ssh", append(app.sshOptions,
-							containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
-							containerId,
-						)...,
-					)
-				}
+				app.sshOptions = append(app.sshOptions, containerizationSystem)
+				cmdOptions = append(app.sshOptions, cmdOptions...)
+				// ssh sshOptions containerizationSystem cmdOptions containerId
+				cmd = exec.CommandContext(
+					ctx,
+					"ssh",
+					append(
+						cmdOptions,
+						containerId,
+					)...,
+				)
 			} else {
-				switch {
-				case app.sinceDateFilterMode && app.untilDateFilterMode:
-					cmd = exec.CommandContext(
-						ctx,
-						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
-						"--since", sinceFilterTextNotSpace,
-						"--until", untilFilterTextNotSpace,
+				// containerizationSystem cmdOptions containerId
+				cmd = exec.CommandContext(
+					ctx,
+					containerizationSystem,
+					append(
+						cmdOptions,
 						containerId,
-					)
-				case app.sinceDateFilterMode && !app.untilDateFilterMode:
-					cmd = exec.CommandContext(
-						ctx,
-						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
-						"--since", sinceFilterTextNotSpace,
-						containerId,
-					)
-				case !app.sinceDateFilterMode && app.untilDateFilterMode:
-					cmd = exec.CommandContext(
-						ctx,
-						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
-						"--until", untilFilterTextNotSpace,
-						containerId,
-					)
-				default:
-					cmd = exec.CommandContext(
-						ctx,
-						containerizationSystem, "--context", app.dockerContext, "logs", "--timestamps", "--tail", app.logViewCount,
-						containerId,
-					)
-				}
+					)...,
+				)
 			}
 		}
 		// Ожидаем выполнение в течение 2-х секунд

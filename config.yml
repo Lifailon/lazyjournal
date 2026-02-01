@@ -8,6 +8,7 @@ settings:
   wrapModeDisable: false
   dockerStreamOnly: false
   dockerContext: default
+  podmanContext: ""
   kubernetesContext: default
   kubernetesNamespace: all
   customPath: /opt
