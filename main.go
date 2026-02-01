@@ -32,7 +32,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var programVersion string = "0.8.4"
+var programVersion string = "0.8.5"
 
 // Структура конфигурации
 type Config struct {
@@ -4988,9 +4988,35 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 		// Удаляем символ справа от курсора
 		case key == gocui.KeyDelete:
 			v.EditDelete(false)
+		// Быстрое перещенеие курсора влево
+		case key == gocui.KeyArrowLeft && (mod == gocui.ModAlt || mod == gocui.ModMouseCtrl):
+			buffer := v.Buffer()
+			cursor, _ := v.Cursor()
+			if len(buffer) > 0 && cursor > 0 {
+				position := strings.LastIndex(buffer[0:cursor], " ")
+				if position == -1 {
+					v.SetCursor(0, 0)
+				} else {
+					v.SetCursor(position, 0)
+				}
+			}
+			return
+		// Быстрое перещенеие курсора вправо
+		case key == gocui.KeyArrowRight && (mod == gocui.ModAlt || mod == gocui.ModMouseCtrl):
+			buffer := v.Buffer()
+			cursor, _ := v.Cursor()
+			if len(buffer) > 0 && cursor < len(buffer) {
+				position := strings.Index(buffer[cursor:len(buffer)-1], " ")
+				if position == -1 {
+					v.SetCursor(len(buffer), 0)
+				} else {
+					v.SetCursor(cursor+position+1, 0)
+				}
+			}
+			return
 		// Перемещение курсора влево
 		case key == gocui.KeyArrowLeft:
-			v.MoveCursor(-1, 0) // удалить 3-й булевой параметр для форка
+			v.MoveCursor(-1, 0)
 			return
 		// Перемещение курсора вправо
 		case key == gocui.KeyArrowRight:
