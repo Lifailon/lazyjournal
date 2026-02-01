@@ -95,6 +95,7 @@ jobs:
           APP_VERSION: ${{ github.event.inputs.Version }}
         run: |
           export PATH="/usr/lib/go-1.23/bin:$PATH"
+          export GOTOOLCHAIN=local
           export DEBFULLNAME="$DEB_FULLNAME"
           export DEBEMAIL="$DEB_EMAIL"
           
@@ -112,6 +113,7 @@ jobs:
           echo -e "\n\033[33m>>> Update go version\033[0m\n"
           sed -i 's/golang-any/golang-1.23-go/' debian/control
           sed -i '1a export PATH := /usr/lib/go-1.23/bin:$(PATH)' debian/rules
+          sed -i '1a export GOTOOLCHAIN := local' debian/rules
 
           echo -e "\n\033[33m>>> Update debian control\033[0m\n"
           sed -i 's/Section: TODO/Section: utils/' debian/control
@@ -138,7 +140,6 @@ jobs:
           fi
 
           echo -e "\n\033[33m>>> Check build\033[0m\n"
-          chmod -R 777 .
           dpkg-buildpackage -us -uc -b
 
           echo -e "\n\033[33m>>> Build changes\033[0m\n"
