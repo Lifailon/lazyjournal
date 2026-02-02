@@ -4763,54 +4763,72 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		case app.dockerStreamMode == "stdout" || containerizationSystem == "compose" || containerizationSystem == "kubectl":
 			// Читаем стандартный вывод
 			stdoutPipe, _ := cmd.StdoutPipe()
-			_ = cmd.Start()
+			cmd.Start()
 			stdoutBytes, stdoutErr = io.ReadAll(stdoutPipe)
 			stdoutLines := strings.Split(string(stdoutBytes), "\n")
-			// Формируем итоговый массив
-			for _, line := range stdoutLines {
-				// Пропускаем пустые строки
-				if strings.TrimSpace(line) == "" {
-					continue
-				}
-				var ts time.Time
-				var err error
-				// Извлекаем timestamp
-				switch containerizationSystem {
-				case "compose":
-					// Сначала извлекаем имя сервиса
-					parts1 := strings.SplitN(line, " | ", 2)
-					// Затем извлекаем timestamp
-					parts2 := strings.SplitN(parts1[1], " ", 2)
-					tsStr := strings.TrimSpace(parts2[0])
-					ts, err = time.Parse(time.RFC3339Nano, tsStr)
-				case "kubectl":
-					// Сначала извлекаем префикс (название пода и контейнера в формате [pod/<podName>/<containerName>])
-					parts1 := strings.SplitN(line, "] ", 2)
-					// Затем извлекаем timestamp
-					parts2 := strings.SplitN(parts1[1], " ", 2)
-					tsStr := strings.TrimSpace(parts2[0])
-					ts, err = time.Parse(time.RFC3339Nano, tsStr)
-				default:
-					// Извлекаем время из префикса docker/podman
-					ts, err = parseTimestamp(line)
-				}
-				if err != nil {
-					continue
+			// Удаляем последнюю пустую строку
+			if len(stdoutLines) > 0 && stdoutLines[len(stdoutLines)-1] == "" {
+				stdoutLines = stdoutLines[0 : len(stdoutLines)-1]
+			}
+			// Проверяем stdout на ошибки, если в выводе одна строка (например, 502 Bad Gateway в kubectl)
+			if len(stdoutLines) <= 1 {
+				lastLineContext := ""
+				// Проверяем на пустую строку
+				if len(stdoutLines[0]) != 0 {
+					lastLineContext = stdoutLines[0]
 				}
 				combined = append(combined, dockerLogLines{
 					isError:   false,
-					timestamp: ts,
-					content:   line,
+					timestamp: time.Now(),
+					content:   lastLineContext,
 				})
-			}
-			// Сортируем вывод по timestamp для compose
-			if containerizationSystem == "compose" {
-				sort.Slice(
-					combined,
-					func(i, j int) bool {
-						return combined[i].timestamp.Before(combined[j].timestamp)
-					},
-				)
+			} else {
+				// Формируем итоговый массив
+				for _, line := range stdoutLines {
+					// Пропускаем пустые строки
+					if strings.TrimSpace(line) == "" {
+						continue
+					}
+					var ts time.Time
+					var err error
+					// Извлекаем timestamp
+					switch containerizationSystem {
+					case "compose":
+						// Сначала извлекаем имя сервиса
+						parts1 := strings.SplitN(line, " | ", 2)
+						// Затем извлекаем timestamp
+						parts2 := strings.SplitN(parts1[1], " ", 2)
+						tsStr := strings.TrimSpace(parts2[0])
+						ts, err = time.Parse(time.RFC3339Nano, tsStr)
+					case "kubectl":
+						// Сначала извлекаем префикс (название пода и контейнера в формате [pod/<podName>/<containerName>])
+						parts1 := strings.SplitN(line, "] ", 2)
+						// Затем извлекаем timestamp
+						parts2 := strings.SplitN(parts1[1], " ", 2)
+						tsStr := strings.TrimSpace(parts2[0])
+						ts, err = time.Parse(time.RFC3339Nano, tsStr)
+					default:
+						// Извлекаем время из префикса docker/podman
+						ts, err = parseTimestamp(line)
+					}
+					if err != nil {
+						continue
+					}
+					combined = append(combined, dockerLogLines{
+						isError:   false,
+						timestamp: ts,
+						content:   line,
+					})
+				}
+				// Сортируем вывод по timestamp для compose
+				if containerizationSystem == "compose" {
+					sort.Slice(
+						combined,
+						func(i, j int) bool {
+							return combined[i].timestamp.Before(combined[j].timestamp)
+						},
+					)
+				}
 			}
 		case app.dockerStreamMode == "stderr":
 			// Читаем вывод ошибок
