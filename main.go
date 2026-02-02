@@ -1600,7 +1600,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Autoscroll = false
 		v.FrameColor = app.frameColor
 		v.TitleColor = app.titleColor
-		v.Subtitle = "{ }"
+		v.Subtitle = "[ ]"
 	}
 
 	// Окно статуса внизу интерфейса (вместо Subtitle)
@@ -2460,7 +2460,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		app.applyFilter(false)
 		v, err := app.gui.View("logs")
 		if err == nil {
-			v.Subtitle = "{ " + selectUnits + "/" + serviceName + " }"
+			v.Subtitle = "[ " + selectUnits + "/" + serviceName + " ]"
 		}
 	}
 }
@@ -3034,6 +3034,11 @@ func (app *App) loadFiles(logPath string) {
 	if !app.testMode {
 		app.logfilesNotFilter = app.logfiles
 		app.applyFilterList()
+		v, err := app.gui.View("varLogs")
+		if err == nil {
+			curTime := time.Now().Format("02.01.2006 15:04:05")
+			v.Subtitle = "[ " + curTime + " ]"
+		}
 	}
 }
 
@@ -3178,6 +3183,11 @@ func (app *App) loadWinFiles(logPath string) {
 	if !app.testMode {
 		app.logfilesNotFilter = app.logfiles
 		app.applyFilterList()
+		v, err := app.gui.View("varLogs")
+		if err == nil {
+			curTime := time.Now().Format("02.01.2006 15:04:05")
+			v.Subtitle = "[ " + curTime + " ]"
+		}
 	}
 }
 
@@ -3726,7 +3736,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 			app.applyFilter(false)
 			v, err := app.gui.View("logs")
 			if err == nil {
-				v.Subtitle = "{ " + logFullPath + " }"
+				v.Subtitle = "[ " + logFullPath + " ]"
 			}
 		}
 	}
@@ -4912,7 +4922,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		app.applyFilter(false)
 		v, err := app.gui.View("logs")
 		if err == nil {
-			v.Subtitle = "{ " + containerizationSystem + "/" + containerName + " }"
+			v.Subtitle = "[ " + containerizationSystem + "/" + containerName + " ]"
 		}
 	}
 }
