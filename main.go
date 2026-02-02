@@ -1646,7 +1646,7 @@ func (app *App) layout(g *gocui.Gui) error {
 	return nil
 }
 
-// ---------------------------------------- journalctl/Windows Event Logs ----------------------------------------
+// ---------------------------------------- journald/auditd/wineventlog ----------------------------------------
 
 // Функция для удаления ANSI-символов покраски
 func removeANSI(input string) string {
@@ -3830,7 +3830,7 @@ func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors str
 	return decodedOutput, "nil"
 }
 
-// ---------------------------------------- Docker/Compose/Podman/k8s ----------------------------------------
+// ---------------------------------------- Docker/Compose/Podman/Kubernetes ----------------------------------------
 
 func (app *App) loadDockerContainer(containerizationSystem string) {
 	app.dockerContainers = nil
@@ -4485,25 +4485,51 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		switch containerizationSystem {
 		case "kubectl":
 			// Формируем команду kubectl с нужными ключами и предварительно извлеченным namespace при выборе пода
+			kubeSinceTime := app.sinceFilterText + "T00:00:00Z"
 			if app.sshMode {
-				cmd = exec.CommandContext(
-					ctx,
-					"ssh", append(app.sshOptions,
+				if app.sinceDateFilterMode {
+					cmd = exec.CommandContext(
+						ctx,
+						"ssh", append(app.sshOptions,
+							containerizationSystem, "logs",
+							"--since-time", kubeSinceTime,
+							"--context", app.kubernetesContext, "-n", namespace,
+							"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
+							"--all-containers=true", "--prefix=true",
+							"--timestamps=true", "--tail", app.logViewCount, containerId,
+						)...)
+				} else {
+					cmd = exec.CommandContext(
+						ctx,
+						"ssh", append(app.sshOptions,
+							containerizationSystem, "logs",
+							"--context", app.kubernetesContext, "-n", namespace,
+							"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
+							"--all-containers=true", "--prefix=true",
+							"--timestamps=true", "--tail", app.logViewCount, containerId,
+						)...)
+				}
+			} else {
+				if app.sinceDateFilterMode {
+					cmd = exec.CommandContext(
+						ctx,
+						containerizationSystem, "logs",
+						"--since-time", kubeSinceTime,
+						"--context", app.kubernetesContext, "-n", namespace,
+						"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
+						"--all-containers=true", "--prefix=true",
+						"--timestamps=true", "--tail", app.logViewCount, containerId,
+					)
+				} else {
+					cmd = exec.CommandContext(
+						ctx,
 						containerizationSystem, "logs",
 						"--context", app.kubernetesContext, "-n", namespace,
 						"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
 						"--all-containers=true", "--prefix=true",
 						"--timestamps=true", "--tail", app.logViewCount, containerId,
-					)...)
-			} else {
-				cmd = exec.CommandContext(
-					ctx,
-					containerizationSystem, "logs",
-					"--context", app.kubernetesContext, "-n", namespace,
-					"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
-					"--all-containers=true", "--prefix=true",
-					"--timestamps=true", "--tail", app.logViewCount, containerId,
-				)
+					)
+				}
 			}
 		case "compose":
 			// Сначала получаем список контейнеров в стеке Compose
