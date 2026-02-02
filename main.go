@@ -1199,8 +1199,12 @@ func runGoCui(mock bool) {
 		app.kubernetesNamespace = "--namespace=" + *kubernetesNamespaceFlag
 	}
 
-	if *pathFlag != "" && len(*pathFlag) > 1 && *pathFlag != "/" && strings.HasPrefix(*pathFlag, "/") {
+	if (app.getOS != "windows" && strings.HasPrefix(*pathFlag, "/")) || (app.getOS == "windows" && strings.Contains(*pathFlag, ":\\")) {
 		app.customPath = *pathFlag
+		app.customPath = strings.TrimSuffix(app.customPath, "/")
+		app.customPath = strings.TrimSuffix(app.customPath, "\\")
+		app.customPath = strings.ReplaceAll(app.customPath, "//", "/")
+		app.customPath = strings.ReplaceAll(app.customPath, "\\\\", "\\")
 	} else {
 		if *pathFlag != config.Settings.CustomPath {
 			fmt.Println("Invalid custom path: " + *pathFlag)
@@ -3047,22 +3051,35 @@ func (app *App) loadWinFiles(logPath string) {
 		logPath = app.systemDisk + ":\\Users\\" + app.userName + "\\AppData\\Local"
 	case "AppDataRoaming":
 		logPath = app.systemDisk + ":\\Users\\" + app.userName + "\\AppData\\Roaming"
+	case "WinCustomPath":
+		logPath = app.customPath
 	}
-	// Ищем файлы с помощью WalkDir
+	// Массив для хранений списка файлов
 	var files []string
+	// Получаем список корневых директорий
+	rootDirs, _ := os.ReadDir(logPath)
+	// Проверяем файлы внутри customPath
+	if logPath == app.customPath {
+		for _, rootFile := range rootDirs {
+			if !rootFile.IsDir() {
+				if strings.HasSuffix(strings.ToLower(rootFile.Name()), ".log") {
+					files = append(files, rootFile.Name())
+				}
+			}
+		}
+	}
 	// Доступ к срезу files из нескольких горутин
 	var mu sync.Mutex
 	// Группа ожидания для отслеживания завершения всех горутин
 	var wg sync.WaitGroup
-	// Получаем список корневых директорий
-	rootDirs, _ := os.ReadDir(logPath)
+	// Ищем файлы с помощью WalkDir в Windows
 	for _, rootDir := range rootDirs {
-		// Проверяем, является ли текущий элемент директорие
+		// Проверяем, является ли текущий элемент директорией
 		if rootDir.IsDir() {
 			// Увеличиваем счетчик ожидаемых горутин
 			wg.Add(1)
 			go func(dir string) {
-				// Уменьшаем счетчик горутин после завершения текущей
+				// Уменьшаем счетчик горутин после завершения выполнения текущей функции
 				defer wg.Done()
 				// Рекурсивно обходим все файлы и подкаталоги в текущей директории
 				err := filepath.WalkDir(filepath.Join(logPath, dir), func(path string, d os.DirEntry, err error) error {
@@ -9032,6 +9049,10 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.Title = " < AppData Roaming (0) > "
 				app.loadWinFiles(app.selectPath)
 			case "AppDataRoaming":
+				app.selectPath = "WinCustomPath"
+				selectedVarLog.Title = " < Custom Path (0) > "
+				app.loadWinFiles(app.selectPath)
+			case "WinCustomPath":
 				app.selectPath = "ProgramFiles"
 				selectedVarLog.Title = " < Program Files (0) > "
 				app.loadWinFiles(app.selectPath)
@@ -9095,6 +9116,10 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 		go func() {
 			switch app.selectPath {
 			case "ProgramFiles":
+				app.selectPath = "WinCustomPath"
+				selectedVarLog.Title = " < Custom Path (0) > "
+				app.loadWinFiles(app.selectPath)
+			case "WinCustomPath":
 				app.selectPath = "AppDataRoaming"
 				selectedVarLog.Title = " < AppData Roaming (0) > "
 				app.loadWinFiles(app.selectPath)
