@@ -99,8 +99,11 @@ type Hotkeys struct {
 	Exit                 string `yaml:"exit"`
 }
 
-// Структура доступных параметров для покраски интерфейса из конфигурации
+// Структура доступных параметров для настройки интерфейса (#37)
 type Interface struct {
+	SystemLogList           string `yaml:"systemLogList"`
+	FileLogList             string `yaml:"fileLogList"`
+	ContainerLogList        string `yaml:"containerLogList"`
 	ForegroundColor         string `yaml:"foregroundColor"`
 	BackgroundColor         string `yaml:"backgroundColor"`
 	SelectedForegroundColor string `yaml:"selectedForegroundColor"`
@@ -190,10 +193,10 @@ type App struct {
 	customPath      string // пользовательский путь вместо /opt по умолчанию (#31)
 	minSymbolFilter int    // минимальное кол-во символов дли фильтрации вывода
 
-	selectUnits                  string // название журнала (UNIT/USER_UNIT/kernel/audit)
-	selectPath                   string // путь к логам (/var/log/)
+	selectUnits                  string // название журнала (services/systemUnits/userUnits/kernelBoot/auditd)
+	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
 	selectContainerizationSystem string // название системы контейнеризации (docker/compose/podman/kubernetes)
-	selectFilterMode             string // режим фильтрации (default/fuzzy/regex)
+	selectFilterMode             string // режим фильтрации (default/fuzzy/regex/timestamp)
 
 	logViewCount     string   // количество логов для просмотра
 	logUpdateSeconds int      // период фонового обновления журнала
@@ -325,7 +328,7 @@ func showHelp() {
 	fmt.Println()
 }
 
-// Config (#23)
+// Config (-g/--config)
 func showConfig() {
 	// Читаем конфигурацию (извлекаем путь и ошибки)
 	configPath, err := config.getConfig()
@@ -396,6 +399,9 @@ func showConfig() {
 	fmt.Printf("  exit:                     %s\n", config.Hotkeys.Exit)
 
 	fmt.Println("interface:")
+	fmt.Printf("  SystemLogList:            %s\n", config.Interface.SystemLogList)
+	fmt.Printf("  FileLogList:              %s\n", config.Interface.FileLogList)
+	fmt.Printf("  ContainerLogList:         %s\n", config.Interface.ContainerLogList)
 	fmt.Printf("  foregroundColor:          %s\n", config.Interface.ForegroundColor)
 	fmt.Printf("  backgroundColor:          %s\n", config.Interface.BackgroundColor)
 	fmt.Printf("  selectedForegroundColor:  %s\n", config.Interface.SelectedForegroundColor)
@@ -415,7 +421,7 @@ func showConfig() {
 	}
 }
 
-// Audit (#18) for homebrew
+// Audit (#18)
 func (app *App) showAudit() {
 	var auditText []string
 	app.testMode = true
@@ -547,9 +553,9 @@ func (app *App) showAudit() {
 				journalName string
 			}{
 				{"Unit service list", "services"},
-				{"System journals", "UNIT"},
-				{"User journals", "USER_UNIT"},
-				{"Kernel boot", "kernel"},
+				{"System journals", "systemUnits"},
+				{"User journals", "userUnits"},
+				{"Kernel boot", "kernelBoot"},
 			}
 			for _, journal := range journalList {
 				app.loadServices(journal.journalName)
@@ -571,14 +577,22 @@ func (app *App) showAudit() {
 			name string
 			path string
 		}{
-			{"System var logs", "/var/log/"},
-			{"Custom path", "/opt"},
-			{"Users home logs", "/home/"},
+			{"System var logs", "varlog"},
+			{"Custom path", "customPath"},
+			{"Users home logs", "home"},
 			{"Process descriptor logs", "descriptor"},
 		}
 		for _, path := range paths {
 			app.loadFiles(path.path)
 			lenLogFiles := strconv.Itoa(len(app.logfiles))
+			switch path.path {
+			case "varlog":
+				path.path = "/var/log/"
+			case "customPath":
+				path.path = "/opt/"
+			case "home":
+				path.path = "/home/"
+			}
 			auditText = append(auditText,
 				"  - name: "+path.name,
 				"    path: "+path.path,
@@ -857,49 +871,49 @@ var g *gocui.Gui
 func runGoCui(mock bool) {
 	// Инициализация значений по умолчанию + компиляция регулярных выражений для покраски
 	app := &App{
-		sshMode:                      false,
-		fastMode:                     true,
-		testMode:                     false,
-		mouseSupport:                 true,
-		wrapSupport:                  true,
-		dockerStreamLogs:             false,
-		dockerStreamMode:             "stream",
-		dockerContext:                "default",
-		podmanContext:                "nil",
-		kubernetesContext:            "default",
-		kubernetesNamespace:          "all",
-		startServices:                0, // начальная позиция списка юнитов
-		selectedJournal:              0, // начальный индекс выбранного журнала
-		startFiles:                   0,
-		selectedFile:                 0,
-		startDockerContainers:        0,
-		selectedDockerContainer:      0,
-		debugLoadTime:                "0s",
-		debugColorTime:               "0s",
-		selectUnits:                  "services",  // "UNIT" || "USER_UNIT" || "kernel" || "audit"
-		selectPath:                   "/var/log/", // "/opt/", "/home/" или "/Users/" (для macOS) + /root/ || "descriptor"
-		selectContainerizationSystem: "docker",    // "compose" || "podman" || "kubernetes"
-		selectFilterMode:             "default",   // "fuzzy" || "regex" || "timestamp"
-		timestampFilterView:          false,
-		sinceDateFilterMode:          false,
-		untilDateFilterMode:          false,
-		sinceFilterDate:              time.Now(),
-		untilFilterDate:              time.Now().AddDate(0, 0, 1),
-		limitFilterDate:              time.Now().AddDate(0, 0, 1),
-		autoScroll:                   true,
-		trimHttpRegex:                trimHttpRegex,
-		trimHttpsRegex:               trimHttpsRegex,
-		hexByteRegex:                 hexByteRegex,
-		dateTimeRegex:                dateTimeRegex,
-		integersInputRegex:           integersInputRegex,
-		syslogUnitRegex:              syslogUnitRegex,
-		keybindingsEnabled:           true,
-		timestampDocker:              true,
-		streamTypeDocker:             true,
-		lastCurrentView:              "services",
-		backCurrentView:              false,
-		dockerCompose:                "docker compose",
-		uniquePrefixColorMap:         make(map[string]string),
+		sshMode:                 false,
+		fastMode:                true,
+		testMode:                false,
+		mouseSupport:            true,
+		wrapSupport:             true,
+		dockerStreamLogs:        false,
+		dockerStreamMode:        "stream",
+		dockerContext:           "default",
+		podmanContext:           "nil",
+		kubernetesContext:       "default",
+		kubernetesNamespace:     "all",
+		startServices:           0, // начальная позиция списка юнитов
+		selectedJournal:         0, // начальный индекс выбранного журнала
+		startFiles:              0,
+		selectedFile:            0,
+		startDockerContainers:   0,
+		selectedDockerContainer: 0,
+		debugLoadTime:           "0s",
+		debugColorTime:          "0s",
+		// selectUnits:                  "services",
+		// selectPath:                   "varlog",
+		// selectContainerizationSystem: "docker",
+		selectFilterMode:     "default",
+		timestampFilterView:  false,
+		sinceDateFilterMode:  false,
+		untilDateFilterMode:  false,
+		sinceFilterDate:      time.Now(),
+		untilFilterDate:      time.Now().AddDate(0, 0, 1),
+		limitFilterDate:      time.Now().AddDate(0, 0, 1),
+		autoScroll:           true,
+		trimHttpRegex:        trimHttpRegex,
+		trimHttpsRegex:       trimHttpsRegex,
+		hexByteRegex:         hexByteRegex,
+		dateTimeRegex:        dateTimeRegex,
+		integersInputRegex:   integersInputRegex,
+		syslogUnitRegex:      syslogUnitRegex,
+		keybindingsEnabled:   true,
+		timestampDocker:      true,
+		streamTypeDocker:     true,
+		lastCurrentView:      "services",
+		backCurrentView:      false,
+		dockerCompose:        "docker compose",
+		uniquePrefixColorMap: make(map[string]string),
 	}
 
 	// Значения по умолчанию
@@ -997,7 +1011,7 @@ func runGoCui(mock bool) {
 		os.Exit(0)
 	}
 
-	// Проверяем и извлекаем значения настроек для флагов из конфигурации
+	// Проверяем и извлекаем значения настроек для флагов из конфигурации (#27)
 
 	_, errConfig := config.getConfig()
 	if errConfig != nil {
@@ -1224,6 +1238,47 @@ func runGoCui(mock bool) {
 		} else {
 			app.colorMode = "default"
 		}
+	}
+
+	// Определяем списки в панелях по умолчанию при запуске интерфейса (#37)
+
+	// selectUnits=SystemLogList
+	// selectPath=FileLogList
+	// selectContainerizationSystem=ContainerLogList
+
+	switch config.Interface.SystemLogList {
+	case "systemUnits":
+		app.selectUnits = "systemUnits"
+	case "userUnits":
+		app.selectUnits = "userUnits"
+	case "kernelBoot":
+		app.selectUnits = "kernelBoot"
+	case "auditd":
+		app.selectUnits = "auditd"
+	default:
+		app.selectUnits = "services"
+	}
+
+	switch config.Interface.FileLogList {
+	case "customPath":
+		app.selectPath = "customPath"
+	case "home":
+		app.selectPath = "home"
+	case "descriptor":
+		app.selectPath = "descriptor"
+	default:
+		app.selectPath = "varlog"
+	}
+
+	switch config.Interface.ContainerLogList {
+	case "compose":
+		app.selectContainerizationSystem = "compose"
+	case "podman":
+		app.selectContainerizationSystem = "podman"
+	case "kubernetes":
+		app.selectContainerizationSystem = "kubernetes"
+	default:
+		app.selectContainerizationSystem = "docker"
 	}
 
 	// Извлекаем цвета из конфигурации для покраски интерфейса
@@ -1512,10 +1567,22 @@ func (app *App) layout(g *gocui.Gui) error {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
-		v.Title = " < Unit service list (0) > " // заголовок окна
-		v.Highlight = true                      // выделение активного элемента в списке
-		v.Wrap = false                          // отключаем перенос строк
-		v.Autoscroll = true                     // включаем автопрокрутку
+		// Определяем заголовок панели в зависимости от выбранного журнала в конфигурации по умолчанию
+		switch app.selectUnits {
+		case "services":
+			v.Title = " < Unit service list (0) > "
+		case "systemUnits":
+			v.Title = " < System journals (0) > "
+		case "userUnits":
+			v.Title = " < User journals (0) > "
+		case "kernelBoot":
+			v.Title = " < Kernel boot (0) > "
+		case "auditd":
+			v.Title = " < Audit rules keys (0) > "
+		}
+		v.Highlight = true  // выделение активного элемента в списке
+		v.Wrap = false      // отключаем перенос строк
+		v.Autoscroll = true // включаем автопрокрутку
 		// Цвет границ и заголовка окна из конфигурации по умолчанию при загрузке интерфейса
 		v.FrameColor = app.frameColor
 		v.TitleColor = app.titleColor
@@ -1530,7 +1597,16 @@ func (app *App) layout(g *gocui.Gui) error {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
-		v.Title = " < System var logs (0) > "
+		switch app.selectPath {
+		case "varlog":
+			v.Title = " < System var logs (0) > "
+		case "customPath":
+			v.Title = " < Custom path - " + app.customPath + " (0) > "
+		case "home":
+			v.Title = " < Users home logs (0) > "
+		case "descriptor":
+			v.Title = " < Process descriptor logs (0) > "
+		}
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
@@ -1547,7 +1623,16 @@ func (app *App) layout(g *gocui.Gui) error {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
-		v.Title = " < Docker containers (0) > "
+		switch app.selectContainerizationSystem {
+		case "docker":
+			v.Title = " < Docker containers (0) > "
+		case "compose":
+			v.Title = " < Compose stacks (0) > "
+		case "podman":
+			v.Title = " < Podman containers (0) > "
+		case "kubernetes":
+			v.Title = " < Kubernetes pods (0) > "
+		}
 		v.Highlight = true
 		v.Wrap = false
 		v.Autoscroll = true
@@ -1922,7 +2007,7 @@ func (app *App) loadServices(journalName string) {
 			}
 		}
 	// Boots list from journald
-	case "kernel":
+	case "kernelBoot":
 		// Получаем список загрузок системы
 		var bootCmd *exec.Cmd
 		if app.sshMode {
@@ -2026,8 +2111,14 @@ func (app *App) loadServices(journalName string) {
 			// Сравниваем по второй дате в обратном порядке (After для сортировки по убыванию)
 			return date1.After(date2)
 		})
-	// Journals list from journald
+	// Journals list from journald (UNIT/USER_UNIT)
 	default:
+		switch journalName {
+		case "systemUnits":
+			journalName = "UNIT"
+		case "userUnits":
+			journalName = "USER_UNIT"
+		}
 		var cmd *exec.Cmd
 		if app.sshMode {
 			cmd = exec.Command(
@@ -2336,7 +2427,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			log.Print("Error: getting auditd logs. ", err)
 		}
 	// Читаем лог ядра загрузки системы
-	case selectUnits == "kernel":
+	case selectUnits == "kernelBoot":
 		// Извлекаем id журнала из названия
 		var boot_id string
 		for _, journal := range app.journals {
@@ -2677,7 +2768,8 @@ func (app *App) loadFiles(logPath string) {
 				output = append(output, []byte(file+"\n")...)
 			}
 		}
-	case "/var/log/":
+	case "varlog":
+		logPath = "/var/log/"
 		var cmd *exec.Cmd
 		// Загрузка системных журналов для macOS
 		if app.getOS == "darwin" {
@@ -2782,12 +2874,13 @@ func (app *App) loadFiles(logPath string) {
 		for _, path := range logPaths {
 			output = append([]byte(path), output...)
 		}
-	case "/opt/":
+	case "customPath":
+		logPath = app.customPath
 		var cmd *exec.Cmd
 		if app.sshMode {
 			cmd = exec.Command(
 				"ssh", append(app.sshOptions,
-					"find", app.customPath,
+					"find", logPath,
 					"-type", "f",
 					"-name", "*.log", "-o",
 					"-name", "*.log.*", "-o",
@@ -2800,7 +2893,7 @@ func (app *App) loadFiles(logPath string) {
 			)
 		} else {
 			cmd = exec.Command(
-				"find", app.customPath,
+				"find", logPath,
 				"-type", "f",
 				"-name", "*.log", "-o",
 				"-name", "*.log.*", "-o",
@@ -2834,11 +2927,13 @@ func (app *App) loadFiles(logPath string) {
 			}
 		} else {
 			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
-				log.Print("Error: files not found in ", app.customPath)
+				log.Print("Error: files not found in ", logPath)
 			}
 		}
 	default:
-		// Домашние каталоги пользователей: /home/ для Linux и /Users/ для macOS
+		// Определяем домашний каталог в Linux
+		logPath = "/home/"
+		// Домашний каталог в macOS
 		if app.getOS == "darwin" {
 			logPath = "/Users/"
 		}
@@ -3833,6 +3928,9 @@ func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors str
 // ---------------------------------------- Docker/Compose/Podman/Kubernetes ----------------------------------------
 
 func (app *App) loadDockerContainer(containerizationSystem string) {
+	if containerizationSystem == "kubernetes" {
+		containerizationSystem = "kubectl"
+	}
 	app.dockerContainers = nil
 	// Создаем контекст выполнения удаленных команд по ssh (timeout 5s)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -3890,7 +3988,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		case "kubectl":
 			if strings.Contains(string(version), "Version:") {
 				// Проверяем вывод kubectl, может быть ошибка подключения к кластеру
-				cmd = exec.Command("kubectl", "get", "nodes")
+				cmd = exec.Command(containerizationSystem, "get", "nodes")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Fprintln(vError, "\033[31mError connection to the Kubernetes cluster\033[0m")
@@ -4311,6 +4409,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		app.lastContainerizationSystem = app.selectContainerizationSystem
 	} else {
 		containerizationSystem = app.lastContainerizationSystem
+	}
+	if containerizationSystem == "kubernetes" {
+		containerizationSystem = "kubectl"
 	}
 	var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	// Извлекаем id контейнера и namespace для подов k8s
@@ -7018,7 +7119,7 @@ func (app *App) updateDelimiter(newUpdate bool) {
 
 // ---------------------------------------- Key Binding ----------------------------------------
 
-// Карта для сопостовления сочетаний клавиш со значениями из конфигурации
+// Карта для сопостовления сочетаний клавиш со значениями из конфигурации (#23)
 var keyMap = map[string]gocui.Key{
 	"f1":        gocui.KeyF1,
 	"f2":        gocui.KeyF2,
@@ -7069,7 +7170,7 @@ var keyMap = map[string]gocui.Key{
 	"escape":    gocui.KeyEsc,
 }
 
-// Функция для опредиления клавиш из конфигурации
+// Функция для опредиления клавиш из конфигурации (#23)
 func getHotkey(configKey, defaultKey string) (any, gocui.Modifier) {
 	// Опускаем регистр для всех вхождений (букв и сочетаний)
 	inputKey := strings.ToLower(configKey)
@@ -8635,7 +8736,7 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 				app.selectPath = "ProgramFiles"
 			} else {
 				app.selectUnits = "services"
-				app.selectPath = "/var/log/"
+				app.selectPath = "varlog"
 			}
 		}
 		// Обновляем списки сервисов и файлов
@@ -9003,18 +9104,18 @@ func (app *App) setUnitListRight(g *gocui.Gui, v *gocui.View) error {
 	// Меняем журнал и обновляем список
 	switch app.selectUnits {
 	case "services":
-		app.selectUnits = "UNIT"
+		app.selectUnits = "systemUnits"
 		selectedServices.Title = " < System journals (0) > "
 		app.loadServices(app.selectUnits)
-	case "UNIT":
-		app.selectUnits = "USER_UNIT"
+	case "systemUnits":
+		app.selectUnits = "userUnits"
 		selectedServices.Title = " < User journals (0) > "
 		app.loadServices(app.selectUnits)
-	case "USER_UNIT":
-		app.selectUnits = "kernel"
+	case "userUnits":
+		app.selectUnits = "kernelBoot"
 		selectedServices.Title = " < Kernel boot (0) > "
 		app.loadServices(app.selectUnits)
-	case "kernel":
+	case "kernelBoot":
 		app.selectUnits = "auditd"
 		selectedServices.Title = " < Audit rules keys (0) > "
 		app.loadServices(app.selectUnits)
@@ -9040,18 +9141,18 @@ func (app *App) setUnitListLeft(g *gocui.Gui, v *gocui.View) error {
 		selectedServices.Title = " < Audit rules keys (0) > "
 		app.loadServices(app.selectUnits)
 	case "auditd":
-		app.selectUnits = "kernel"
+		app.selectUnits = "kernelBoot"
 		selectedServices.Title = " < Kernel boot (0) > "
 		app.loadServices(app.selectUnits)
-	case "kernel":
-		app.selectUnits = "USER_UNIT"
+	case "kernelBoot":
+		app.selectUnits = "userUnits"
 		selectedServices.Title = " < User journals (0) > "
 		app.loadServices(app.selectUnits)
-	case "USER_UNIT":
-		app.selectUnits = "UNIT"
+	case "userUnits":
+		app.selectUnits = "systemUnits"
 		selectedServices.Title = " < System journals (0) > "
 		app.loadServices(app.selectUnits)
-	case "UNIT":
+	case "systemUnits":
 		app.selectUnits = "services"
 		selectedServices.Title = " < Unit service list (0) > "
 		app.loadServices(app.selectUnits)
@@ -9120,20 +9221,20 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 	} else {
 		go func() {
 			switch app.selectPath {
-			case "/var/log/":
-				app.selectPath = "/opt/"
+			case "varlog":
+				app.selectPath = "customPath"
 				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
 				app.loadFiles(app.selectPath)
-			case "/opt/":
-				app.selectPath = "/home/"
+			case "customPath":
+				app.selectPath = "home"
 				selectedVarLog.Title = " < Users home logs (0) > "
 				app.loadFiles(app.selectPath)
-			case "/home/":
+			case "home":
 				app.selectPath = "descriptor"
 				selectedVarLog.Title = " < Process descriptor logs (0) > "
 				app.loadFiles(app.selectPath)
 			case "descriptor":
-				app.selectPath = "/var/log/"
+				app.selectPath = "varlog"
 				selectedVarLog.Title = " < System var logs (0) > "
 				app.loadFiles(app.selectPath)
 			}
@@ -9202,20 +9303,20 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 	} else {
 		go func() {
 			switch app.selectPath {
-			case "/var/log/":
+			case "varlog":
 				app.selectPath = "descriptor"
 				selectedVarLog.Title = " < Process descriptor logs (0) > "
 				app.loadFiles(app.selectPath)
 			case "descriptor":
-				app.selectPath = "/home/"
+				app.selectPath = "home"
 				selectedVarLog.Title = " < Users home logs (0) > "
 				app.loadFiles(app.selectPath)
-			case "/home/":
-				app.selectPath = "/opt/"
+			case "home":
+				app.selectPath = "customPath"
 				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
 				app.loadFiles(app.selectPath)
-			case "/opt/":
-				app.selectPath = "/var/log/"
+			case "customPath":
+				app.selectPath = "varlog"
 				selectedVarLog.Title = " < System var logs (0) > "
 				app.loadFiles(app.selectPath)
 			}
@@ -9247,10 +9348,10 @@ func (app *App) setContainersListRight(g *gocui.Gui, v *gocui.View) error {
 		selectedDocker.Title = " < Podman containers (0) > "
 		app.loadDockerContainer(app.selectContainerizationSystem)
 	case "podman":
-		app.selectContainerizationSystem = "kubectl"
+		app.selectContainerizationSystem = "kubernetes"
 		selectedDocker.Title = " < Kubernetes pods (0) > "
 		app.loadDockerContainer(app.selectContainerizationSystem)
-	case "kubectl":
+	case "kubernetes":
 		app.selectContainerizationSystem = "docker"
 		selectedDocker.Title = " < Docker containers (0) > "
 		app.loadDockerContainer(app.selectContainerizationSystem)
@@ -9268,10 +9369,10 @@ func (app *App) setContainersListLeft(g *gocui.Gui, v *gocui.View) error {
 	app.selectedDockerContainer = 0
 	switch app.selectContainerizationSystem {
 	case "docker":
-		app.selectContainerizationSystem = "kubectl"
+		app.selectContainerizationSystem = "kubernetes"
 		selectedDocker.Title = " < Kubernetes pods (0) > "
 		app.loadDockerContainer(app.selectContainerizationSystem)
-	case "kubectl":
+	case "kubernetes":
 		app.selectContainerizationSystem = "podman"
 		selectedDocker.Title = " < Podman containers (0) > "
 		app.loadDockerContainer(app.selectContainerizationSystem)

@@ -55,8 +55,16 @@ hotkeys:
   timestampShow: ctrl+t
   exit: ctrl+c
 
-# Available colors: default, green, black, yellow, red, blue, cyan, magenta, white
+# Default interface settings
 interface:
+  # Lists in panels loaded when the interface starts
+  # Available system log lists: services, systemUnits, userUnits, kernelBoot, auditd
+  systemLogList: services
+  # Available file log lists: varlog, customPath, home, descriptor
+  fileLogList: varlog
+  # Available container log lists: docker, compose, podman, kubernetes
+  containerLogList: docker
+  # Available colors: default, green, black, yellow, red, blue, cyan, magenta, white
   foregroundColor: default
   backgroundColor: default
   selectedForegroundColor: black
@@ -67,7 +75,7 @@ interface:
   selectedTitleColor: green
   errorColor: red
 
-# List of ssh hosts with flags for connection
+# List of ssh hosts with flags for connection from the interface
 # ssh:
 #   hosts:
 #     - lifailon@192.168.3.101

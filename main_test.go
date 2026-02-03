@@ -181,9 +181,9 @@ func TestUnixFiles(t *testing.T) {
 		name       string
 		selectPath string
 	}{
-		{"System var logs", "/var/log/"},
-		{"Optional package logs", "/opt/"},
-		{"Users home logs", "/home/"},
+		{"System var logs", "varlog"},
+		{"Optional package logs", "customPath"},
+		{"Users home logs", "home"},
 		{"Process descriptor logs", "descriptor"},
 	}
 
@@ -208,7 +208,7 @@ func TestUnixFiles(t *testing.T) {
 			}
 
 			// Пропускаем тесты в macOS/BSD
-			if runtime.GOOS != "linux" && tc.selectPath != "/var/log/" {
+			if runtime.GOOS != "linux" && tc.selectPath != "varlog" {
 				t.Skip("Skip test for macOS in CI")
 			}
 
@@ -252,8 +252,8 @@ func TestLinuxJournal(t *testing.T) {
 		journalName string
 	}{
 		{"Unit service list", "services"},
-		{"System journals", "UNIT"},
-		{"User journals", "USER_UNIT"},
+		{"System journals", "systemUnits"},
+		{"User journals", "userUnits"},
 		{"Kernel boot", "kernel"},
 	}
 
@@ -372,7 +372,7 @@ func TestColor(t *testing.T) {
 		testMode:           true,
 		logViewCount:       "10000",
 		logUpdateSeconds:   5,
-		selectPath:         "/home/",
+		selectPath:         "home",
 		filterListText:     "color",
 		trimHttpRegex:      trimHttpRegex,
 		trimHttpsRegex:     trimHttpsRegex,
@@ -436,7 +436,7 @@ func TestExtColor(t *testing.T) {
 		colorMode:        "tailspin",
 		logViewCount:     "10000",
 		logUpdateSeconds: 5,
-		selectPath:       "/home/",
+		selectPath:       "home",
 		filterListText:   "color",
 	}
 
@@ -487,7 +487,7 @@ func TestFilter(t *testing.T) {
 				testMode:           true,
 				logViewCount:       "10000",
 				logUpdateSeconds:   5,
-				selectPath:         "/home/",
+				selectPath:         "home",
 				filterListText:     "color",
 				selectFilterMode:   tc.selectFilterMode,
 				filterText:         "true",
@@ -563,7 +563,7 @@ func TestCommandColor(t *testing.T) {
 		startDockerContainers:        0,
 		selectedDockerContainer:      0,
 		selectUnits:                  "services",
-		selectPath:                   "/var/log/",
+		selectPath:                   "varlog",
 		selectContainerizationSystem: "docker",
 		selectFilterMode:             "default",
 		logViewCount:                 "10000",
@@ -646,7 +646,7 @@ func TestCommandFuzzyFilter(t *testing.T) {
 		startDockerContainers:        0,
 		selectedDockerContainer:      0,
 		selectUnits:                  "services",
-		selectPath:                   "/var/log/",
+		selectPath:                   "varlog",
 		selectContainerizationSystem: "docker",
 		selectFilterMode:             "default",
 		logViewCount:                 "10000",
@@ -692,7 +692,7 @@ func TestCommandRegexFilter(t *testing.T) {
 		startDockerContainers:        0,
 		selectedDockerContainer:      0,
 		selectUnits:                  "services",
-		selectPath:                   "/var/log/",
+		selectPath:                   "varlog",
 		selectContainerizationSystem: "docker",
 		selectFilterMode:             "default",
 		logViewCount:                 "10000",
@@ -748,7 +748,7 @@ func TestMockInterface(t *testing.T) {
 		startDockerContainers:        0,
 		selectedDockerContainer:      0,
 		selectUnits:                  "services",
-		selectPath:                   "/var/log/",
+		selectPath:                   "varlog",
 		selectContainerizationSystem: "docker",
 		selectFilterMode:             "default",
 		logViewCount:                 "10000",
@@ -1067,12 +1067,12 @@ func TestMockInterface(t *testing.T) {
 			app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("\033[32mPASS\033[0m: Optional package logs (/opt/log)")
+				t.Log("\033[32mPASS\033[0m: Optional package logs and custom path")
 			}
 			app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("\033[32mPASS\033[0m: Users home logs (/home)")
+				t.Log("\033[32mPASS\033[0m: Users home logs")
 			}
 			app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
@@ -1082,7 +1082,7 @@ func TestMockInterface(t *testing.T) {
 			app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("\033[32mPASS\033[0m: System var logs (/var/log)")
+				t.Log("\033[32mPASS\033[0m: System var logs")
 			}
 			// Влево
 			if debug {
@@ -1096,17 +1096,17 @@ func TestMockInterface(t *testing.T) {
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("\033[32mPASS\033[0m: Users home logs (/home)")
+				t.Log("\033[32mPASS\033[0m: Users home logs")
 			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("\033[32mPASS\033[0m: Optional package logs (/opt/log)")
+				t.Log("\033[32mPASS\033[0m: Optional package logs and custom path")
 			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				t.Log("\033[32mPASS\033[0m: System var logs (/var/log)")
+				t.Log("\033[32mPASS\033[0m: System var logs")
 			}
 		}
 	}
