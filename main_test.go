@@ -254,7 +254,7 @@ func TestLinuxJournal(t *testing.T) {
 		{"Unit service list", "services"},
 		{"System journals", "systemUnits"},
 		{"User journals", "userUnits"},
-		{"Kernel boot", "kernel"},
+		{"Kernel boot", "kernelBoot"},
 	}
 
 	for _, tc := range testCases {
@@ -313,7 +313,7 @@ func TestDockerContainer(t *testing.T) {
 		{"Docker", "docker"},
 		// {"Compose", "compose"},
 		// {"Podman", "podman"},
-		// {"Kubernetes", "kubectl"},
+		// {"Kubernetes", "kubernetes"},
 	}
 
 	for _, tc := range testCases {

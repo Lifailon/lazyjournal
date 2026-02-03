@@ -2371,6 +2371,18 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 	} else {
 		selectUnits = app.lastSelectUnits
 	}
+	// Обновляем статус с названием источника журнала (название юнита)
+	if !app.testMode {
+		v, err := app.gui.View("logs")
+		serviceWithoutStatus := serviceName
+		serviceNameSplit := strings.Split(serviceWithoutStatus, "] ")
+		if len(serviceNameSplit) == 2 && len(serviceNameSplit[1]) > 0 {
+			serviceWithoutStatus = serviceNameSplit[1]
+		}
+		if err == nil {
+			v.Subtitle = "[ " + selectUnits + "/" + serviceWithoutStatus + " ]"
+		}
+	}
 	switch {
 	// Читаем журналы Windows
 	case app.getOS == "windows":
@@ -2549,10 +2561,6 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		// app.filterText = ""
 		// Применяем текущий фильтр к записям для обновления вывода
 		app.applyFilter(false)
-		v, err := app.gui.View("logs")
-		if err == nil {
-			v.Subtitle = "[ " + selectUnits + "/" + serviceName + " ]"
-		}
 	}
 }
 
@@ -3413,6 +3421,13 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 			break
 		}
 	}
+	// Обновляем статус с названием источника журнала (полный путь к файлу)
+	if !app.testMode {
+		v, err := app.gui.View("logs")
+		if err == nil {
+			v.Subtitle = "[ " + logFullPath + " ]"
+		}
+	}
 	if newUpdate {
 		app.lastLogPath = logFullPath
 		// Фиксируем новую дату изменения и размер для выбранного файла
@@ -3829,10 +3844,6 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 		if !app.testMode {
 			app.updateDelimiter(newUpdate)
 			app.applyFilter(false)
-			v, err := app.gui.View("logs")
-			if err == nil {
-				v.Subtitle = "[ " + logFullPath + " ]"
-			}
 		}
 	}
 }
@@ -4409,6 +4420,13 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		app.lastContainerizationSystem = app.selectContainerizationSystem
 	} else {
 		containerizationSystem = app.lastContainerizationSystem
+	}
+	// Обновляем статус с названием источника журнала (имя контейнера)
+	if !app.testMode {
+		v, err := app.gui.View("logs")
+		if err == nil {
+			v.Subtitle = "[ " + containerizationSystem + "/" + containerName + " ]"
+		}
 	}
 	if containerizationSystem == "kubernetes" {
 		containerizationSystem = "kubectl"
@@ -5065,10 +5083,6 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	if !readFileContainer || (readFileContainer && app.updateFile) || containerizationSystem != "docker" {
 		app.updateDelimiter(newUpdate)
 		app.applyFilter(false)
-		v, err := app.gui.View("logs")
-		if err == nil {
-			v.Subtitle = "[ " + containerizationSystem + "/" + containerName + " ]"
-		}
 	}
 }
 
