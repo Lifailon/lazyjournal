@@ -318,7 +318,7 @@ func showHelp() {
 	fmt.Println("    --podman-context, -P       Use the specified Podman context (not used by default)")
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
 	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
-	fmt.Println("    --path, -p                 Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
+	fmt.Println("    --path, -p                 Specify path in the file system, e.g. \"$(pwd)\" (/opt on Linux and $HOME/Documents on Windows by default)")
 	fmt.Println("    --color-mode, -C           Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
@@ -421,6 +421,16 @@ func showConfig() {
 	}
 }
 
+func winHomeDocsDir() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	docsDir := filepath.Join(homeDir, "Documents")
+	docsDir = strings.ReplaceAll(docsDir, "\\", "/")
+	return docsDir
+}
+
 // Audit (#18)
 func (app *App) showAudit() {
 	var auditText []string
@@ -503,7 +513,9 @@ func (app *App) showAudit() {
 				{"ProgramData", "ProgramData"},
 				{"/AppData/Local", "AppDataLocal"},
 				{"/AppData/Roaming", "AppDataRoaming"},
+				{"Custom Path", "WinCustomPath"},
 			}
+			app.customPath = winHomeDocsDir()
 			// Создаем группу для ожидания выполнения всех горутин
 			var wg sync.WaitGroup
 			// Мьютекс для безопасного доступа к переменной auditText
@@ -515,9 +527,12 @@ func (app *App) showAudit() {
 					// Отнимаем счетчик горутин при завершении выполнения горутины
 					defer wg.Done()
 					var fullPath string
-					if strings.HasPrefix(path.fullPath, "Program") {
+					switch {
+					case path.fullPath == "Custom Path":
+						fullPath = "\"" + app.customPath + "\""
+					case strings.HasPrefix(path.fullPath, "Program"):
 						fullPath = "\"" + app.systemDisk + ":/" + path.fullPath + "\""
-					} else {
+					default:
 						fullPath = "\"" + app.systemDisk + ":/Users/" + app.userName + path.fullPath + "\""
 					}
 					app.loadWinFiles(path.path)
@@ -583,6 +598,7 @@ func (app *App) showAudit() {
 			{"Process descriptor logs", "descriptor"},
 		}
 		for _, path := range paths {
+			app.customPath = "/opt/"
 			app.loadFiles(path.path)
 			lenLogFiles := strconv.Itoa(len(app.logfiles))
 			switch path.path {
@@ -975,8 +991,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(kubernetesContextFlag, "K", "default", "Use the specified Kubernetes context (default: default)")
 	kubernetesNamespaceFlag := flag.String("namespace", "all", "Use the specified Kubernetes namespace (default: all)")
 	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
-	pathFlag := flag.String("path", "/opt", "Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
-	flag.StringVar(pathFlag, "p", "/opt", "Custom path to logs in the file system (e.g. \"$(pwd)\", default: /opt)")
+	pathFlag := flag.String("path", "", "Specify path in the file system, e.g. \"$(pwd)\" (/opt on Linux and $HOME/Documents on Windows by default)")
+	flag.StringVar(pathFlag, "p", "", "Specify path in the file system, e.g. \"$(pwd)\" (/opt on Linux and $HOME/Documents on Windows by default)")
 	colorModeFlag := flag.String("color-mode", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	flag.StringVar(colorModeFlag, "C", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
@@ -1082,7 +1098,7 @@ func runGoCui(mock bool) {
 		kubernetesNamespaceFlag = &config.Settings.KubernetesNamespace
 	}
 
-	if config.Settings.CustomPath != "" && *pathFlag == "/opt" {
+	if config.Settings.CustomPath != "" && *pathFlag == "" {
 		pathFlag = &config.Settings.CustomPath
 	}
 
@@ -1213,7 +1229,8 @@ func runGoCui(mock bool) {
 		app.kubernetesNamespace = "--namespace=" + *kubernetesNamespaceFlag
 	}
 
-	if (app.getOS != "windows" && strings.HasPrefix(*pathFlag, "/")) || (app.getOS == "windows" && strings.Contains(*pathFlag, ":\\")) {
+	if (app.getOS != "windows" && strings.HasPrefix(*pathFlag, "/")) ||
+		(app.getOS == "windows" && (strings.Contains(*pathFlag, ":\\") || strings.Contains(*pathFlag, ":/"))) {
 		app.customPath = *pathFlag
 		app.customPath = strings.TrimSuffix(app.customPath, "/")
 		app.customPath = strings.TrimSuffix(app.customPath, "\\")
@@ -1221,10 +1238,14 @@ func runGoCui(mock bool) {
 		app.customPath = strings.ReplaceAll(app.customPath, "\\\\", "\\")
 	} else {
 		if *pathFlag != config.Settings.CustomPath {
-			fmt.Println("Invalid custom path: " + *pathFlag)
+			fmt.Println("Invalid custom path for " + app.getOS + ": " + *pathFlag)
 			os.Exit(1)
 		} else {
-			app.customPath = "/opt"
+			if app.getOS == "windows" {
+				app.customPath = winHomeDocsDir()
+			} else {
+				app.customPath = "/opt"
+			}
 		}
 	}
 

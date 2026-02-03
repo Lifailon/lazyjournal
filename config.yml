@@ -13,7 +13,8 @@ settings:
   podmanContext: ""
   kubernetesContext: default
   kubernetesNamespace: all
-  customPath: /opt
+  # Default (if not specified): /opt for Linux and $HOME/Documents for Windows
+  customPath: ""
   # Available modes: default, tailspin, bat, disable 
   colorMode: default
   colorActionsDisable: false
