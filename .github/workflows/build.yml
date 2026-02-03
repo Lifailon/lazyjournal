@@ -141,6 +141,7 @@ jobs:
 
       - name: Unit testing in Linux (all functions and mock interface)
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'ubuntu-24.04' }}
+        id: unitTestLinux
         continue-on-error: true
         timeout-minutes: 10
         run: sudo env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover | tee test.log
@@ -328,7 +329,8 @@ jobs:
             **Build binary and deb packages**: ${{ github.event.inputs.Binary == 'true' && '✅' || '❌' }}
             **Update version in README**: ${{ github.event.inputs.README == 'true' && '✅' || '❌' }}
 
-            🚀 Result unit testing coverage: ${{ env.COVERAGE || 'n/a' }}
+            🚀 Result unit testing: ${{ steps.unitTestLinux.outcome }}
+            🧪 Result unit coverage: ${{ env.COVERAGE || 'n/a' }}
 
   build:
     runs-on: ubuntu-latest
