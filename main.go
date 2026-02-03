@@ -4102,7 +4102,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 					ctx,
 					"ssh", append(app.sshOptions,
 						containerizationSystem,
-						"--context", app.dockerContext,
+						"--context", app.podmanContext,
 						"ps", "-a",
 						"--format", "'{{.ID}} {{.Names}} {{.State}}'",
 					)...)
@@ -4110,7 +4110,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 				cmd = exec.CommandContext(
 					ctx,
 					containerizationSystem,
-					"--context", app.dockerContext,
+					"--context", app.podmanContext,
 					"ps", "-a",
 					"--format", "{{.ID}} {{.Names}} {{.State}}",
 				)
@@ -4817,8 +4817,10 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			// Формируем опции для выполнения команды
 			cmdOptions := []string{}
 			// #38 Добавляем название контекста с проверкой флага для Podman
-			if containerizationSystem == "docker" || (containerizationSystem == "podman" && app.podmanContext != "") {
+			if containerizationSystem == "docker" {
 				cmdOptions = append(cmdOptions, "--context", app.dockerContext)
+			} else if containerizationSystem == "podman" && app.podmanContext != "" {
+				cmdOptions = append(cmdOptions, "--context", app.podmanContext)
 			}
 			// Добавляем фильтрацию по времени
 			sinceFilterTextNotSpace := reSpace.ReplaceAllString(app.sinceFilterText, "T")
