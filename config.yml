@@ -1,11 +1,10 @@
 # Default flag values (lower priority)
 settings:
   tailModeDisable: false
-  # Available values: 200, 500, 1000, 5000, 10000, 20000, 30000, 40000, 50000, 100000, 150000, 200000
   tailModeLines: 10000
-  # Valid range: 2-10
   updateInterval: 5
   minSymbolFilter: 3
+  timezoneFilter: +00:00
   mouseDisable: false
   wrapModeDisable: false
   dockerStreamOnly: false
@@ -13,26 +12,23 @@ settings:
   podmanContext: ""
   kubernetesContext: default
   kubernetesNamespace: all
-  # Default (if not specified): /opt for Linux and $HOME/Documents for Windows
   customPath: ""
-  # Available modes: default, tailspin, bat, disable 
   colorMode: default
   colorActionsDisable: false
-  sinceDateFilterMode: false
-  untilDateFilterMode: false
-  # UTC offset
-  filterTimezone: "+00:00"
   disableFastMode: false
 
 # Default interface settings
 interface:
-  # Lists in panels loaded when the interface starts
+  # Lists in panels when the interface is started
   # Available system log lists: services, systemUnits, userUnits, kernelBoot, auditd
   systemLogList: services
   # Available file log lists: varlog, customPath, home, descriptor
   fileLogList: varlog
   # Available container log lists: docker, compose, podman, kubernetes
   containerLogList: docker
+  # Enable filtering by date when the interface is started (today by default)
+  sinceDateFilterMode: false
+  untilDateFilterMode: false
   # Available colors: default, green, black, yellow, red, blue, cyan, magenta, white
   foregroundColor: default
   backgroundColor: default

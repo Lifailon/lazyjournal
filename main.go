@@ -48,6 +48,7 @@ type Settings struct {
 	TailModeLines       string `yaml:"tailModeLines"`
 	UpdateInterval      string `yaml:"updateInterval"`
 	MinSymbolFilter     string `yaml:"minSymbolFilter"`
+	TimezoneFilter      string `yaml:"timezoneFilter"`
 	MouseDisable        string `yaml:"mouseDisable"`
 	WrapModeDisable     string `yaml:"wrapModeDisable"`
 	DockerStreamOnly    string `yaml:"dockerStreamOnly"`
@@ -58,9 +59,6 @@ type Settings struct {
 	CustomPath          string `yaml:"customPath"`
 	ColorMode           string `yaml:"colorMode"`
 	ColorActionsDisable string `yaml:"colorActionsDisable"`
-	SinceDateFilterMode string `yaml:"sinceDateFilterMode"`
-	UntilDateFilterMode string `yaml:"untilDateFilterMode"`
-	FilterTimezone      string `yaml:"filterTimezone"`
 	DisableFastMode     string `yaml:"disableFastMode"`
 }
 
@@ -69,6 +67,8 @@ type Interface struct {
 	SystemLogList           string `yaml:"systemLogList"`
 	FileLogList             string `yaml:"fileLogList"`
 	ContainerLogList        string `yaml:"containerLogList"`
+	SinceDateFilterMode     string `yaml:"sinceDateFilterMode"`
+	UntilDateFilterMode     string `yaml:"untilDateFilterMode"`
 	ForegroundColor         string `yaml:"foregroundColor"`
 	BackgroundColor         string `yaml:"backgroundColor"`
 	SelectedForegroundColor string `yaml:"selectedForegroundColor"`
@@ -228,7 +228,7 @@ type App struct {
 	untilFilterDate     time.Time // конец отрезка времени в формате time для проверки
 	limitFilterDate     time.Time // предельное значение для проверки untilFilterDate
 	filterByDateStatus  string    // текстовое значение режима работы фильтра для статуса
-	filterTimezone      string    // смещение UTC для фильтрации по дате
+	timezoneFilter      string    // смещение UTC для фильтрации по дате
 
 	// Текст для фильтрации список журналов
 	filterListText string
@@ -312,7 +312,8 @@ func showHelp() {
 	fmt.Println("    --tail-mode-disable, -d    Disable streaming of new events (log is loaded once without update)")
 	fmt.Println("    --tail-lines, -t           Change the number of log lines to output (range: 200-200000, default: 10K)")
 	fmt.Println("    --update-interval, -u      Change the update interval of the log output (range: 2-10, default: 5)")
-	fmt.Println("    --filter-symbols, -F       Minimum number of symbols for filtering output (range: 1-10, default: 3)")
+	fmt.Println("    --min-symbols-filter, -F   Minimum number of symbols for filtering output (range: 1-10, default: 3)")
+	fmt.Println("    --timezone-filter, -T      UTC offset when filtering by date (default: +00:00)")
 	fmt.Println("    --mouse-disable, -m        Disable mouse control support")
 	fmt.Println("    --wrap-disable, -w         Disable wrap mode in log content")
 	fmt.Println("    --docker-stream-only, -o   Force reading of Docker container logs in stream mode (by default from the file system)")
@@ -320,7 +321,7 @@ func showHelp() {
 	fmt.Println("    --podman-context, -P       Use the specified Podman context (not used by default)")
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
 	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
-	fmt.Println("    --path, -p                 Specify path in the file system, e.g. \"$(pwd)\" (/opt on Linux and $HOME/Documents on Windows by default)")
+	fmt.Println("    --path, -p                 Specify path in the file system, e.g. \"$(pwd)\" (/opt in Linux and $HOME/Documents in Windows by default)")
 	fmt.Println("    --color-mode, -C           Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
@@ -352,6 +353,7 @@ func showConfig() {
 	fmt.Printf("  tailModeLines:            %s\n", config.Settings.TailModeLines)
 	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
 	fmt.Printf("  minSymbolFilter:          %s\n", config.Settings.MinSymbolFilter)
+	fmt.Printf("  timezoneFilter:           %s\n", config.Settings.TimezoneFilter)
 	fmt.Printf("  mouseDisable:             %s\n", config.Settings.MouseDisable)
 	fmt.Printf("  wrapModeDisable:          %s\n", config.Settings.WrapModeDisable)
 	fmt.Printf("  dockerStreamOnly:         %s\n", config.Settings.DockerStreamOnly)
@@ -362,15 +364,14 @@ func showConfig() {
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
 	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
 	fmt.Printf("  colorActionsDisable:      %s\n", config.Settings.ColorActionsDisable)
-	fmt.Printf("  sinceDateFilterMode:      %s\n", config.Settings.SinceDateFilterMode)
-	fmt.Printf("  untilDateFilterMode:      %s\n", config.Settings.UntilDateFilterMode)
-	fmt.Printf("  filterTimezone:           %s\n", config.Settings.FilterTimezone)
 	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
 
 	fmt.Println("interface:")
 	fmt.Printf("  SystemLogList:            %s\n", config.Interface.SystemLogList)
 	fmt.Printf("  FileLogList:              %s\n", config.Interface.FileLogList)
 	fmt.Printf("  ContainerLogList:         %s\n", config.Interface.ContainerLogList)
+	fmt.Printf("  sinceDateFilterMode:      %s\n", config.Interface.SinceDateFilterMode)
+	fmt.Printf("  untilDateFilterMode:      %s\n", config.Interface.UntilDateFilterMode)
 	fmt.Printf("  foregroundColor:          %s\n", config.Interface.ForegroundColor)
 	fmt.Printf("  backgroundColor:          %s\n", config.Interface.BackgroundColor)
 	fmt.Printf("  selectedForegroundColor:  %s\n", config.Interface.SelectedForegroundColor)
@@ -978,8 +979,10 @@ func runGoCui(mock bool) {
 	flag.StringVar(tailFlag, "t", "10000", "Change the number of log lines to output (range: 200-200000, default: 10K)")
 	updateFlag := flag.Int("update-interval", 5, "Change the update interval of the log output (range: 2-10, default: 5)")
 	flag.IntVar(updateFlag, "u", 5, "Change the update interval of the log output (range: 2-10, default: 5)")
-	minSymbolFilterFlag := flag.Int("filter-symbols", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
+	minSymbolFilterFlag := flag.Int("min-symbols-filter", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
 	flag.IntVar(minSymbolFilterFlag, "F", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
+	timezoneFilterFlag := flag.String("timezone-filter", "+00:00", "UTC offset when filtering by date (default: +00:00)")
+	flag.StringVar(timezoneFilterFlag, "T", "+00:00", "UTC offset when filtering by date (default: +00:00)")
 	mouseDisable := flag.Bool("mouse-disable", false, "Disable mouse control support")
 	flag.BoolVar(mouseDisable, "m", false, "Disable mouse control support")
 	wrapModeDisable := flag.Bool("wrap-disable", false, "Disable wrap mode in log content")
@@ -994,8 +997,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(kubernetesContextFlag, "K", "default", "Use the specified Kubernetes context (default: default)")
 	kubernetesNamespaceFlag := flag.String("namespace", "all", "Use the specified Kubernetes namespace (default: all)")
 	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
-	pathFlag := flag.String("path", "", "Specify path in the file system, e.g. \"$(pwd)\" (/opt on Linux and $HOME/Documents on Windows by default)")
-	flag.StringVar(pathFlag, "p", "", "Specify path in the file system, e.g. \"$(pwd)\" (/opt on Linux and $HOME/Documents on Windows by default)")
+	pathFlag := flag.String("path", "", "Specify path in the file system, e.g. \"$(pwd)\" (/opt in Linux and $HOME/Documents in Windows by default)")
+	flag.StringVar(pathFlag, "p", "", "Specify path in the file system, e.g. \"$(pwd)\" (/opt in Linux and $HOME/Documents in Windows by default)")
 	colorModeFlag := flag.String("color-mode", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	flag.StringVar(colorModeFlag, "C", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
@@ -1063,6 +1066,10 @@ func runGoCui(mock bool) {
 		}
 	}
 
+	if config.Settings.TimezoneFilter != "" && *timezoneFilterFlag == "+00:00" {
+		timezoneFilterFlag = &config.Settings.TimezoneFilter
+	}
+
 	if config.Settings.MouseDisable != "" && !*mouseDisable {
 		if strings.EqualFold(config.Settings.MouseDisable, "true") {
 			trueFlag := true
@@ -1109,18 +1116,6 @@ func runGoCui(mock bool) {
 		colorModeFlag = &config.Settings.ColorMode
 	}
 
-	if config.Settings.SinceDateFilterMode != "" {
-		if strings.EqualFold(config.Settings.SinceDateFilterMode, "true") {
-			app.sinceDateFilterMode = true
-		}
-	}
-
-	if config.Settings.UntilDateFilterMode != "" {
-		if strings.EqualFold(config.Settings.UntilDateFilterMode, "true") {
-			app.untilDateFilterMode = true
-		}
-	}
-
 	switch {
 	case app.sinceDateFilterMode && !app.untilDateFilterMode:
 		app.filterByDateStatus = "since only"
@@ -1141,14 +1136,6 @@ func runGoCui(mock bool) {
 	if config.Settings.DisableFastMode != "" {
 		if strings.EqualFold(config.Settings.DisableFastMode, "true") {
 			app.fastMode = false
-		}
-	}
-
-	app.filterTimezone = "+00:00"
-	if config.Settings.FilterTimezone != "" && config.Settings.FilterTimezone != "+00:00" {
-		checkTimezone := regexp.MustCompile(`^[+-][0-9]{2}:[0-9]{2}$`)
-		if checkTimezone.MatchString(config.Settings.FilterTimezone) {
-			app.filterTimezone = config.Settings.FilterTimezone
 		}
 	}
 
@@ -1193,6 +1180,14 @@ func runGoCui(mock bool) {
 		} else {
 			app.minSymbolFilter = 3
 		}
+	}
+
+	// Значение для временной зоны по умолчанию
+	app.timezoneFilter = "+00:00"
+	// Проверяем формат временной зоны из флага или конфигурации
+	checkTimezone := regexp.MustCompile(`^[+-][0-9]{2}:[0-9]{2}$`)
+	if checkTimezone.MatchString(*timezoneFilterFlag) {
+		app.timezoneFilter = *timezoneFilterFlag
 	}
 
 	if *disableScroll {
@@ -1311,6 +1306,20 @@ func runGoCui(mock bool) {
 		app.selectContainerizationSystem = "kubernetes"
 	default:
 		app.selectContainerizationSystem = "docker"
+	}
+
+	// Включение фильтрации по дате при запуске интерфейса (за сегодняшний день по умолчанию)
+
+	if config.Interface.SinceDateFilterMode != "" {
+		if strings.EqualFold(config.Interface.SinceDateFilterMode, "true") {
+			app.sinceDateFilterMode = true
+		}
+	}
+
+	if config.Interface.UntilDateFilterMode != "" {
+		if strings.EqualFold(config.Interface.UntilDateFilterMode, "true") {
+			app.untilDateFilterMode = true
+		}
 	}
 
 	// Извлекаем цвета из конфигурации для покраски интерфейса
@@ -4636,7 +4645,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		switch containerizationSystem {
 		case "kubectl":
 			// Собираем timezone с учетом смещения UTC
-			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.filterTimezone
+			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.timezoneFilter
 			// Формируем команду kubectl с нужными ключами и предварительно извлеченным namespace при выборе пода
 			if app.sshMode {
 				if app.sinceDateFilterMode {
@@ -4697,8 +4706,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					}
 				}
 			}
-			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.filterTimezone
-			untilTimestamp := app.untilFilterText + "T00:00:00" + app.filterTimezone
+			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.timezoneFilter
+			untilTimestamp := app.untilFilterText + "T00:00:00" + app.timezoneFilter
 			if app.sshMode {
 				if app.dockerCompose == "docker compose" {
 					switch {
@@ -4855,8 +4864,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				cmdOptions = append(cmdOptions, "--context", app.podmanContext)
 			}
 			// Добавляем фильтрацию по времени
-			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.filterTimezone
-			untilTimestamp := app.untilFilterText + "T00:00:00" + app.filterTimezone
+			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.timezoneFilter
+			untilTimestamp := app.untilFilterText + "T00:00:00" + app.timezoneFilter
 			switch {
 			case app.sinceDateFilterMode && app.untilDateFilterMode:
 				cmdOptions = append(

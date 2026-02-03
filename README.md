@@ -238,7 +238,8 @@ Access to all system logs and containers may require elevated privileges for the
 --tail-mode-disable, -d    Disable streaming of new events (log is loaded once without update)
 --tail-lines, -t           Change the number of log lines to output (range: 200-200000, default: 10K)
 --update-interval, -u      Change the update interval of the log output (range: 2-10, default: 5)
---filter-symbols, -F       Minimum number of symbols for filtering output (range: 1-10, default: 3)
+--min-symbols-filter, -F   Minimum number of symbols for filtering output (range: 1-10, default: 3)
+--timezone-filter, -T      UTC offset when filtering by date (default: +00:00)
 --mouse-disable, -m        Disable mouse control support
 --wrap-disable, -w         Disable wrap mode in log content
 --docker-stream-only, -o   Force reading of Docker container logs in stream mode (by default from the file system)
@@ -246,7 +247,7 @@ Access to all system logs and containers may require elevated privileges for the
 --podman-context, -P       Use the specified Podman context (not used by default)
 --kubernetes-context, -K   Use the specified Kubernetes context (default: default)
 --namespace, -n            Use the specified Kubernetes namespace (default: all)
---path, -p                 Custom path to logs in the file system (e.g. "$(pwd)", default: /opt)
+--path, -p                 Specify path in the file system, e.g. "$(pwd)" (/opt in Linux and $HOME/Documents in Windows by default)
 --color-mode, -C           Highlighting mode for logs (available values: default, tailspin, bat or disable)
 --command-color, -c        ANSI coloring in command line mode
 --command-fuzzy, -f        Filtering using fuzzy search in command line mode
