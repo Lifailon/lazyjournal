@@ -60,6 +60,7 @@ type Settings struct {
 	ColorActionsDisable string `yaml:"colorActionsDisable"`
 	SinceDateFilterMode string `yaml:"sinceDateFilterMode"`
 	UntilDateFilterMode string `yaml:"untilDateFilterMode"`
+	FilterTimezone      string `yaml:"filterTimezone"`
 	DisableFastMode     string `yaml:"disableFastMode"`
 }
 
@@ -227,6 +228,7 @@ type App struct {
 	untilFilterDate     time.Time // конец отрезка времени в формате time для проверки
 	limitFilterDate     time.Time // предельное значение для проверки untilFilterDate
 	filterByDateStatus  string    // текстовое значение режима работы фильтра для статуса
+	filterTimezone      string    // смещение UTC для фильтрации по дате
 
 	// Текст для фильтрации список журналов
 	filterListText string
@@ -362,6 +364,7 @@ func showConfig() {
 	fmt.Printf("  colorActionsDisable:      %s\n", config.Settings.ColorActionsDisable)
 	fmt.Printf("  sinceDateFilterMode:      %s\n", config.Settings.SinceDateFilterMode)
 	fmt.Printf("  untilDateFilterMode:      %s\n", config.Settings.UntilDateFilterMode)
+	fmt.Printf("  filterTimezone:           %s\n", config.Settings.FilterTimezone)
 	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
 
 	fmt.Println("interface:")
@@ -1138,6 +1141,14 @@ func runGoCui(mock bool) {
 	if config.Settings.DisableFastMode != "" {
 		if strings.EqualFold(config.Settings.DisableFastMode, "true") {
 			app.fastMode = false
+		}
+	}
+
+	app.filterTimezone = "+00:00"
+	if config.Settings.FilterTimezone != "" && config.Settings.FilterTimezone != "+00:00" {
+		checkTimezone := regexp.MustCompile(`^[+-][0-9]{2}:[0-9]{2}$`)
+		if checkTimezone.MatchString(config.Settings.FilterTimezone) {
+			app.filterTimezone = config.Settings.FilterTimezone
 		}
 	}
 
@@ -4624,15 +4635,16 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		var cmd *exec.Cmd
 		switch containerizationSystem {
 		case "kubectl":
+			// Собираем timezone с учетом смещения UTC
+			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.filterTimezone
 			// Формируем команду kubectl с нужными ключами и предварительно извлеченным namespace при выборе пода
-			kubeSinceTime := app.sinceFilterText + "T00:00:00Z"
 			if app.sshMode {
 				if app.sinceDateFilterMode {
 					cmd = exec.CommandContext(
 						ctx,
 						"ssh", append(app.sshOptions,
 							containerizationSystem, "logs",
-							"--since-time", kubeSinceTime,
+							"--since-time", sinceTimestamp,
 							"--context", app.kubernetesContext, "-n", namespace,
 							"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
 							"--all-containers=true", "--prefix=true",
@@ -4654,7 +4666,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					cmd = exec.CommandContext(
 						ctx,
 						containerizationSystem, "logs",
-						"--since-time", kubeSinceTime,
+						"--since-time", sinceTimestamp,
 						"--context", app.kubernetesContext, "-n", namespace,
 						"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
 						"--all-containers=true", "--prefix=true",
@@ -4685,9 +4697,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					}
 				}
 			}
-			// Извлекаем содержимое логов
-			sinceFilterTextNotSpace := reSpace.ReplaceAllString(app.sinceFilterText, "T")
-			untilFilterTextNotSpace := reSpace.ReplaceAllString(app.untilFilterText, "T")
+			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.filterTimezone
+			untilTimestamp := app.untilFilterText + "T00:00:00" + app.filterTimezone
 			if app.sshMode {
 				if app.dockerCompose == "docker compose" {
 					switch {
@@ -4696,8 +4707,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 							ctx,
 							"ssh", append(app.sshOptions,
 								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--since", sinceFilterTextNotSpace,
-								"--until", untilFilterTextNotSpace,
+								"--since", sinceTimestamp,
+								"--until", untilTimestamp,
 								"--tail", app.logViewCount,
 							)...,
 						)
@@ -4706,7 +4717,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 							ctx,
 							"ssh", append(app.sshOptions,
 								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--since", sinceFilterTextNotSpace,
+								"--since", sinceTimestamp,
 								"--tail", app.logViewCount,
 							)...,
 						)
@@ -4715,7 +4726,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 							ctx,
 							"ssh", append(app.sshOptions,
 								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--until", untilFilterTextNotSpace,
+								"--until", untilTimestamp,
 								"--tail", app.logViewCount,
 							)...,
 						)
@@ -4735,8 +4746,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 							ctx,
 							"ssh", append(app.sshOptions,
 								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--since", sinceFilterTextNotSpace,
-								"--until", untilFilterTextNotSpace,
+								"--since", sinceTimestamp,
+								"--until", untilTimestamp,
 								"--tail", app.logViewCount,
 							)...,
 						)
@@ -4745,7 +4756,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 							ctx,
 							"ssh", append(app.sshOptions,
 								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--since", sinceFilterTextNotSpace,
+								"--since", sinceTimestamp,
 								"--tail", app.logViewCount,
 							)...,
 						)
@@ -4754,7 +4765,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 							ctx,
 							"ssh", append(app.sshOptions,
 								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--until", untilFilterTextNotSpace,
+								"--until", untilTimestamp,
 								"--tail", app.logViewCount,
 							)...,
 						)
@@ -4775,22 +4786,22 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 						cmd = exec.CommandContext(
 							ctx,
 							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--since", sinceFilterTextNotSpace,
-							"--until", untilFilterTextNotSpace,
+							"--since", sinceTimestamp,
+							"--until", untilTimestamp,
 							"--tail", app.logViewCount,
 						)
 					case app.sinceDateFilterMode && !app.untilDateFilterMode:
 						cmd = exec.CommandContext(
 							ctx,
 							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--since", sinceFilterTextNotSpace,
+							"--since", sinceTimestamp,
 							"--tail", app.logViewCount,
 						)
 					case !app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.CommandContext(
 							ctx,
 							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--until", untilFilterTextNotSpace,
+							"--until", untilTimestamp,
 							"--tail", app.logViewCount,
 						)
 					default:
@@ -4806,22 +4817,22 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 						cmd = exec.CommandContext(
 							ctx,
 							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--since", sinceFilterTextNotSpace,
-							"--until", untilFilterTextNotSpace,
+							"--since", sinceTimestamp,
+							"--until", untilTimestamp,
 							"--tail", app.logViewCount,
 						)
 					case app.sinceDateFilterMode && !app.untilDateFilterMode:
 						cmd = exec.CommandContext(
 							ctx,
 							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--since", sinceFilterTextNotSpace,
+							"--since", sinceTimestamp,
 							"--tail", app.logViewCount,
 						)
 					case !app.sinceDateFilterMode && app.untilDateFilterMode:
 						cmd = exec.CommandContext(
 							ctx,
 							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--until", untilFilterTextNotSpace,
+							"--until", untilTimestamp,
 							"--tail", app.logViewCount,
 						)
 					default:
@@ -4844,24 +4855,24 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				cmdOptions = append(cmdOptions, "--context", app.podmanContext)
 			}
 			// Добавляем фильтрацию по времени
-			sinceFilterTextNotSpace := reSpace.ReplaceAllString(app.sinceFilterText, "T")
-			untilFilterTextNotSpace := reSpace.ReplaceAllString(app.untilFilterText, "T")
+			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.filterTimezone
+			untilTimestamp := app.untilFilterText + "T00:00:00" + app.filterTimezone
 			switch {
 			case app.sinceDateFilterMode && app.untilDateFilterMode:
 				cmdOptions = append(
 					cmdOptions, "logs", "--timestamps", "--tail", app.logViewCount,
-					"--since", sinceFilterTextNotSpace,
-					"--until", untilFilterTextNotSpace,
+					"--since", sinceTimestamp,
+					"--until", untilTimestamp,
 				)
 			case app.sinceDateFilterMode && !app.untilDateFilterMode:
 				cmdOptions = append(
 					cmdOptions, "logs", "--timestamps", "--tail", app.logViewCount,
-					"--since", sinceFilterTextNotSpace,
+					"--since", sinceTimestamp,
 				)
 			case !app.sinceDateFilterMode && app.untilDateFilterMode:
 				cmdOptions = append(
 					cmdOptions, "logs", "--timestamps", "--tail", app.logViewCount,
-					"--until", untilFilterTextNotSpace,
+					"--until", untilTimestamp,
 				)
 			default:
 				cmdOptions = append(
@@ -4916,7 +4927,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			if len(stdoutLines) <= 1 {
 				lastLineContext := ""
 				// Проверяем на пустую строку
-				if len(stdoutLines[0]) != 0 {
+				if len(stdoutLines) > 0 && len(stdoutLines[0]) > 0 {
 					lastLineContext = stdoutLines[0]
 				}
 				combined = append(combined, dockerLogLines{

@@ -20,6 +20,8 @@ settings:
   colorActionsDisable: false
   sinceDateFilterMode: false
   untilDateFilterMode: false
+  # UTC offset
+  filterTimezone: "+00:00"
   disableFastMode: false
 
 # Default interface settings
