@@ -63,6 +63,22 @@ type Settings struct {
 	DisableFastMode     string `yaml:"disableFastMode"`
 }
 
+// Структура доступных параметров для настройки интерфейса (#37)
+type Interface struct {
+	SystemLogList           string `yaml:"systemLogList"`
+	FileLogList             string `yaml:"fileLogList"`
+	ContainerLogList        string `yaml:"containerLogList"`
+	ForegroundColor         string `yaml:"foregroundColor"`
+	BackgroundColor         string `yaml:"backgroundColor"`
+	SelectedForegroundColor string `yaml:"selectedForegroundColor"`
+	SelectedBackgroundColor string `yaml:"selectedBackgroundColor"`
+	FrameColor              string `yaml:"frameColor"`
+	TitleColor              string `yaml:"titleColor"`
+	SelectedFrameColor      string `yaml:"selectedFrameColor"`
+	SelectedTitleColor      string `yaml:"selectedTitleColor"`
+	ErrorColor              string `yaml:"errorColor"`
+}
+
 // Структура доступных сочетаний клавиш для переопределения (#23)
 type Hotkeys struct {
 	ShowHelp             string `yaml:"showHelp"`
@@ -97,22 +113,6 @@ type Hotkeys struct {
 	SwitchStreamMode     string `yaml:"switchStreamMode"`
 	TimestampShow        string `yaml:"timestampShow"`
 	Exit                 string `yaml:"exit"`
-}
-
-// Структура доступных параметров для настройки интерфейса (#37)
-type Interface struct {
-	SystemLogList           string `yaml:"systemLogList"`
-	FileLogList             string `yaml:"fileLogList"`
-	ContainerLogList        string `yaml:"containerLogList"`
-	ForegroundColor         string `yaml:"foregroundColor"`
-	BackgroundColor         string `yaml:"backgroundColor"`
-	SelectedForegroundColor string `yaml:"selectedForegroundColor"`
-	SelectedBackgroundColor string `yaml:"selectedBackgroundColor"`
-	FrameColor              string `yaml:"frameColor"`
-	TitleColor              string `yaml:"titleColor"`
-	SelectedFrameColor      string `yaml:"selectedFrameColor"`
-	SelectedTitleColor      string `yaml:"selectedTitleColor"`
-	ErrorColor              string `yaml:"errorColor"`
 }
 
 // Структура с содержимым массива ssh хостов с параметрами подключения
@@ -364,6 +364,20 @@ func showConfig() {
 	fmt.Printf("  untilDateFilterMode:      %s\n", config.Settings.UntilDateFilterMode)
 	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
 
+	fmt.Println("interface:")
+	fmt.Printf("  SystemLogList:            %s\n", config.Interface.SystemLogList)
+	fmt.Printf("  FileLogList:              %s\n", config.Interface.FileLogList)
+	fmt.Printf("  ContainerLogList:         %s\n", config.Interface.ContainerLogList)
+	fmt.Printf("  foregroundColor:          %s\n", config.Interface.ForegroundColor)
+	fmt.Printf("  backgroundColor:          %s\n", config.Interface.BackgroundColor)
+	fmt.Printf("  selectedForegroundColor:  %s\n", config.Interface.SelectedForegroundColor)
+	fmt.Printf("  selectedBackgroundColor:  %s\n", config.Interface.SelectedBackgroundColor)
+	fmt.Printf("  frameColor:               %s\n", config.Interface.FrameColor)
+	fmt.Printf("  titleColor:               %s\n", config.Interface.TitleColor)
+	fmt.Printf("  selectedFrameColor:       %s\n", config.Interface.SelectedFrameColor)
+	fmt.Printf("  selectedTitleColor:       %s\n", config.Interface.SelectedTitleColor)
+	fmt.Printf("  errorColor:               %s\n", config.Interface.ErrorColor)
+
 	fmt.Println("hotkeys:")
 	fmt.Printf("  showHelp:                 %s\n", config.Hotkeys.ShowHelp)
 	fmt.Printf("  showManager:              %s\n", config.Hotkeys.ShowManager)
@@ -397,20 +411,6 @@ func showConfig() {
 	fmt.Printf("  switchStreamMode:         %s\n", config.Hotkeys.SwitchStreamMode)
 	fmt.Printf("  timestampShow:            %s\n", config.Hotkeys.TimestampShow)
 	fmt.Printf("  exit:                     %s\n", config.Hotkeys.Exit)
-
-	fmt.Println("interface:")
-	fmt.Printf("  SystemLogList:            %s\n", config.Interface.SystemLogList)
-	fmt.Printf("  FileLogList:              %s\n", config.Interface.FileLogList)
-	fmt.Printf("  ContainerLogList:         %s\n", config.Interface.ContainerLogList)
-	fmt.Printf("  foregroundColor:          %s\n", config.Interface.ForegroundColor)
-	fmt.Printf("  backgroundColor:          %s\n", config.Interface.BackgroundColor)
-	fmt.Printf("  selectedForegroundColor:  %s\n", config.Interface.SelectedForegroundColor)
-	fmt.Printf("  selectedBackgroundColor:  %s\n", config.Interface.SelectedBackgroundColor)
-	fmt.Printf("  frameColor:               %s\n", config.Interface.FrameColor)
-	fmt.Printf("  titleColor:               %s\n", config.Interface.TitleColor)
-	fmt.Printf("  selectedFrameColor:       %s\n", config.Interface.SelectedFrameColor)
-	fmt.Printf("  selectedTitleColor:       %s\n", config.Interface.SelectedTitleColor)
-	fmt.Printf("  errorColor:               %s\n", config.Interface.ErrorColor)
 
 	if len(config.Ssh.Hosts) >= 1 {
 		fmt.Println("ssh:")
