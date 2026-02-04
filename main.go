@@ -815,8 +815,6 @@ var (
 	integersInputRegex = regexp.MustCompile(`^[^a-zA-Z]*\d+[^a-zA-Z]*$`)
 	// Syslog UNIT
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
-	// Замена пробелов на T для фильтрации по дате+время
-	reSpace = regexp.MustCompile(`\s+`)
 )
 
 // Ошибки
@@ -4467,6 +4465,17 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		v, err := app.gui.View("logs")
 		if err == nil {
 			v.Subtitle = "[ " + containerizationSystem + "/" + containerName + " ]"
+		}
+	}
+	if !app.testMode {
+		v, err := app.gui.View("logs")
+		containerNameWithoutStatus := containerName
+		containerNameSplit := strings.Split(containerNameWithoutStatus, "] ")
+		if len(containerNameSplit) == 2 && len(containerNameSplit[1]) > 0 {
+			containerNameWithoutStatus = containerNameSplit[1]
+		}
+		if err == nil {
+			v.Subtitle = "[ " + containerizationSystem + "/" + containerNameWithoutStatus + " ]"
 		}
 	}
 	if containerizationSystem == "kubernetes" {
