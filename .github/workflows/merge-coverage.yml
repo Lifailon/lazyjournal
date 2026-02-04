@@ -48,24 +48,40 @@ jobs:
       - name: Start docker container for test in Ubuntu
         run: |
           version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
-          curl -L "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          curl -sSL "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
           sed "s/TTYD=false/TTYD=true/" docker-compose.yml -i
           docker-compose up -d
           docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
 
-      - name: Create pcap files for Linux
+      - name: Create pcap files
         run: |
           sudo tcpdump -i any -c 1 -w test.pcap
           gzip -c test.pcap > test.pcap.gz
           sudo tcpdump -i any -c 1 -w test.pcapng
           gzip -c test.pcapng > test.pcapng.gz
           ls -lh
-        continue-on-error: true
 
-      - name: Install tailspin
-        run: sudo apt install -y tailspin
+      - name: Install auditd and create rules
+        run: |
+          sudo apt install -y auditd
+          sudo auditctl -w /etc/ssh/ -p rwxa -k ssh
+          sudo auditctl -w /etc/passwd -p wa -k passwd
+          sudo auditctl -l
+
+      - name: Install bat and tailspin
+        run: |
+          sudo apt install -y bat
+          bat --version || batcat --version || true
+          # sudo apt install -y tailspin
+          version=$(curl -s https://api.github.com/repos/bensadeh/tailspin/releases/latest | jq -r .tag_name)
+          curl -L "https://github.com/bensadeh/tailspin/releases/download/$version/tailspin-$(uname -m)-unknown-$(uname -s | tr '[:upper:]' '[:lower:]')-musl.tar.gz" -o /usr/local/bin/tailspin.tar.gz
+          tar -xzf /usr/local/bin/tailspin.tar.gz -C /usr/local/bin
+          mv /usr/local/bin/tspin /usr/local/bin/tailspin
+          chmod +x /usr/local/bin/tailspin
+          rm /usr/local/bin/*.tar.gz
+          tailspin --version
 
       - name: Run all unit test in Linux
         run: sudo go test -v -cover -coverprofile linux-coverage.out
@@ -116,7 +132,7 @@ jobs:
       - name: Start docker container for test in Ubuntu
         run: |
           version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
-          curl -L "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          curl -sSL "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
           sed "s/TTYD=false/TTYD=true/" docker-compose.yml -i

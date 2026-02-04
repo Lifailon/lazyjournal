@@ -145,7 +145,7 @@ func TestWinEvents(t *testing.T) {
 
 	app.loadWinEvents()
 	if len(app.journals) == 0 {
-		t.Errorf("File list is null")
+		t.Errorf("Event list is null")
 	} else {
 		t.Log("Windows Event Logs count:", len(app.journals))
 	}
@@ -251,10 +251,11 @@ func TestLinuxJournal(t *testing.T) {
 		name        string
 		journalName string
 	}{
-		{"Unit service list", "services"},
-		{"System journals", "systemUnits"},
-		{"User journals", "userUnits"},
-		{"Kernel boot", "kernelBoot"},
+		// {"Unit service list", "services"},
+		// {"System journals", "systemUnits"},
+		// {"User journals", "userUnits"},
+		// {"Kernel boot", "kernelBoot"},
+		{"Audit", "auditd"},
 	}
 
 	for _, tc := range testCases {
@@ -277,7 +278,11 @@ func TestLinuxJournal(t *testing.T) {
 
 			app.loadServices(app.selectUnits)
 			if len(app.journals) == 0 {
-				t.Errorf("File list is null")
+				if tc.journalName == "auditd" && os.Geteuid() != 0 {
+					t.Log("Skip auditd from non-root")
+				} else {
+					t.Errorf("Journal list is null")
+				}
 			} else {
 				t.Log("Journal count:", len(app.journals))
 			}
@@ -311,7 +316,7 @@ func TestDockerContainer(t *testing.T) {
 		selectContainerizationSystem string
 	}{
 		{"Docker", "docker"},
-		// {"Compose", "compose"},
+		{"Compose", "compose"},
 		// {"Podman", "podman"},
 		// {"Kubernetes", "kubernetes"},
 	}

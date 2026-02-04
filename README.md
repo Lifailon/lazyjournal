@@ -366,7 +366,7 @@ Unit tests cover all main functions and interface operation.
 # Get a list of all tests
 make test-list
 # Run selected or all tests
-make test-run n=TestMockInterface
+make test-run case=TestMockInterface
 make test-all
 ```
 

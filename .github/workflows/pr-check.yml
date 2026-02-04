@@ -106,10 +106,18 @@ jobs:
           gzip -c test.pcapng > test.pcapng.gz
           ls -lh
 
+      - name: Install auditd and create rules
+        run: |
+          sudo apt install -y auditd
+          sudo auditctl -w /etc/ssh/ -p rwxa -k ssh
+          sudo auditctl -w /etc/passwd -p wa -k passwd
+          sudo auditctl -l
+
       - name: Install bat and tailspin
         run: |
-          sudo apt install bat
+          sudo apt install -y bat
           bat --version || batcat --version || true
+          # sudo apt install -y tailspin
           version=$(curl -s https://api.github.com/repos/bensadeh/tailspin/releases/latest | jq -r .tag_name)
           curl -L "https://github.com/bensadeh/tailspin/releases/download/$version/tailspin-$(uname -m)-unknown-$(uname -s | tr '[:upper:]' '[:lower:]')-musl.tar.gz" -o /usr/local/bin/tailspin.tar.gz
           tar -xzf /usr/local/bin/tailspin.tar.gz -C /usr/local/bin
