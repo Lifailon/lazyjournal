@@ -557,8 +557,7 @@ func (app *App) showAudit() {
 	} else {
 		// systemd/journald
 		auditText = append(auditText,
-			"systemd:",
-			"  journald:",
+			"journald:",
 		)
 		csCheck := exec.Command("journalctl", "--version")
 		_, err := csCheck.Output()
@@ -587,10 +586,36 @@ func (app *App) showAudit() {
 		} else {
 			auditText = append(auditText, "  - installed: false")
 		}
+		// auditd
+		auditText = append(auditText,
+			"auditd:",
+		)
+		csCheck = exec.Command("dpkg-query", "-W", "-f='${Version}'", "auditd")
+		auditdVersion, err := csCheck.Output()
+		if err == nil {
+			auditdVersionString := strings.ReplaceAll(string(auditdVersion), "'", "")
+			auditdVersionString = strings.Split(auditdVersionString, "-")[0]
+			auditText = append(auditText,
+				"  - installed: true",
+				"    version: "+string(auditdVersionString),
+			)
+			if os.Geteuid() == 0 {
+				app.loadServices("auditd")
+				lenRules := strconv.Itoa(len(app.journals))
+				auditText = append(auditText,
+					"    rules: "+lenRules,
+				)
+			} else {
+				auditText = append(auditText,
+					"    rules: requires root access",
+				)
+			}
+		} else {
+			auditText = append(auditText, "  - installed: false")
+		}
 		// Filesystem
 		auditText = append(auditText,
 			"fileSystem:",
-			"  files:",
 		)
 		paths := []struct {
 			name string
@@ -621,8 +646,7 @@ func (app *App) showAudit() {
 		}
 	}
 	auditText = append(auditText,
-		"containerization: ",
-		"  system: ",
+		"containerizationSystem: ",
 	)
 	containerizationSystems := []string{
 		"docker",
@@ -645,7 +669,19 @@ func (app *App) showAudit() {
 			if err == nil {
 				auditText = append(auditText, "    installed: true")
 				csVersion := strings.TrimSpace(string(output))
-				csVersion = strings.Split(csVersion, "version v")[1]
+				splitVersion := strings.Split(csVersion, "version v")
+				if len(splitVersion) == 2 && len(splitVersion[1]) > 0 {
+					csVersion = splitVersion[1]
+				} else {
+					splitVersion = strings.Split(csVersion, "version ")
+					if len(splitVersion) == 2 && len(splitVersion[1]) > 0 {
+						csVersion = splitVersion[1]
+						buildIndex := strings.Index(csVersion, ",")
+						if buildIndex != -1 {
+							csVersion = csVersion[:buildIndex]
+						}
+					}
+				}
 				auditText = append(auditText, "    version: "+csVersion)
 				var cmd *exec.Cmd
 				if composeBin == "docker compose" {
@@ -724,6 +760,7 @@ func (app *App) showAudit() {
 			} else {
 				auditText = append(auditText, "    installed: false")
 			}
+		// docker/podman case
 		default:
 			csCheck := exec.Command(cs, "--version")
 			output, err := csCheck.Output()
@@ -743,15 +780,17 @@ func (app *App) showAudit() {
 				} else {
 					auditText = append(auditText, "    containers: 0")
 				}
-				// docker/podman context
-				auditText = append(auditText, "    context: ")
-				auditText = append(auditText, "      current: "+app.dockerContext)
-				cmd = exec.Command(cs, "context", "ls", "-q")
-				contexts, err := cmd.Output()
-				if err == nil {
-					auditText = append(auditText, "      count: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(contexts)), "\n"))))
-				} else {
-					auditText = append(auditText, "      count: 0")
+				// docker context
+				if cs == "docker" {
+					auditText = append(auditText, "    context: ")
+					auditText = append(auditText, "      current: "+app.dockerContext)
+					cmd = exec.Command(cs, "context", "ls", "-q")
+					contexts, err := cmd.Output()
+					if err == nil {
+						auditText = append(auditText, "      count: "+strconv.Itoa(len(strings.Split(strings.TrimSpace(string(contexts)), "\n"))))
+					} else {
+						auditText = append(auditText, "      count: 0")
+					}
 				}
 			} else {
 				auditText = append(auditText, "    installed: false")

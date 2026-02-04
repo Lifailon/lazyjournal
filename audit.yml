@@ -1,62 +1,60 @@
 system:
-  date: 28.11.2025 11:21:32
-  go: 1.23.2
+  date: 04.02.2026 12:50:24
+  go: 1.25.6
   os: linux Ubuntu 25.04 (Plucky Puffin)
   arch: amd64
   username: lifailon
   privilege: user
   execType: source code
-  execPath: /tmp/go-build4279785658/b001/exe/main
-systemd:
-  journald:
+  execPath: /tmp/go-build3916067317/b001/exe/main
+journald:
   - installed: true
     journals:
     - name: Unit service list
-      count: 232
+      count: 229
     - name: System journals
-      count: 83667
+      count: 94223
     - name: User journals
-      count: 147
+      count: 154
     - name: Kernel boot
-      count: 36
+      count: 42
+auditd:
+  - installed: true
+    version: 1:4.0.2
+    rules: 2
 fileSystem:
-  files:
   - name: System var logs
     path: /var/log/
-    count: 79
+    count: 293
   - name: Custom path
-    path: /opt
-    count: 0
+    path: /opt/
+    count: 2
   - name: Users home logs
     path: /home/
-    count: 103
+    count: 202
   - name: Process descriptor logs
     path: descriptor
-    count: 0
-containerization:
-  system:
+    count: 78
+containerizationSystem:
   - name: docker
     installed: true
     version: 27.5.1
-    containers: 38
+    containers: 24
     context:
       current: default
       count: 4
   - name: compose
     installed: true
     version: 2.39.2
-    stacks: 11
+    stacks: 8
   - name: podman
     installed: true
-    version: 5.4.1
-    containers: 0
-    context:
-      current: default
-      count: 1
+    version: 5.7.1
+    containers: 1
   - name: kubernetes
     installed: true
-    version: 1.33.3+k3s1
-    pods: 56
+    version: 1.34.3
+    pods: 93
     context:
       current: default
       count: 1
