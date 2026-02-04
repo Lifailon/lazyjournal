@@ -102,15 +102,17 @@ jobs:
 
       # Unit testing in Linux
 
-      - name: Start docker container for test in Ubuntu
+      - name: Start docker containers using compose
         if: ${{ (github.event.inputs.Release == 'true' || github.event.inputs.Test == 'true') && github.event.inputs.Distro == 'ubuntu-24.04' }}
         run: |
           version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
           curl -sSL "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
+          mkdir -p $HOME/.docker/cli-plugins
+          cp /usr/local/bin/docker-compose $HOME/.docker/cli-plugins/docker-compose
+          docker compose version
           sed "s/TTYD=false/TTYD=true/" docker-compose.yml -i
-          docker-compose up -d
+          docker compose up -d
           docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
 
       - name: Create pcap files for Linux
