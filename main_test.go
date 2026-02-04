@@ -251,10 +251,10 @@ func TestLinuxJournal(t *testing.T) {
 		name        string
 		journalName string
 	}{
-		// {"Unit service list", "services"},
-		// {"System journals", "systemUnits"},
-		// {"User journals", "userUnits"},
-		// {"Kernel boot", "kernelBoot"},
+		{"Unit service list", "services"},
+		{"System journals", "systemUnits"},
+		{"User journals", "userUnits"},
+		{"Kernel boot", "kernelBoot"},
 		{"Audit", "auditd"},
 	}
 
@@ -285,6 +285,12 @@ func TestLinuxJournal(t *testing.T) {
 				}
 			} else {
 				t.Log("Journal count:", len(app.journals))
+			}
+
+			if tc.journalName == "auditd" {
+				file.WriteString("## Audit rules\n")
+				file.WriteString("| Lines | Read | Color | Rules keys   |\n")
+				file.WriteString("|-------|------|-------|--------------|\n")
 			}
 
 			var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
