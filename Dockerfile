@@ -1,5 +1,5 @@
 # build source code for different architectures
-FROM golang:1.23-alpine3.20 AS build
+FROM golang:1.24-alpine3.23 AS build
 WORKDIR /lazyjournal
 COPY go.mod go.sum ./
 RUN go mod download
@@ -27,7 +27,7 @@ RUN latest=$(curl -sL https://dl.k8s.io/release/stable.txt) && \
     curl -fsSL https://cdn.dl.k8s.io/release/${latest}/bin/linux/${TARGETARCH}/kubectl -o /bin/kubectl
 
 # docker-cli-build
-FROM golang:1.23-alpine3.20 AS docker-cli-build
+FROM golang:1.24-alpine3.23 AS docker-cli-build
 RUN apk add -U -q --progress --no-cache git bash coreutils gcc musl-dev
 WORKDIR /go/src/github.com/docker/cli
 RUN git clone --branch v27.0.3 --single-branch --depth 1 https://github.com/docker/cli .

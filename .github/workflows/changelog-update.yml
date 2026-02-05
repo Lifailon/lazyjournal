@@ -1,4 +1,4 @@
-name: AI CHANGELOG update
+name: AI CHANGELOG Update
 
 on:
   workflow_dispatch:
