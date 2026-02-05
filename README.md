@@ -113,7 +113,7 @@ sudo apt install -y lazyjournal
 Or download the `deb` package from the GitHub releases page for installation on any Debian-based system.
 
 ```bash
-curl -sSL https://github.com/Lifailon/lazyjournal/releases/download/0.8.4/lazyjournal-0.8.4-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
+curl -sSL https://github.com/Lifailon/lazyjournal/releases/download/0.8.5/lazyjournal-0.8.5-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
 sudo apt install -y /tmp/lazyjournal.deb && rm /tmp/lazyjournal.deb
 ```
 
