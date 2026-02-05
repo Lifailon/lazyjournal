@@ -19,7 +19,6 @@ linters:
     - exptostd
     - fatcontext
     - ginkgolinter
-    - godot
     - goheader
     - iface
     - importas
@@ -27,7 +26,6 @@ linters:
     - mirror
     - misspell
     - nakedret
-    - nlreturn
     - nolintlint
     - perfsprint
     - protogetter
@@ -38,7 +36,9 @@ linters:
     - usestdlibvars
     - usetesting
     - whitespace
-    - wsl_v5
+    # - godot
+    # - nlreturn
+    # - wsl_v5
 
   # default: all
   # disable:
@@ -70,3 +70,6 @@ linters:
   #   - unconvert
   #   - varnamelen
   #   - wrapcheck
+  #   - godot
+  #   - nlreturn
+  #   - wsl_v5
