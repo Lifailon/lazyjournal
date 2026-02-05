@@ -1,4 +1,4 @@
-name: Release Publish on GitHub
+name: CD (Release on GitHub)
 
 on:
   workflow_dispatch:

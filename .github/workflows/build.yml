@@ -1,4 +1,4 @@
-name: CI (build and unit testing)
+name: CI (Build and Testing)
 
 on:
   workflow_dispatch:

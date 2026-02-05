@@ -75,7 +75,7 @@ jobs:
 
       - name: Send message to Telegram if there is an error sending the description
         uses: appleboy/telegram-action@master
-        if: ${{ steps.tg_msg.outcome == 'failure' }}
+        if: failure()
         continue-on-error: true
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
