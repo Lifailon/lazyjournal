@@ -144,10 +144,12 @@ jobs:
           paths: "report.xml"
 
       - name: Publish junit report in annotations
+        id: junit_report
         uses: mikepenz/action-junit-report@v6
         if: always()
         with:
           report_paths: "report.xml"
+          detailed_summary: true
 
       - name: Send message to Telegram
         uses: appleboy/telegram-action@master
@@ -164,17 +166,25 @@ jobs:
             📁 **Repository**: ${{ github.repository }}
             👤 **From user**: ${{ github.actor }}
 
-            💡 **Result**: ${{ steps.unitTesting.outcome }}
+            💡 **Status**: ${{ steps.unitTesting.outcome == 'success' && '✅' || '❌' }} ${{ steps.unitTesting.outcome }}
+
+            📚 **Report**:
+            ${{ steps.junit_report.outputs.total }}
 
       - name: Post AI comment on PR
         if: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && always() }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          DETAILED_REPORT: ${{ steps.junit_report.outputs.detailed_summary }}
         run: |
-          SUMMARY=$(cat $GITHUB_STEP_SUMMARY)
-          BODY=$(printf "### Unit testing results\n\nStatus: **${{ steps.unitTesting.outcome }}**\n\n$SUMMARY")
-          gh pr comment "$PR_NUMBER" --body "$BODY"
+          cat <<EOF > comment_body.md
+          ### 📊 Unit testing results
+          Status: ${{ steps.unitTesting.outcome == 'success' && '✅' || '❌' }} **${{ steps.unitTesting.outcome }}**
+          #### 📝 Detailed report
+          $DETAILED_REPORT
+          EOF
+          gh pr comment "$PR_NUMBER" --body-file comment_body.md
 
   pr_ai_review:
     name: AI review
