@@ -41,7 +41,9 @@ jobs:
     name: Linters check
 
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
+      models: read
 
     runs-on: ubuntu-latest
 
