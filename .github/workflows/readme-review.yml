@@ -53,9 +53,9 @@ jobs:
           max-tokens: 8192
           system-prompt: |
             You are a professional translator.
-            We need to analyze the submitted file and check its spelling in ${{ github.event.inputs.Language }}.
-            Do not alter the content; you must return the entire file with corrections.
-            Maintain the original Markdown formatting and links.
+            You must analyze the provided text from the repository's README file and check for spelling in the ${{ github.event.inputs.Language }} language and errors in the text.
+            Do not modify the content, you must return the entire text with corrections and without unnecessary comments.
+            Preserve the original Markdown formatting and links.
           prompt: ${{ steps.read_file.outputs.readme }}
 
       - name: Write README
@@ -80,7 +80,7 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "actions: review readme file"
+          commit-message: "review readme file using ai"
           branch: "docs/readme-review"
           title: "README review"
           body: "AI-powered README file review"

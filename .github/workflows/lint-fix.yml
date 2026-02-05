@@ -10,7 +10,7 @@ on:
       Version:
         description: 'Version for Go'
         required: false
-        default: ''
+        default: '1.25'
       Modules:
         description: 'Update dependencies in modules'
         default: false
@@ -109,7 +109,7 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "actions: update dependencies"
+          commit-message: "update go version and package dependencies"
           branch: "fix/${{ env.APP_VERSION }}-update"
           title: "Updated dependencies"
           body: "Updated go version and modules in `go.mod` and `go.sum` files."
@@ -194,7 +194,7 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "actions: fix lint in main.go"
+          commit-message: "autofix linters using golangci"
           branch: "fix/${{ env.APP_VERSION }}-lint"
           title: "Fixed linters"
           body: "Automatically fixing linters with golangci from GitHub Actions."
