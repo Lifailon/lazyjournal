@@ -1768,7 +1768,7 @@ func (app *App) layout(g *gocui.Gui) error {
 
 	// Окно статуса внизу интерфейса (вместо Subtitle)
 	if v, err := g.SetView("status", -1, maxY-3, maxX, maxY, 8); err != nil {
-		if err != gocui.ErrUnknownView {
+		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
 		v.Frame = false // Отключаем рамку для статуса
@@ -5547,7 +5547,7 @@ func (app *App) checkBin(commands []string) (string, error) {
 				app.closeInfo(g)
 			}()
 		}
-		return "", fmt.Errorf("binary file not found in environment")
+		return "", errors.New("binary file not found in environment")
 	}
 }
 
@@ -8667,9 +8667,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		v.SelBgColor = app.selectedBackgroundColor
 		v.Clear()
 		sshHosts := []string{"localhost"}
-		for _, sshHost := range config.Ssh.Hosts {
-			sshHosts = append(sshHosts, sshHost)
-		}
+		sshHosts = append(sshHosts, config.Ssh.Hosts...)
 		for _, sshHost := range sshHosts {
 			fmt.Fprintln(v, sshHost)
 		}
