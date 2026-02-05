@@ -428,7 +428,7 @@ jobs:
 
       - name: Upload binaries
         if: ${{ github.event.inputs.Binary == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: bin/

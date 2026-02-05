@@ -99,13 +99,13 @@ jobs:
         continue-on-error: true
 
       - name: Upload test summary report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux-report
           path: test-linux-report.md
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux-coverage
           path: linux-coverage.out
@@ -149,7 +149,7 @@ jobs:
         timeout-minutes: 5
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docker-coverage
           path: docker-coverage.out
@@ -189,13 +189,13 @@ jobs:
         continue-on-error: true
 
       - name: Upload test summary report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: macos-report
           path: test-macos-report.md
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: macos-coverage
           path: macos-coverage.out
@@ -244,13 +244,13 @@ jobs:
           DEBUG: ${{ inputs.Debug }}
 
       - name: Upload test summary report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-report
           path: test-windows-report.md
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-coverage
           path: windows-coverage.out
@@ -277,25 +277,25 @@ jobs:
           go-version: 1.25
 
       - name: Download coverage report for Linux (with root)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: linux-coverage
           path: .
 
       - name: Download coverage report for Docker without root
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: docker-coverage
           path: .
 
       - name: Download coverage report for macOS
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: macos-coverage
           path: .
 
       - name: Download coverage report for Windows
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: windows-coverage
           path: .
@@ -383,7 +383,7 @@ jobs:
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Upload merge coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: merge-coverage
           path: merge-coverage.out
@@ -399,19 +399,19 @@ jobs:
         continue-on-error: true
 
       - name: Download test summary report for Linux
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: linux-report
           path: .
 
       - name: Download test summary report for macOS
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: macos-report
           path: .
 
       - name: Download test summary report for Windows
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: windows-report
           path: .
@@ -426,7 +426,7 @@ jobs:
           cat "test-windows-report.md" >> all-report.md
 
       - name: Upload final report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: all-report
           path: all-report.md
