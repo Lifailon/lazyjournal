@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload snap package
         if: ${{ github.event.inputs.Upload == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: snap-packages
           path: packages/*.snap
