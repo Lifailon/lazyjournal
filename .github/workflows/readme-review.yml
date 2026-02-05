@@ -60,7 +60,7 @@ jobs:
 
       - name: Write README
         env:
-          README_REVIEW: ${{ steps.ai_review.outputs.answer }}
+          README_REVIEW: ${{ steps.ai_review.outputs.response }}
         run: |
           cat <<'EOF' > ${{ github.event.inputs.Output }}
           ${{ env.README_REVIEW }}
