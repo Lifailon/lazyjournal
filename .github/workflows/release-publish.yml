@@ -4,9 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       Tag:
-        description: 'Create git tag for patch version'
+        description: 'Create GitHub tag for new version'
         default: false
         type: boolean
+      Bump:
+        description: 'Select bump for tag'
+        default: 'patch'
+        type: choice
+        options:
+          - 'patch'
+          - 'minor '
+          - 'major'
       Upload:
         description: 'Upload artifacts'
         default: false
@@ -28,6 +36,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Create git tag for patch version
+        if: ${{ github.event.inputs.Tag == 'true' }}
+        id: tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: ${{ github.event.inputs.Bump }}
+          tag_prefix: ""
+
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -41,15 +58,6 @@ jobs:
 
       - name: Upload changelog to summary
         run: cat dist/CHANGELOG.md >> $GITHUB_STEP_SUMMARY
-
-      - name: Create git tag for patch version
-        if: ${{ github.event.inputs.Tag == 'true' }}
-        id: tag
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: patch
-          tag_prefix: ""
 
       - name: Go release publish
         if: ${{ github.event_name == 'push' }}
