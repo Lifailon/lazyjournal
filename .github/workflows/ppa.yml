@@ -151,4 +151,4 @@ jobs:
       - name: Push to PPA
         if: ${{ github.event.inputs.Install != 'true' && github.event.inputs.Push == 'true' }}
         run: |
-          dput ppa:lifailon/lazyjournal ../*.changes
+          dput ppa:lifailon/lazyjournal *.changes
