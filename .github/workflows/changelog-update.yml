@@ -76,7 +76,7 @@ jobs:
           REPORT_TEMP_FILE="CHANGELOG.tmp"
           echo -e "## Release ${{ env.CURRENT_TAG }}\n" > $REPORT_TEMP_FILE
           echo "$AI_RESPONSE" >> $REPORT_TEMP_FILE
-          echo -e "\n" >> $REPORT_TEMP_FILE
+          cat "$REPORT_TEMP_FILE" >> $GITHUB_STEP_SUMMARY
           if [ -f "$REPORT_ORIGIN_FILE" ]; then
             cat "$REPORT_ORIGIN_FILE" >> $REPORT_TEMP_FILE
           fi
