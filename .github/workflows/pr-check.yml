@@ -149,7 +149,6 @@ jobs:
         if: always()
         with:
           report_paths: "report.xml"
-          detailed_summary: true
 
       - name: Send message to Telegram
         uses: appleboy/telegram-action@master
@@ -166,23 +165,27 @@ jobs:
             📁 **Repository**: ${{ github.repository }}
             👤 **From user**: ${{ github.actor }}
 
-            💡 **Status**: ${{ steps.unitTesting.outcome == 'success' && '✅' || '❌' }} ${{ steps.unitTesting.outcome }}
+            💡 **Step status**: ${{ steps.unitTesting.outcome == 'success' && '✅' || '❌' }} ${{ steps.unitTesting.outcome }}
 
-            📚 **Report**:
-            ${{ steps.junit_report.outputs.total }}
+            📚 **Test results**:
+            Total: ${{ steps.junit_report.outputs.total }}
+            Passed: ${{ steps.junit_report.outputs.passed }}
+            Skipped: ${{ steps.junit_report.outputs.skipped }}
+            Retried: ${{ steps.junit_report.outputs.retried }}
+            Failed: ${{ steps.junit_report.outputs.failed }}
 
       - name: Post AI comment on PR
         if: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && always() }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          DETAILED_REPORT: ${{ steps.junit_report.outputs.detailed_summary }}
+          JUNIT_REPORT_SUMMARY: ${{ steps.junit_report.outputs.summary }}
         run: |
           cat <<EOF > comment_body.md
-          ### 📊 Unit testing results
+          ### 🧪 Unit testing results
           Status: ${{ steps.unitTesting.outcome == 'success' && '✅' || '❌' }} **${{ steps.unitTesting.outcome }}**
-          #### 📝 Detailed report
-          $DETAILED_REPORT
+          #### 📊 Report summary
+          $JUNIT_REPORT_SUMMARY
           EOF
           gh pr comment "$PR_NUMBER" --body-file comment_body.md
 

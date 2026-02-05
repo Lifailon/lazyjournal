@@ -50,7 +50,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           endpoint: https://models.github.ai/inference
           model: gpt-4.1
-          max-tokens: 2048
+          max-tokens: 8192
           system-prompt: |
             You are a professional translator.
             We need to analyze the submitted file and check its spelling in ${{ github.event.inputs.Language }}.
