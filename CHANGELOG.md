@@ -1,3 +1,48 @@
+## Release 0.8.5
+
+### New features
+
+- Added support for auditd and podman context, with the ability to install and unit test auditd.
+- Introduced the ability to set timezone (UTC offset) for filtering container logs by date.
+- Added a flag to set timezone, defaulting the date filter mode to interface.
+- Implemented a filter by "since time" for Kubernetes.
+- Included current upload time in the subtitle of the file list.
+- Added a custom path option for Windows.
+- Added quick navigation for entering text in the filter.
+- Introduced a podman-context flag and updated the context usage for Docker.
+- Provided the ability to escape Markdown characters in issue reports.
+- Set up support for building and publishing deb and rpm packages, including workflows for PPA and COPR.
+- Added and updated multiple GitHub workflows for: changelog updates, lint checks and autofixes using golangci, release reports, readme reviews (using AI), pull request checks, dependency updates (via dependabot), test summary reporting, and artifact uploads.
+- Integrated gotestsum for better test reporting, including generating JUnit reports.
+- Improved cluster connection error handling during Kubernetes log upload.
+- Allowed setting the default panel loaded when the interface starts.
+- Added the ability to view logs for container checks.
+- Included notifications via Telegram for build status, issues, tests, and non-Linux builds.
+- Added installation method and verification for apt installs from PPA and Snapcraft workflows.
+- Added report generation for release and AI-based release analysis.
+
+### Fixes
+
+- Fixed path handling in workflows for PPA publishing.
+- Resolved issues with linters by auto-fixing code using golangci, updating linter configs, and skipping problematic checks.
+- Corrected response handling from AI in the readme review workflow.
+- Fixed handling of cluster connection errors during Kubernetes log uploads.
+- Addressed context usage issues in podman.
+- Fixed Docker options related to SSH mode and updated the subtitle to show the full path.
+- Improved notification and environment handling for local build and PPA publishing.
+- Fixed notifications to Telegram in various workflows.
+- Adjusted handling of custom paths for Windows.
+- Fixed check and installation of deb packages in workflows.
+- Corrected issues with the build workflow version retrieval and branch naming.
+- Updated permissions and access for lint fixes.
+- Fixed jobs related to PR checking, runners for testing, and moving the Docker workflow.
+- Improved dependabot and workflow configurations for updating dependencies and Go versions.
+- Resolved linter check failures and dependency exclusions for goreleaser.
+- Fixed TTY issues for container checks and added linting support for Docker workflow.
+- Addressed the installation and verification of deb packages via apt.
+- Fixed branch and actions bot username issues, along with dpkg update for deb install checks.
+- Updated and fixed AI reports and changelog naming for releases.
+
 ## Release 0.8.4
 
 ### New features
