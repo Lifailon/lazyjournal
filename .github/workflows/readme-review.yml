@@ -1,0 +1,86 @@
+name: AI README Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      Input:
+        description: 'Input README file'
+        required: true
+        default: 'README.md'
+      Output:
+        description: 'Output README file'
+        required: true
+        default: 'README.md'
+      Language:
+        description: 'Target language'
+        required: true
+        default: 'English'
+      PR:
+        description: 'Creat Pull Request'
+        default: false
+        type: boolean
+
+jobs:
+  ai_review:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read README
+        id: read_file
+        run: |
+          README=$(cat ${{ github.event.inputs.Input }})
+          {
+            echo "readme<<EOF"
+            echo "$README"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: AI-powered README file review
+        id: ai_review
+        uses: actions/ai-inference@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          endpoint: https://models.github.ai/inference
+          model: gpt-4.1
+          system-prompt: |
+            You are a professional translator.
+            We need to analyze the submitted file and check its spelling in ${{ github.event.inputs.Language }}.
+            Do not alter the content; you must return the entire file with corrections.
+            Maintain the original Markdown formatting and links.
+          prompt: ${{ steps.read_file.outputs.readme }}
+
+      - name: Write README
+        env:
+          README_REVIEW: ${{ steps.ai_review.outputs.answer }}
+        run: |
+          cat <<'EOF' > ${{ github.event.inputs.Output }}
+          ${{ env.README_REVIEW }}
+          EOF
+
+      - name: Output diff to summary
+        run: |
+          {
+            echo "### 📝 README diff"
+            echo '```diff'
+            git diff ${{ github.event.inputs.Output }}
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Create PR
+        if: ${{ github.event.inputs.PR == 'true' }}
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "actions: review readme file"
+          branch: "docs/readme-review"
+          title: "README review"
+          body: "AI-powered README file review"
+          add-paths: |
+            ${{ github.event.inputs.Output }}
