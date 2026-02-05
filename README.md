@@ -20,9 +20,9 @@
     <a href="https://deepwiki.com/Lifailon/lazyjournal"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
-Terminal user interface for viewing logs from `journald`, `auditd`, file system, Docker and Podman containers, Compose stacks and Kubernetes pods with supports log highlighting and several filtering modes. Written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
+Terminal user interface for viewing logs from `journald`, `auditd`, file system, Docker and Podman containers, Compose stacks and Kubernetes pods with support for log highlighting and several filtering modes. Written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
 
-This tool is inspired by and with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit). It is also included in [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging), [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
+This tool is inspired by and made with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit). It is also included in [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging), [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
 
 > [!NOTE]
 > You can try it out on the [Killercoda](https://killercoda.com/lazyjournal/scenario/playground) playground.
@@ -40,11 +40,11 @@ This tool is inspired by and with love for [LazyDocker](https://github.com/jesse
 - List of all system boots for kernel log output.
 - List of audit rules from `auditd` for filtering by keys and viewing in `interpret` format.
 - File system logs such as for `Apache` or `Nginx`, as well as `syslog`, `messages`, etc. from `/var/log`.
-- Lists all log files in users home directories, as well as descriptor log files used by processes.
+- Lists all log files in users' home directories, as well as descriptor log files used by processes.
 - Reading archive logs truncated during rotation (`gz`, `xz` and `bz2` formats) and Packet Capture (`pcap` format).
 - Apple System Logs support (`asl` format).
 - Windows Event Logs via `PowerShell` and `wevtutil`, as well as application logs from Windows file system.
-- Docker and Swarm logs from the file system or stream, including build-in timestamps and filtering by stream.
+- Docker and Swarm logs from the file system or stream, including built-in timestamps and filtering by stream.
 - Logs of all containers in Docker Compose stacks, sorted by time for all entries.
 - Podman logs, without the need to run a background process (socket).
 - Kubernetes pods logs (you must first configure the cluster connection in `kubeconfig`).
@@ -67,7 +67,7 @@ Supports 4 filtering modes:
 Several log output coloring modes are supported:
 
 - **default** - built-in log highlighter by default, requires no dependencies and is several times faster than other tools (including in [command-line mode](#command-line-mode)).
-- **tailspin** - uses [tailspins](https://github.com/bensadeh/tailspin).
+- **tailspin** - uses [tailspin](https://github.com/bensadeh/tailspin).
 - **bat** - uses [bat](https://github.com/sharkdp/bat) in ansi mode and log language (much slower than other modes).
 
 When using external tools, they are required to be already installed on your system. You can also disable output highlighting with the `Ctrl+Q` keyboard shortcut, this is useful for improving performance when viewing large logs or if your terminal already has a built-in highlighting feature, such as [WindTerm](https://github.com/kingToolbox/WindTerm).
@@ -142,7 +142,7 @@ pixi global install lazyjournal
 
 ### Arch Linux
 
-If you an Arch Linux user you can also install from the [AUR](https://aur.archlinux.org/packages/lazyjournal):
+If you are an Arch Linux user, you can also install from the [AUR](https://aur.archlinux.org/packages/lazyjournal):
 
 ```bash
 paru -S lazyjournal
@@ -191,7 +191,7 @@ The following directories are used to search for logs in the file system:
 - `Program Files`
 - `Program Files (x86)`
 - `ProgramData`
-- `AppData\Local` and `AppData\Roamin` for current user
+- `AppData\Local` and `AppData\Roaming` for current user
 
 To read logs, automatic detection of the following encodings is supported:
 
@@ -214,7 +214,7 @@ You can start the interface from anywhere: `lazyjournal` or use `lazyjournal -h`
 
 The application is an interface for viewing logs with the ability to filter them for analysis. Therefore, to access the logs themselves, it is necessary that such programs as [docker-cli](https://github.com/docker/cli), [compose](https://github.com/docker/compose), [podman](https://github.com/containers/podman) and [kubectl](https://github.com/kubernetes/kubectl) are already installed on your system.
 
-Access to all system logs and containers may require elevated privileges for the current user. For example, if a user does not have read permission to the directory `/var/lib/docker/containers`, he will not be able to access all archived logs from the moment the container is started, but only from the moment the containerization system is started, so the process of reading logs is different. However, reading in streaming mode is faster than parsing json logs from the file system.
+Access to all system logs and containers may require elevated privileges for the current user. For example, if a user does not have read permission to the directory `/var/lib/docker/containers`, they will not be able to access all archived logs from the moment the container is started, but only from the moment the containerization system is started, so the process of reading logs is different. However, reading in streaming mode is faster than parsing json logs from the file system.
 
 ### Configuration
 
@@ -288,7 +288,7 @@ make build
 ```
 
 > [!NOTE]
-> The repository uses AI-powered release analysis in the [changelog](/CHANGELOG.md) file, as well review commits, PR and issues in [Actions](https://github.com/Lifailon/lazyjournal/actions).
+> The repository uses AI-powered release analysis in the [changelog](/CHANGELOG.md) file, as well as review commits, PR and issues in [Actions](https://github.com/Lifailon/lazyjournal/actions).
 
 ### Testing
 
