@@ -49,6 +49,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: patch
+          tag_prefix: ""
 
       - name: Go release publish
         if: ${{ github.event_name == 'push' }}
