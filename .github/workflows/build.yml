@@ -38,6 +38,9 @@ on:
 
 run-name: "CI #${{ github.run_number }} on ${{ github.event.inputs.Distro }}"
 
+permissions:
+  contents: write
+
 jobs:
   test:
     name: Testing on ${{ github.event.inputs.Distro }}

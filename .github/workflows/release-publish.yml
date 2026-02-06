@@ -4,17 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       Tag:
-        description: 'Create GitHub tag for new version'
+        description: 'Create GitHub tag and branch for new version'
         default: false
         type: boolean
-      Bump:
-        description: 'Select bump for tag'
-        default: 'patch'
-        type: choice
-        options:
-          - 'patch'
-          - 'minor '
-          - 'major'
       Upload:
         description: 'Upload artifacts'
         default: false
@@ -30,25 +22,34 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
 
+    env:
+      VERSION: ''
+
     steps:
       - name: Checkout repository (all commits)
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Create git tag for patch version
-        if: ${{ github.event.inputs.Tag == 'true' }}
-        id: tag
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: ${{ github.event.inputs.Bump }}
-          tag_prefix: ""
-
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version: 1.25
+
+      - name: Get app version for tag
+        if: ${{ github.event.inputs.Tag == 'true' }}
+        run: |
+          VERSION=$(go run main.go -v)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Create git tag and branch for new version
+        if: ${{ github.event.inputs.Tag == 'true' }}
+        run: | 
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag $VERSION
+          git checkout -b "release/$VERSION"
+          git push origin "release/$VERSION" $VERSION
 
       - name: Install goreleaser
         run: go install github.com/goreleaser/goreleaser/v2@latest
