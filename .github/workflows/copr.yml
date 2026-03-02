@@ -31,14 +31,14 @@ jobs:
         run: echo -e "\n      - rpm" >> .goreleaser.yaml
 
       - name: Build packages using goreleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           args: release --clean --skip=publish --skip=validate
 
       - name: Upload rpm package
         if: ${{ github.event.inputs.Upload == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: rpm-packages
           path: dist/*.rpm
