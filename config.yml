@@ -1,4 +1,4 @@
-# Default flag values (lower priority)
+# Default flag values
 settings:
   tailModeDisable: false
   tailModeLines: 10000
@@ -12,6 +12,7 @@ settings:
   podmanContext: ""
   kubernetesContext: default
   kubernetesNamespace: all
+  unitType: service
   customPath: ""
   colorMode: default
   colorActionsDisable: false
@@ -20,8 +21,8 @@ settings:
 # Default interface settings
 interface:
   # Lists in panels when the interface is started
-  # Available system log lists: services, systemUnits, userUnits, kernelBoot, auditd
-  systemLogList: services
+  # Available system log lists: systemUnits, userUnits, kernelBoot, auditd
+  systemLogList: systemUnits
   # Available file log lists: varlog, customPath, home, descriptor
   fileLogList: varlog
   # Available container log lists: docker, compose, podman, kubernetes

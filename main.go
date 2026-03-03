@@ -56,6 +56,7 @@ type Settings struct {
 	PodmanContext       string `yaml:"podmanContext"`
 	KubernetesContext   string `yaml:"kubernetesContext"`
 	KubernetesNamespace string `yaml:"kubernetesNamespace"`
+	UnitType            string `yaml:"unitType"`
 	CustomPath          string `yaml:"customPath"`
 	ColorMode           string `yaml:"colorMode"`
 	ColorActionsDisable string `yaml:"colorActionsDisable"`
@@ -191,8 +192,8 @@ type App struct {
 	systemDisk    string   // порядковая буква системного диска для Windows
 	userNameArray []string // список всех пользователей
 
-	customPath      string // пользовательский путь вместо /opt по умолчанию (#31)
-	minSymbolFilter int    // минимальное кол-во символов дли фильтрации вывода
+	unitType   string // фильтрация списка юнитов по типу (#46)
+	customPath string // пользовательский путь для поиска логов в файловой системе (#31)
 
 	selectUnits                  string // название журнала (systemUnits/userUnits/kernelBoot/auditd)
 	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
@@ -244,6 +245,7 @@ type App struct {
 	windowWidth  int
 	windowHeight int
 
+	minSymbolFilter  int      // минимальное кол-во символов дли фильтрации вывода
 	filterText       string   // текст для фильтрации записей журнала
 	currentLogLines  []string // набор строк (срез) для хранения журнала без фильтрации
 	filteredLogLines []string // набор строк (срез) для хранения журнала после фильтра
@@ -321,7 +323,8 @@ func showHelp() {
 	fmt.Println("    --podman-context, -P       Use the specified Podman context (not used by default)")
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
 	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
-	fmt.Println("    --path, -p                 Specify path in the file system, e.g. \"$(pwd)\" (/opt in Linux and $HOME/Documents in Windows by default)")
+	fmt.Println("    --unit-type, -U            Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
+	fmt.Println("    --path, -p                 Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
 	fmt.Println("    --color-mode, -C           Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
 	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
@@ -361,6 +364,7 @@ func showConfig() {
 	fmt.Printf("  podmanContext:            %s\n", config.Settings.PodmanContext)
 	fmt.Printf("  kubernetesContext:        %s\n", config.Settings.KubernetesContext)
 	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
+	fmt.Printf("  unitType:                 %s\n", config.Settings.UnitType)
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
 	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
 	fmt.Printf("  colorActionsDisable:      %s\n", config.Settings.ColorActionsDisable)
@@ -1030,8 +1034,10 @@ func runGoCui(mock bool) {
 	flag.StringVar(kubernetesContextFlag, "K", "default", "Use the specified Kubernetes context (default: default)")
 	kubernetesNamespaceFlag := flag.String("namespace", "all", "Use the specified Kubernetes namespace (default: all)")
 	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
-	pathFlag := flag.String("path", "", "Specify path in the file system, e.g. \"$(pwd)\" (/opt in Linux and $HOME/Documents in Windows by default)")
-	flag.StringVar(pathFlag, "p", "", "Specify path in the file system, e.g. \"$(pwd)\" (/opt in Linux and $HOME/Documents in Windows by default)")
+	unitTypeFlag := flag.String("unit-type", "service", "Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
+	flag.StringVar(unitTypeFlag, "U", "service", "Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
+	pathFlag := flag.String("path", "", "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
+	flag.StringVar(pathFlag, "p", "", "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
 	colorModeFlag := flag.String("color-mode", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	flag.StringVar(colorModeFlag, "C", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
@@ -1139,6 +1145,12 @@ func runGoCui(mock bool) {
 
 	if config.Settings.KubernetesNamespace != "" && *kubernetesNamespaceFlag == "all" {
 		kubernetesNamespaceFlag = &config.Settings.KubernetesNamespace
+	}
+
+	if config.Settings.UnitType != "" && *unitTypeFlag == "service" {
+		app.unitType = config.Settings.UnitType
+	} else {
+		app.unitType = *unitTypeFlag
 	}
 
 	if config.Settings.CustomPath != "" && *pathFlag == "" {
@@ -1859,26 +1871,27 @@ func (app *App) loadServices(journalName string) {
 		})
 		// (1) Получаем список всех юнитов со статусом работы через systemctl в формате JSON
 		var unitsList *exec.Cmd
+		var unitTypeFlag string = "--type=" + app.unitType
 		if app.sshMode {
 			if journalName == "systemUnits" {
 				unitsList = exec.Command(
 					"ssh", append(app.sshOptions,
-						"systemctl", "list-units", "--all", "--type=service,mount,socket,timer,path,scope", "--no-legend", "--no-pager", "--output=json",
+						"systemctl", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json",
 					)...)
 			} else {
 				unitsList = exec.Command(
 					"ssh", append(app.sshOptions,
-						"systemctl", "--user", "list-units", "--all", "--type=service,mount,socket,timer,path,scope", "--no-legend", "--no-pager", "--output=json",
+						"systemctl", "--user", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json",
 					)...)
 			}
 		} else {
 			if journalName == "systemUnits" {
 				unitsList = exec.Command(
-					"systemctl", "list-units", "--all", "--type=service,mount,socket,timer,path,scope", "--no-legend", "--no-pager", "--output=json",
+					"systemctl", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json",
 				)
 			} else {
 				unitsList = exec.Command(
-					"systemctl", "--user", "list-units", "--all", "--type=service,mount,socket,timer,path,scope", "--no-legend", "--no-pager", "--output=json",
+					"systemctl", "--user", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json",
 				)
 			}
 		}
@@ -1932,11 +1945,11 @@ func (app *App) loadServices(journalName string) {
 		if app.sshMode {
 			unitFilesList = exec.Command(
 				"ssh", append(app.sshOptions,
-					"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
+					"systemctl", "list-unit-files", unitTypeFlag, "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
 				)...)
 		} else {
 			unitFilesList = exec.Command(
-				"systemctl", "list-unit-files", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
+				"systemctl", "list-unit-files", unitTypeFlag, "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
 			)
 		}
 		output, _ = unitFilesList.Output()
