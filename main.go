@@ -194,7 +194,7 @@ type App struct {
 	customPath      string // пользовательский путь вместо /opt по умолчанию (#31)
 	minSymbolFilter int    // минимальное кол-во символов дли фильтрации вывода
 
-	selectUnits                  string // название журнала (services/systemUnits/userUnits/kernelBoot/auditd)
+	selectUnits                  string // название журнала (systemUnits/userUnits/kernelBoot/auditd)
 	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
 	selectContainerizationSystem string // название системы контейнеризации (docker/compose/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (default/fuzzy/regex/timestamp)
@@ -570,9 +570,8 @@ func (app *App) showAudit() {
 				name        string
 				journalName string
 			}{
-				{"Unit service list", "services"},
-				{"System journals", "systemUnits"},
-				{"User journals", "userUnits"},
+				{"System unit list", "systemUnits"},
+				{"User unit list", "userUnits"},
 				{"Kernel boot", "kernelBoot"},
 			}
 			for _, journal := range journalList {
@@ -947,30 +946,27 @@ func runGoCui(mock bool) {
 		selectedDockerContainer: 0,
 		debugLoadTime:           "0s",
 		debugColorTime:          "0s",
-		// selectUnits:                  "services",
-		// selectPath:                   "varlog",
-		// selectContainerizationSystem: "docker",
-		selectFilterMode:     "default",
-		timestampFilterView:  false,
-		sinceDateFilterMode:  false,
-		untilDateFilterMode:  false,
-		sinceFilterDate:      time.Now(),
-		untilFilterDate:      time.Now().AddDate(0, 0, 1),
-		limitFilterDate:      time.Now().AddDate(0, 0, 1),
-		autoScroll:           true,
-		trimHttpRegex:        trimHttpRegex,
-		trimHttpsRegex:       trimHttpsRegex,
-		hexByteRegex:         hexByteRegex,
-		dateTimeRegex:        dateTimeRegex,
-		integersInputRegex:   integersInputRegex,
-		syslogUnitRegex:      syslogUnitRegex,
-		keybindingsEnabled:   true,
-		timestampDocker:      true,
-		streamTypeDocker:     true,
-		lastCurrentView:      "services",
-		backCurrentView:      false,
-		dockerCompose:        "docker compose",
-		uniquePrefixColorMap: make(map[string]string),
+		selectFilterMode:        "default",
+		timestampFilterView:     false,
+		sinceDateFilterMode:     false,
+		untilDateFilterMode:     false,
+		sinceFilterDate:         time.Now(),
+		untilFilterDate:         time.Now().AddDate(0, 0, 1),
+		limitFilterDate:         time.Now().AddDate(0, 0, 1),
+		autoScroll:              true,
+		trimHttpRegex:           trimHttpRegex,
+		trimHttpsRegex:          trimHttpsRegex,
+		hexByteRegex:            hexByteRegex,
+		dateTimeRegex:           dateTimeRegex,
+		integersInputRegex:      integersInputRegex,
+		syslogUnitRegex:         syslogUnitRegex,
+		keybindingsEnabled:      true,
+		timestampDocker:         true,
+		streamTypeDocker:        true,
+		lastCurrentView:         "services",
+		backCurrentView:         false,
+		dockerCompose:           "docker compose",
+		uniquePrefixColorMap:    make(map[string]string),
 	}
 
 	// Значения по умолчанию
@@ -1320,7 +1316,7 @@ func runGoCui(mock bool) {
 	case "auditd":
 		app.selectUnits = "auditd"
 	default:
-		app.selectUnits = "services"
+		app.selectUnits = "systemUnits"
 	}
 
 	switch config.Interface.FileLogList {
@@ -1647,12 +1643,10 @@ func (app *App) layout(g *gocui.Gui) error {
 		}
 		// Определяем заголовок панели в зависимости от выбранного журнала в конфигурации по умолчанию
 		switch app.selectUnits {
-		case "services":
-			v.Title = " < Unit service list (0) > "
 		case "systemUnits":
-			v.Title = " < System journals (0) > "
+			v.Title = " < System unit list (0) > "
 		case "userUnits":
-			v.Title = " < User journals (0) > "
+			v.Title = " < User unit list (0) > "
 		case "kernelBoot":
 			v.Title = " < Kernel boot (0) > "
 		case "auditd":
@@ -1829,7 +1823,7 @@ func parseDateFromName(name string) time.Time {
 // Функция для загрузки списка журналов служб или загрузок системы из journald с помощью journalctl
 func (app *App) loadServices(journalName string) {
 	app.journals = nil
-	// Проверка, что в системе установлен/поддерживается утилита journalctl
+	// Проверка, что в системе установлена и поддерживается утилита journalctl
 	var checkJournald *exec.Cmd
 	if app.sshMode {
 		checkJournald = exec.Command(
@@ -1857,22 +1851,36 @@ func (app *App) loadServices(journalName string) {
 	}
 	switch journalName {
 	// Services list from systemd
-	case "services":
+	// case "units", "userUnits":
+	case "systemUnits", "userUnits":
 		app.journals = append(app.journals, Journal{
 			name:    "_all",
 			boot_id: "_all",
 		})
-		// (1) Получаем список всех юнитов со статусом работы и фильтрацией по сервисам через systemctl в формате JSON
+		// (1) Получаем список всех юнитов со статусом работы через systemctl в формате JSON
 		var unitsList *exec.Cmd
 		if app.sshMode {
-			unitsList = exec.Command(
-				"ssh", append(app.sshOptions,
-					"systemctl", "list-units", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
-				)...)
+			if journalName == "systemUnits" {
+				unitsList = exec.Command(
+					"ssh", append(app.sshOptions,
+						"systemctl", "list-units", "--all", "--type=service,mount,socket,timer,path,scope", "--no-legend", "--no-pager", "--output=json",
+					)...)
+			} else {
+				unitsList = exec.Command(
+					"ssh", append(app.sshOptions,
+						"systemctl", "--user", "list-units", "--all", "--type=service,mount,socket,timer,path,scope", "--no-legend", "--no-pager", "--output=json",
+					)...)
+			}
 		} else {
-			unitsList = exec.Command(
-				"systemctl", "list-units", "--type=service", "--all", "--no-legend", "--no-pager", "--output=json",
-			)
+			if journalName == "systemUnits" {
+				unitsList = exec.Command(
+					"systemctl", "list-units", "--all", "--type=service,mount,socket,timer,path,scope", "--no-legend", "--no-pager", "--output=json",
+				)
+			} else {
+				unitsList = exec.Command(
+					"systemctl", "--user", "list-units", "--all", "--type=service,mount,socket,timer,path,scope", "--no-legend", "--no-pager", "--output=json",
+				)
+			}
 		}
 		output, err := unitsList.Output()
 		if !app.testMode {
@@ -1958,11 +1966,9 @@ func (app *App) loadServices(journalName string) {
 			// Детализированное состояние
 			serviceSubStatus, _ := unit["sub"].(string)
 			switch serviceSubStatus {
-			case "running":
-				serviceSubStatus = "\033[32m" + "running" + "\033[0m"
-			case "exited":
-				serviceSubStatus = "\033[32m" + "exit" + "\033[0m"
-			case "dead":
+			case "running", "mounted", "listening", "waiting":
+				serviceSubStatus = "\033[32m" + serviceSubStatus + "\033[0m"
+			case "dead", "failed":
 				serviceSubStatus = "\033[31m" + serviceSubStatus + "\033[0m"
 			default:
 				serviceSubStatus = "\033[33m" + serviceSubStatus + "\033[0m"
@@ -2084,7 +2090,7 @@ func (app *App) loadServices(journalName string) {
 				}
 			}
 		}
-	// Boots list from journald
+	// Kernel boots list from journald
 	case "kernelBoot":
 		// Получаем список загрузок системы
 		var bootCmd *exec.Cmd
@@ -2188,64 +2194,6 @@ func (app *App) loadServices(journalName string) {
 			date2 := parseDateFromName(app.journals[j].name)
 			// Сравниваем по второй дате в обратном порядке (After для сортировки по убыванию)
 			return date1.After(date2)
-		})
-	// Journals list from journald (UNIT/USER_UNIT)
-	default:
-		switch journalName {
-		case "systemUnits":
-			journalName = "UNIT"
-		case "userUnits":
-			journalName = "USER_UNIT"
-		}
-		var cmd *exec.Cmd
-		if app.sshMode {
-			cmd = exec.Command(
-				"ssh", append(app.sshOptions,
-					"journalctl", "--no-pager", "-F", journalName,
-				)...)
-		} else {
-			cmd = exec.Command(
-				"journalctl", "--no-pager", "-F", journalName,
-			)
-		}
-		output, err := cmd.Output()
-		if !app.testMode {
-			if err != nil {
-				vError, _ := app.gui.View("services")
-				vError.Clear()
-				app.journalListFrameColor = app.errorColor
-				vError.FrameColor = app.journalListFrameColor
-				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31mError getting services from journald via journalctl\033[0m")
-				return
-			} else {
-				vError, _ := app.gui.View("services")
-				app.journalListFrameColor = app.frameColor
-				if vError.FrameColor != app.frameColor {
-					vError.FrameColor = app.selectedFrameColor
-				}
-				vError.Highlight = true
-			}
-		}
-		if err != nil && app.testMode {
-			log.Print("Error: getting services from journald via journalctl")
-		}
-		// Создаем массив (хеш-таблица с доступом по ключу) для уникальных имен служб
-		serviceMap := make(map[string]bool)
-		scanner := bufio.NewScanner(strings.NewReader(string(output)))
-		for scanner.Scan() {
-			serviceName := strings.TrimSpace(scanner.Text())
-			if serviceName != "" && !serviceMap[serviceName] {
-				serviceMap[serviceName] = true
-				app.journals = append(app.journals, Journal{
-					name:    serviceName,
-					boot_id: "",
-				})
-			}
-		}
-		// Сортируем список служб по алфавиту
-		sort.Slice(app.journals, func(i, j int) bool {
-			return app.journals[i].name < app.journals[j].name
 		})
 	}
 	if !app.testMode {
@@ -2554,71 +2502,42 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if err != nil && app.testMode {
 			log.Print("Error: getting kernal logs. ", err)
 		}
-	// Для юнитов systemd и других журналов по названию (--unit=UNIT)
+	// Загрузка журналов юнитов systemd (--unit=UNIT)
 	default:
-		if selectUnits == "services" {
-			// Удаляем статусы сервисов из навзания
-			serviceNameNew := strings.Split(serviceName, "] ")
-			if len(serviceNameNew) >= 2 {
-				serviceName = serviceNameNew[1]
-			}
+		// Удаляем статусы сервисов из навзания
+		serviceNameNew := strings.Split(serviceName, "] ")
+		if len(serviceNameNew) >= 2 {
+			serviceName = serviceNameNew[1]
 		}
 		var cmd *exec.Cmd
-		// #34 Две переменные для команды в режиме ssh (используем строку) или локально (используем массив)
-		var serviceNameStr string
-		var serviceNameArr []string
+		// #34 Используем массив для формирования аргументов команды
+		var args []string
 		if serviceName != "_all" {
-			serviceNameStr = "-u " + serviceName
-			serviceNameArr = []string{"-u", serviceName}
+			args = []string{"--unit=" + serviceName}
 		}
-		// Формируем команду для выполнения
+		// #46 Добавляем аргумент для пользовательских журналов
+		if app.selectUnits == "userUnits" {
+			args = append(args, "--user")
+		}
+		// Добавляем основные аргументы
+		args = append(args, "--no-pager", "-n", app.logViewCount, "-p", app.priority)
+		// Добавляем аргументы для фильтрации по времени
+		if app.sinceDateFilterMode {
+			args = append(args, "--since", app.sinceFilterText)
+		}
+		if app.untilDateFilterMode {
+			args = append(args, "--until", app.untilFilterText)
+		}
+		// Проверяем режим работы и формируем команду для выполнения
 		if app.sshMode {
-			switch {
-			case app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command(
-					"ssh", append(app.sshOptions,
-						"journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
-						"--since", app.sinceFilterText, "--until", app.untilFilterText,
-					)...)
-			case app.sinceDateFilterMode && !app.untilDateFilterMode:
-				cmd = exec.Command(
-					"ssh", append(app.sshOptions,
-						"journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
-						"--since", app.sinceFilterText,
-					)...)
-			case !app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command(
-					"ssh", append(app.sshOptions,
-						"journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
-						"--until", app.untilFilterText,
-					)...)
-			default:
-				cmd = exec.Command(
-					"ssh", append(app.sshOptions,
-						"journalctl", serviceNameStr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
-					)...)
-			}
+			// Создаем копию массива с заранее определенной емкостью
+			sshArgs := make([]string, 0, len(app.sshOptions)+1+len(args))
+			sshArgs = append(sshArgs, app.sshOptions...)
+			sshArgs = append(sshArgs, "journalctl")
+			sshArgs = append(sshArgs, args...)
+			cmd = exec.Command("ssh", sshArgs...)
 		} else {
-			switch {
-			case app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command(
-					"journalctl", append(serviceNameArr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
-						"--since", app.sinceFilterText, "--until", app.untilFilterText,
-					)...)
-			case app.sinceDateFilterMode && !app.untilDateFilterMode:
-				cmd = exec.Command(
-					"journalctl", append(serviceNameArr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
-						"--since", app.sinceFilterText,
-					)...)
-			case !app.sinceDateFilterMode && app.untilDateFilterMode:
-				cmd = exec.Command(
-					"journalctl", append(serviceNameArr, "--no-pager", "-n", app.logViewCount, "-p", app.priority,
-						"--until", app.untilFilterText,
-					)...)
-			default:
-				cmd = exec.Command(
-					"journalctl", append(serviceNameArr, "--no-pager", "-n", app.logViewCount, "-p", app.priority)...)
-			}
+			cmd = exec.Command("journalctl", args...)
 		}
 		output, err = cmd.Output()
 		if err != nil && !app.testMode {
@@ -2873,7 +2792,8 @@ func (app *App) loadFiles(logPath string) {
 				"-name", "*.pcapng.gz",
 			}
 			if app.sshMode {
-				sshArgs := app.sshOptions
+				sshArgs := make([]string, 0, len(app.sshOptions)+1+len(args))
+				sshArgs = append(sshArgs, app.sshOptions...)
 				sshArgs = append(sshArgs, "find")
 				sshArgs = append(sshArgs, args...)
 				cmd = exec.Command("ssh", sshArgs...)
@@ -9206,13 +9126,9 @@ func (app *App) setUnitListRight(g *gocui.Gui, v *gocui.View) error {
 	app.selectedJournal = 0
 	// Меняем журнал и обновляем список
 	switch app.selectUnits {
-	case "services":
-		app.selectUnits = "systemUnits"
-		selectedServices.Title = " < System journals (0) > "
-		app.loadServices(app.selectUnits)
 	case "systemUnits":
 		app.selectUnits = "userUnits"
-		selectedServices.Title = " < User journals (0) > "
+		selectedServices.Title = " < User unit list (0) > "
 		app.loadServices(app.selectUnits)
 	case "userUnits":
 		app.selectUnits = "kernelBoot"
@@ -9223,8 +9139,8 @@ func (app *App) setUnitListRight(g *gocui.Gui, v *gocui.View) error {
 		selectedServices.Title = " < Audit rules keys (0) > "
 		app.loadServices(app.selectUnits)
 	case "auditd":
-		app.selectUnits = "services"
-		selectedServices.Title = " < Unit service list (0) > "
+		app.selectUnits = "systemUnits"
+		selectedServices.Title = " < System unit list (0) > "
 		app.loadServices(app.selectUnits)
 	}
 	return nil
@@ -9239,7 +9155,7 @@ func (app *App) setUnitListLeft(g *gocui.Gui, v *gocui.View) error {
 	app.startServices = 0
 	app.selectedJournal = 0
 	switch app.selectUnits {
-	case "services":
+	case "systemUnits":
 		app.selectUnits = "auditd"
 		selectedServices.Title = " < Audit rules keys (0) > "
 		app.loadServices(app.selectUnits)
@@ -9249,15 +9165,11 @@ func (app *App) setUnitListLeft(g *gocui.Gui, v *gocui.View) error {
 		app.loadServices(app.selectUnits)
 	case "kernelBoot":
 		app.selectUnits = "userUnits"
-		selectedServices.Title = " < User journals (0) > "
+		selectedServices.Title = " < User unit list (0) > "
 		app.loadServices(app.selectUnits)
 	case "userUnits":
 		app.selectUnits = "systemUnits"
-		selectedServices.Title = " < System journals (0) > "
-		app.loadServices(app.selectUnits)
-	case "systemUnits":
-		app.selectUnits = "services"
-		selectedServices.Title = " < Unit service list (0) > "
+		selectedServices.Title = " < System unit list (0) > "
 		app.loadServices(app.selectUnits)
 	}
 	return nil
