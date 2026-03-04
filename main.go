@@ -32,7 +32,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var programVersion string = "0.8.5"
+var programVersion string = "0.8.6"
 
 // Структура конфигурации
 type Config struct {
@@ -857,6 +857,8 @@ var (
 	integersInputRegex = regexp.MustCompile(`^[^a-zA-Z]*\d+[^a-zA-Z]*$`)
 	// Syslog UNIT
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
+	// Находим символы покраски для их удаления
+	ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 )
 
 // Ошибки
@@ -3422,7 +3424,6 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 	// В параметре logName имя файла при выборе возвращяется без символов покраски
 	// Получаем путь из массива по имени
 	var logFullPath string
-	var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	for _, logfile := range app.logfiles {
 		// Удаляем покраску из имени файла в сохраненном массиве
 		logFileName := ansiEscape.ReplaceAllString(logfile.name, "")
@@ -4453,7 +4454,6 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	if containerizationSystem == "kubernetes" {
 		containerizationSystem = "kubectl"
 	}
-	var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	// Извлекаем id контейнера и namespace для подов k8s
 	var containerId string
 	var namespace string
@@ -6776,23 +6776,30 @@ func (app *App) updateLogsView(lowerDown bool) {
 			app.logScrollPos = 0
 		}
 	}
+	// Позиция скролла не может быть меньше 0
+	if app.logScrollPos < 0 {
+		app.logScrollPos = 0
+	}
 	// Определяем количество строк для отображения, начиная с позиции logScrollPos
 	startLine := app.logScrollPos
 	endLine := min(startLine+viewHeight, len(app.filteredLogLines))
-	// Учитываем auto wrap (только в конце лога)
-	if app.logScrollPos == len(app.filteredLogLines)-viewHeight-1 {
+	// Учитываем auto wrap (только в конце лога) и проверяем, что журнал не пустой
+	if app.logScrollPos == len(app.filteredLogLines)-viewHeight-1 && len(app.filteredLogLines) > 0 {
 		var viewLines = 0                             // количество строк для вывода
 		var viewCounter = 0                           // обратный счетчик видимых строк для остановки
 		var viewIndex = len(app.filteredLogLines) - 1 // начальный индекс для строк с конца
 		for {
+			// #45 Проверка, что индекс не вышел за пределы массива (исправлено: проверка ДО использования индекса)
+			if viewIndex < 0 || viewIndex >= len(app.filteredLogLines) {
+				break
+			}
 			// Фиксируем текущую входную строку и счетчик
 			viewLines += 1
 			viewCounter += 1
 			// Получаем длинну видимых символов в строке с конца
-			var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 			lengthLine := len([]rune(ansiEscape.ReplaceAllString(app.filteredLogLines[viewIndex], "")))
 			// Если длинна строки больше ширины окна, получаем количество дополнительных строк
-			if lengthLine > viewWidth {
+			if lengthLine > viewWidth && viewWidth > 0 {
 				// Увеличивая счетчик и пропускаем строки
 				viewCounter += lengthLine / viewWidth
 			}
@@ -6806,7 +6813,9 @@ func (app *App) updateLogsView(lowerDown bool) {
 			// Уменьшаем индекс
 			viewIndex -= 1
 		}
-		for i := len(app.filteredLogLines) - viewLines - 1; i < endLine; i++ {
+		// Индекс начала печати не должен быть меньше 0
+		printStart := max(len(app.filteredLogLines)-viewLines-1, 0)
+		for i := printStart; i < endLine; i++ {
 			fmt.Fprintln(v, app.filteredLogLines[i])
 		}
 	} else {
@@ -6835,7 +6844,6 @@ func (app *App) updateLogsView(lowerDown bool) {
 	} else {
 		v.Title = "Logs: 0% (0) [" + app.debugLoadTime + "/" + app.debugColorTime + "]"
 	}
-	v.TitleColor = app.titleColor
 	app.viewScrollLogs(percentage)
 }
 
