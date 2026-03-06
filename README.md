@@ -95,7 +95,7 @@ Binaries are available for download on the GitHub [releases](https://github.com/
 Run the command in the console to quickly install or update the stable version for Linux, macOS or the BSD-based system:
 
 ```bash
-curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/Lifailon/lazyjournal/main/scripts/install.sh | bash
 ```
 
 This command will run a script that will download the latest binary (auto-detect OS and arch) from the GitHub repository to your home directory along with other executables (default path is `~/.local/bin/lazyjournal`) and configurations (`~/.config/lazyjournal/config.yml`) for the current user, and also grant execute permission.
@@ -183,7 +183,7 @@ OPTIONS=-t 5000 -u 2
 Use the following command to quickly install in your PowerShell console:
 
 ```PowerShell
-irm https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/Lifailon/lazyjournal/main/scripts/install.ps1 | iex
 ```
 
 The following directories are used to search for logs in the file system:
