@@ -150,11 +150,11 @@ paru -S lazyjournal
 
 ### Docker (Debian-based)
 
-Download the [docker-compose](/docker-compose.yml) file and run the container using the image from [Docker Hub](https://hub.docker.com/r/lifailon/lazyjournal):
+Download the [docker-compose](/docker/debian/docker-compose.yml) file and run the container using the image from [Docker Hub](https://hub.docker.com/r/lifailon/lazyjournal):
 
 ```bash
 mkdir lazyjournal && cd lazyjournal
-curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/docker-compose.yml -o docker-compose.yml
+curl -sSL https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/docker/debian/docker-compose.yml -o docker-compose.yml
 docker compose up -d
 docker exec -it lazyjournal lazyjournal
 ```
