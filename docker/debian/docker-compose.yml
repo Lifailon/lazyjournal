@@ -22,7 +22,7 @@ services:
       # Kubernetes configuration
       - $HOME/.kube/config:/root/.kube/config:ro
       # Custom lazyjournal configuration (optional)
-      # - ./config.yml:/bin/config.yml:ro
+      # - ./config.yml:/lazyjournal/config.yml:ro
     environment:
       # Enable Web mode
       - TTYD=false

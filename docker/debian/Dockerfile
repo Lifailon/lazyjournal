@@ -6,7 +6,7 @@ RUN go mod download
 
 COPY . .
 ARG TARGETOS TARGETARCH
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o /bin/lazyjournal
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags="-s -w" -o /bin/lazyjournal
 
 # download ttyd, docker-compose and kubectl
 RUN apk add -U -q --progress --no-cache curl jq ca-certificates && \
@@ -37,21 +37,19 @@ RUN mv build/docker-${TARGETOS}-${TARGETARCH} build/docker
 
 # build final image
 FROM debian:bookworm-slim
-WORKDIR /lazyjournal
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends systemd \
-    xz-utils bzip2 gzip && \
+    apt-get install -y --no-install-recommends systemd xz-utilsbzip2 gzip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /usr/local/lib/docker/cli-plugins
 
-COPY --chmod=755 --from=build-docker-cli /go/src/github.com/docker/cli/build/docker /bin/docker
-COPY --chmod=755 --from=build-app /bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
-COPY --chmod=755 --from=build-app /bin/kubectl /bin/kubectl
-COPY --chmod=755 --from=build-app /bin/ttyd /bin/ttyd
-COPY --chmod=755 --from=build-app /bin/lazyjournal .
+COPY --chmod=755 --from=build-docker-cli /go/src/github.com/docker/cli/build/docker /bin/
+COPY --chmod=755 --from=build-app /bin/docker-compose /usr/local/lib/docker/cli-plugins/
+COPY --chmod=755 --from=build-app /bin/kubectl /bin/ttyd /bin/lazyjournal /bin/
+
+WORKDIR /lazyjournal
 COPY --chmod=755 docker/debian/entrypoint.sh .
 COPY config.yml .
 
