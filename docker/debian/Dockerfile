@@ -10,7 +10,8 @@ ARG TARGETOS TARGETARCH
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o /bin/lazyjournal
 
 # download ttyd, docker-compose and kubectl
-RUN ARCH=$(case ${TARGETARCH} in \
+RUN apk add -U -q --progress --no-cache curl jq && \
+    ARCH=$(case ${TARGETARCH} in \
     "amd64") echo "x86_64" ;; \
     "arm64") echo "aarch64" ;; \
     *) echo "${TARGETARCH}" ;; \
