@@ -81,7 +81,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "review readme file using ai"
-          branch: "docs/readme-review"
+          branch: "docs/readme"
           title: "README review"
           body: "AI-powered README file review"
           add-paths: |

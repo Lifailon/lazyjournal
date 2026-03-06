@@ -18,7 +18,7 @@ mkdir /test
 curl -sSL https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log -o /test/color.log
 
 echo -e "\033[32mInstalling lazyjournal binary from the GitHub repository...\033[0m"
-curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/install.sh | bash
+curl -sS https://raw.githubusercontent.com/Lifailon/lazyjournal/main/scripts/install.sh | bash
 . /root/.bashrc
 
 lazyjournal -p /test -t 5000 -u 2
