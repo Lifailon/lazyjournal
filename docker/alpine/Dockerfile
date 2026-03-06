@@ -9,7 +9,7 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags="-s -w
 
 FROM alpine:3.23
 
-RUN apk add --no-cache docker-cli docker-cli-compose kubectl
+RUN apk add --no-cache docker-cli docker-cli-compose kubectl ca-certificates
 
 WORKDIR /lazyjournal
 COPY config.yml .

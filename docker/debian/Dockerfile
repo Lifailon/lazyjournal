@@ -40,7 +40,7 @@ FROM debian:bookworm-slim
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends systemd xz-utilsbzip2 gzip && \
+    apt-get install -y --no-install-recommends systemd xz-utils bzip2 gzip ca-certificates && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /usr/local/lib/docker/cli-plugins
