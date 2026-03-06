@@ -91,7 +91,7 @@ jobs:
         id: containerCheck
         if: ${{ github.event.inputs.Container == 'true' }}
         run: |
-          cd docker && docker compose up -d
+          cd docker/debian && docker compose up -d
           docker exec lazyjournal lazyjournal -v
           script -e -c "timeout 10s docker exec -t lazyjournal lazyjournal" interface.log || [ $? -eq 124 ]
           cat interface.log

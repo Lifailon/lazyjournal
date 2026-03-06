@@ -1,6 +1,5 @@
 # build-app lazyjournal and download dependency packages
 FROM golang:1.24-alpine3.23 AS build-app
-WORKDIR /lazyjournal
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -52,8 +51,8 @@ COPY --chmod=755 --from=build-docker-cli /go/src/github.com/docker/cli/build/doc
 COPY --chmod=755 --from=build-app /bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
 COPY --chmod=755 --from=build-app /bin/kubectl /bin/kubectl
 COPY --chmod=755 --from=build-app /bin/ttyd /bin/ttyd
-COPY --chmod=755 --from=build-app /bin/lazyjournal /bin/lazyjournal
-COPY --chmod=755 docker/debian/entrypoint.sh ./
-COPY config.yml /bin/
+COPY --chmod=755 --from=build-app /bin/lazyjournal .
+COPY --chmod=755 docker/debian/entrypoint.sh .
+COPY config.yml .
 
-ENTRYPOINT ["/lazyjournal/entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]
