@@ -1,5 +1,8 @@
 # Default flag values
 settings:
+  loggingEnable: false
+  loggingPath: lazyjournal.log
+  loggingType: text
   tailModeDisable: false
   tailModeLines: 10000
   updateInterval: 5

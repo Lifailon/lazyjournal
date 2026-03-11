@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"math"
 	"os"
 	"os/exec"
@@ -44,6 +45,9 @@ type Config struct {
 
 // Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
 type Settings struct {
+	LoggingEnable       string `yaml:"loggingEnable"`
+	loggingPath         string `yaml:"loggingPath"`
+	LoggingType         string `yaml:"loggingType"`
 	TailModeDisable     string `yaml:"tailModeDisable"`
 	TailModeLines       string `yaml:"tailModeLines"`
 	UpdateInterval      string `yaml:"updateInterval"`
@@ -252,6 +256,11 @@ type App struct {
 	logScrollPos     int      // позиция прокрутки для отображаемых строк журнала
 	lastFilterText   string   // фиксируем содержимое последнего ввода текста для фильтрации
 
+	// Настройка логирования приложения
+	logging     bool
+	loggingPath string
+	loggingType string
+
 	autoScroll        bool   // используется для автоматического скроллинга вниз при обновлении (если это не ручной скроллинг)
 	disableAutoScroll bool   // отключение автоматического обновления вывода
 	lastUpdateLine    string // фиксируем предпоследнюю строку для делимитра
@@ -311,6 +320,7 @@ func showHelp() {
 	fmt.Println("    --version, -v              Show version")
 	fmt.Println("    --config, -g               Show configuration of hotkeys and settings (check values)")
 	fmt.Println("    --audit, -a                Show audit information")
+	fmt.Println("    --logging, -l              Enable logging of executed commands for debugging")
 	fmt.Println("    --tail-mode-disable, -d    Disable streaming of new events (log is loaded once without update)")
 	fmt.Println("    --tail-lines, -t           Change the number of log lines to output (range: 200-200000, default: 10K)")
 	fmt.Println("    --update-interval, -u      Change the update interval of the log output (range: 2-10, default: 5)")
@@ -352,6 +362,9 @@ func showConfig() {
 	// fmt.Println(string(configData))
 	// Выводим полученные значения из конфигурации (форматированный вывод) с проверкой на пустые значения
 	fmt.Println("settings:")
+	fmt.Printf("  LoggingEnable:            %s\n", config.Settings.LoggingEnable)
+	fmt.Printf("  LoggingPath:              %s\n", config.Settings.loggingPath)
+	fmt.Printf("  LoggingType:              %s\n", config.Settings.LoggingType)
 	fmt.Printf("  tailModeDisable:          %s\n", config.Settings.TailModeDisable)
 	fmt.Printf("  tailModeLines:            %s\n", config.Settings.TailModeLines)
 	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
@@ -1012,6 +1025,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(configFlag, "g", false, "Show configuration of hotkeys and settings (check values)")
 	audit := flag.Bool("audit", false, "Show audit information")
 	flag.BoolVar(audit, "a", false, "Show audit information")
+	loggingFlag := flag.Bool("logging", false, "Enable logging of executed commands for debugging")
+	flag.BoolVar(loggingFlag, "l", false, "Enable logging of executed commands for debugging")
 	disableScroll := flag.Bool("tail-mode-disable", false, "Disable streaming of new events (log is loaded once without update)")
 	flag.BoolVar(disableScroll, "d", false, "Disable streaming of new events (log is loaded once without update)")
 	tailFlag := flag.String("tail-lines", "10000", "Change the number of log lines to output (range: 200-200000, default: 10K)")
@@ -1075,17 +1090,36 @@ func runGoCui(mock bool) {
 	}
 
 	// Проверяем и извлекаем значения настроек для флагов из конфигурации (#27)
-
 	_, errConfig := config.getConfig()
 	if errConfig != nil {
 		fmt.Println(errConfig)
 	}
 
-	// Берем значение из конфигурации, если значение в конфигурации НЕ пустое и значение флага по умолчанию
+	// Берем значение из конфигурации, если значение в конфигурации не пустое и значение флага по умолчанию
+	if config.Settings.LoggingEnable != "" && !*loggingFlag {
+		// Проверяем значение в конфигурации
+		if strings.EqualFold(config.Settings.LoggingEnable, "true") {
+			// Включаем режим логирования
+			*loggingFlag = true
+		}
+	}
+
+	// Настройки логирования
+	if config.Settings.loggingPath != "" {
+		app.loggingPath = config.Settings.loggingPath
+	} else {
+		app.loggingPath = "lazyjournal.log"
+	}
+
+	if config.Settings.LoggingType == "text" || config.Settings.LoggingType == "json" {
+		app.loggingType = config.Settings.LoggingType
+	} else {
+		app.loggingType = "text"
+	}
+
 	if config.Settings.TailModeDisable != "" && !*disableScroll {
 		if strings.EqualFold(config.Settings.TailModeDisable, "true") {
-			trueFlag := true
-			disableScroll = &trueFlag
+			*disableScroll = true
 		}
 	}
 
@@ -1113,22 +1147,19 @@ func runGoCui(mock bool) {
 
 	if config.Settings.MouseDisable != "" && !*mouseDisable {
 		if strings.EqualFold(config.Settings.MouseDisable, "true") {
-			trueFlag := true
-			mouseDisable = &trueFlag
+			*mouseDisable = true
 		}
 	}
 
 	if config.Settings.WrapModeDisable != "" && !*wrapModeDisable {
 		if strings.EqualFold(config.Settings.WrapModeDisable, "true") {
-			trueFlag := true
-			wrapModeDisable = &trueFlag
+			*wrapModeDisable = true
 		}
 	}
 
 	if config.Settings.DockerStreamOnly != "" && !*dockerStreamFlag {
 		if strings.EqualFold(config.Settings.DockerStreamOnly, "true") {
-			trueFlag := true
-			dockerStreamFlag = &trueFlag
+			*dockerStreamFlag = true
 		}
 	}
 
@@ -1186,7 +1217,28 @@ func runGoCui(mock bool) {
 		}
 	}
 
-	// Обработка флагов с учетом значений, полученных из командной строки
+	// Настройки логирования по умолчанию
+	app.loggingPath = "lazyjournal.log"
+	app.loggingType = "text" // "json"
+
+	// Включаем логирование
+	if *loggingFlag {
+		app.logging = true
+		logFile, errOpenFile := os.OpenFile(app.loggingPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if errOpenFile != nil {
+			return
+		}
+		defer logFile.Close()
+		var logger *slog.Logger
+		if app.loggingType == "json" {
+			jsonHandler := slog.NewJSONHandler(logFile, nil)
+			logger = slog.New(jsonHandler)
+		} else {
+			textHandler := slog.NewTextHandler(logFile, nil)
+			logger = slog.New(textHandler)
+		}
+		slog.SetDefault(logger)
+	}
 
 	// Проверяем значение флага на валидность
 	if *tailFlag == "200" || *tailFlag == "500" || *tailFlag == "1000" ||
@@ -1850,6 +1902,9 @@ func (app *App) loadServices(journalName string) {
 		)
 	}
 	// Проверяем на ошибки (очищаем список служб, отключаем курсор и выводим ошибку)
+	if app.logging {
+		slog.Info(checkJournald.String(), "action", "Check the binary")
+	}
 	_, err := checkJournald.Output()
 	if err != nil && !app.testMode {
 		vError, _ := app.gui.View("services")
@@ -1896,6 +1951,15 @@ func (app *App) loadServices(journalName string) {
 					"systemctl", "--user", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json",
 				)
 			}
+		}
+		if app.logging {
+			var logSource string
+			if journalName == "systemUnits" {
+				logSource = "Loading the system unit list"
+			} else {
+				logSource = "Loading the user unit list"
+			}
+			slog.Info(unitsList.String(), "action", logSource)
 		}
 		output, err := unitsList.Output()
 		if !app.testMode {
@@ -1953,6 +2017,15 @@ func (app *App) loadServices(journalName string) {
 			unitFilesList = exec.Command(
 				"systemctl", "list-unit-files", unitTypeFlag, "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
 			)
+		}
+		if app.logging {
+			var logSource string
+			if journalName == "systemUnits" {
+				logSource = "Loading the system unit list"
+			} else {
+				logSource = "Loading the user unit list"
+			}
+			slog.Info(unitFilesList.String(), "action", logSource)
 		}
 		output, _ = unitFilesList.Output()
 		var unitFiles []map[string]any
@@ -2052,6 +2125,9 @@ func (app *App) loadServices(journalName string) {
 				"auditctl", "-l",
 			)
 		}
+		if app.logging {
+			slog.Info(auditRulesList.String(), "action", "Loading the audit rules keys")
+		}
 		output, err := auditRulesList.Output()
 		// Проверяем, что auditd установлен и на ошибку доступа
 		if !app.testMode {
@@ -2118,6 +2194,9 @@ func (app *App) loadServices(journalName string) {
 			bootCmd = exec.Command(
 				"journalctl", "--list-boots", "-o", "json",
 			)
+		}
+		if app.logging {
+			slog.Info(bootCmd.String(), "action", "Loading the kernel boot")
 		}
 		bootOutput, err := bootCmd.Output()
 		if !app.testMode {
@@ -2231,6 +2310,9 @@ func (app *App) loadWinEvents() {
 			"Select-Object LogName,RecordCount | "+
 			"Sort-Object -Descending RecordCount | "+
 			"ConvertTo-Json")
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Loading the windows event logs")
+	}
 	eventsJson, _ := cmd.Output()
 	var events []map[string]any
 	_ = json.Unmarshal(eventsJson, &events)
@@ -2469,6 +2551,9 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 				"ausearch", "-k", serviceName, "--format", "interpret",
 			)
 		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Reading logs from audit rules keys")
+		}
 		output, err = cmd.Output()
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
@@ -2506,6 +2591,9 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			cmd = exec.Command(
 				"journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount,
 			)
+		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Reading logs from kernel boot")
 		}
 		output, err = cmd.Output()
 		if err != nil && !app.testMode {
@@ -2554,6 +2642,15 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		} else {
 			cmd = exec.Command("journalctl", args...)
 		}
+		if app.logging {
+			var logSource string
+			if app.selectUnits == "systemUnits" {
+				logSource = "Reading logs from system unit list"
+			} else {
+				logSource = "Reading logs from user unit list"
+			}
+			slog.Info(cmd.String(), "action", logSource)
+		}
 		output, err = cmd.Output()
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
@@ -2585,6 +2682,9 @@ func (app *App) loadWinEventLog(eventName string) (output []byte) {
 	cmd := exec.Command("powershell", "-Command",
 		"wevtutil qe "+eventName+" /f:text -l:en /c:"+app.logViewCount+
 			" /q:'*[System[TimeCreated[timediff(@SystemTime) <= 2592000000]]]'")
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Reading logs from windows event")
+	}
 	eventData, _ := cmd.Output()
 	// Декодирование вывода из Windows-1251 в UTF-8
 	decoder := charmap.Windows1251.NewDecoder()
@@ -2659,6 +2759,9 @@ func (app *App) statFile(path string) (os.FileInfo, error) {
 		statArgs := app.sshOptions
 		statArgs = append(statArgs, "stat", "-L", "-c", "'%n|%s|%Y'", path)
 		cmd := exec.Command("ssh", statArgs...)
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Loading the log files")
+		}
 		output, err := cmd.Output()
 		if err != nil {
 			return nil, err
@@ -2706,6 +2809,9 @@ func (app *App) statFiles(paths []string) (map[string]os.FileInfo, error) {
 	args = append(args, "stat", "-L", "-c", "'%n|%s|%Y'")
 	args = append(args, paths...)
 	cmd := exec.Command("ssh", args...)
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Loading the log files")
+	}
 	output, _ := cmd.Output()
 	results := make(map[string]os.FileInfo)
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -2751,6 +2857,9 @@ func (app *App) loadFiles(logPath string) {
 		}
 		// Подавить вывод ошибок при отсутствиее прав доступа (opendir: Permission denied)
 		cmd.Stderr = nil
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Loading the log files for process descriptor")
+		}
 		output, _ = cmd.Output()
 		// Разбиваем вывод на строки
 		files := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -2839,6 +2948,9 @@ func (app *App) loadFiles(logPath string) {
 				cmd = exec.Command("find", args...)
 			}
 		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Loading the log files from var logs")
+		}
 		output, _ = cmd.Output()
 		// Преобразуем вывод команды в строку и делим на массив строк
 		files := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -2925,6 +3037,9 @@ func (app *App) loadFiles(logPath string) {
 				"-name", "*.pcapng.gz",
 			)
 		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Loading the log files from custom path")
+		}
 		output, _ = cmd.Output()
 		files := strings.Split(strings.TrimSpace(string(output)), "\n")
 		if !app.testMode {
@@ -2978,6 +3093,9 @@ func (app *App) loadFiles(logPath string) {
 		} else {
 			cmd = exec.Command("find", args...)
 		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Loading the log files from users home")
+		}
 		output, _ = cmd.Output()
 		files := strings.Split(strings.TrimSpace(string(output)), "\n")
 		if !app.testMode {
@@ -3018,6 +3136,9 @@ func (app *App) loadFiles(logPath string) {
 			cmdRootDir = exec.Command("ssh", sshArgs...)
 		} else {
 			cmdRootDir = exec.Command("find", args...)
+		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Loading the log files from users home")
 		}
 		outputRootDir, err := cmdRootDir.Output()
 		// Добавляем содержимое директории /root/ в общий массив, если есть доступ
@@ -3111,6 +3232,9 @@ func (app *App) loadFiles(logPath string) {
 					)
 				}
 				cmd.Stderr = nil
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Loading the log files for process descriptor")
+				}
 				outputLsof, _ := cmd.Output()
 				processLines := strings.Split(strings.TrimSpace(string(outputLsof)), "\n")
 				// Ищем строку, которая содержит имя процесса (только первый процесс)
@@ -3501,6 +3625,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						"syslog", "-f", logFullPath,
 					)
 				}
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading logs in asl format")
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -3524,6 +3651,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						"tcpdump", "-n", "-r", logFullPath,
 					)
 				}
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading logs in pcap format")
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -3535,7 +3665,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					log.Print("Error: reading log using tcpdump tool. ", err)
 				}
 				app.currentLogLines = strings.Split(string(output), "\n")
-			// Packet Filter (PF) Firewall OpenBSD
+			// Packet Filter (PF) Firewall (OpenBSD)
 			case strings.HasSuffix(logFullPath, "pflog"):
 				if app.sshMode {
 					cmd = exec.Command(
@@ -3546,6 +3676,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					cmd = exec.Command(
 						"tcpdump", "-e", "-n", "-r", logFullPath,
 					)
+				}
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading logs in pflog format")
 				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
@@ -3611,6 +3744,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						"tcpdump", "-n", "-r", tmpFile.Name(),
 					)
 				}
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading logs in pcap format")
+				}
 				tcpdumpOut, err := cmdTcpdump.StdoutPipe()
 				if err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
@@ -3675,6 +3811,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						"tail", "-n", app.logViewCount,
 					)
 				}
+				if app.logging {
+					slog.Info(cmdUnzip.String(), "action", "Reading the archive log")
+				}
 				pipe, err := cmdUnzip.StdoutPipe()
 				if err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
@@ -3683,6 +3822,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					return
 				}
 				// Стандартный вывод программы передаем в stdin tail
+				if app.logging {
+					slog.Info(cmdTail.String(), "action", "Reading the archive log")
+				}
 				cmdTail.Stdin = pipe
 				out, err := cmdTail.StdoutPipe()
 				if err != nil && !app.testMode {
@@ -3739,6 +3881,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						"last", "-f", logFullPath,
 					)
 				}
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading logs in wtmp/utmp/utx format")
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -3773,6 +3918,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						"lastb", "-f", logFullPath,
 					)
 				}
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading logs in btmp format")
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -3804,6 +3952,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						"lastlog",
 					)
 				}
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading logs in lastlog format")
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -3824,6 +3975,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						"lastlogin",
 					)
 				}
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading logs in lastlogin format")
+				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
@@ -3842,6 +3996,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					cmd = exec.Command(
 						"tail", "-n", app.logViewCount, logFullPath,
 					)
+				}
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading log file")
 				}
 				output, err := cmd.Output()
 				if err != nil && !app.testMode {
@@ -4000,6 +4157,9 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			)
 		}
 	}
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Check the binary")
+	}
 	version, err := cmd.Output()
 	if err != nil && !app.testMode {
 		vError, _ := app.gui.View("docker")
@@ -4012,6 +4172,9 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			if strings.Contains(string(version), "Version:") {
 				// Проверяем вывод kubectl, может быть ошибка подключения к кластеру
 				cmd = exec.Command(containerizationSystem, "get", "nodes")
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Check the connect to kubernetes cluster")
+				}
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Fprintln(vError, "\033[31mError connection to the Kubernetes cluster\033[0m")
@@ -4152,6 +4315,9 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	}
 	// Ожидаем выполнение в течение 2-х секунд
 	cmd.WaitDelay = 2 * time.Second
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Loading the container list")
+	}
 	output, err := cmd.Output()
 	if !app.testMode {
 		if err != nil {
@@ -4486,6 +4652,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		} else {
 			cmd = exec.Command("docker", "inspect", "--format", "{{.LogPath}}", containerId)
 		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
+		}
 		logFilePathBytes, err := cmd.Output()
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
@@ -4506,6 +4675,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				)...)
 		} else {
 			cmd = exec.Command("tail", "-n", app.logViewCount, logFilePath)
+		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
 		}
 		output, err := cmd.Output()
 		// Если ошибка чтения, значит нет доступа и переходим к чтению из потока
@@ -4894,6 +5066,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				)
 			}
 		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs")
+		}
 		// Ожидаем выполнение в течение 2-х секунд
 		cmd.WaitDelay = 2 * time.Second
 		// Храним байты вывода
@@ -5147,6 +5322,9 @@ func (app *App) getContainersFromCompose(projectName string) []string {
 		}
 	}
 	cmd.WaitDelay = 2 * time.Second
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Loading the compose stacks")
+	}
 	output, err := cmd.Output()
 	if err == nil {
 		containerNameArr := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -5462,6 +5640,9 @@ func (app *App) checkBin(commands []string) (string, error) {
 	var binName string
 	for _, command := range commands {
 		cmd := exec.Command(command, "--version")
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Check the binary")
+		}
 		_, err := cmd.Output()
 		if err == nil {
 			binName = command
@@ -8869,6 +9050,9 @@ func (app *App) getDockerContext() []string {
 			"docker", "context", "ls", "-q",
 		)
 	}
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Loading the docker context list")
+	}
 	context, err := cmd.Output()
 	if err == nil {
 		strCtx := string(context)
@@ -8893,6 +9077,9 @@ func (app *App) getKubernetesContext() []string {
 			"kubectl", "config", "get-contexts", "-o", "name",
 		)
 	}
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Loading the kubernetes context list")
+	}
 	context, err := cmd.Output()
 	if err == nil {
 		strCtx := string(context)
@@ -8916,6 +9103,9 @@ func (app *App) getKubernetesNamespace() []string {
 		cmd = exec.Command(
 			"kubectl", "get", "namespace", "-o", "name",
 		)
+	}
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Loading the kubernetes namespace list")
 	}
 	namespace, err := cmd.Output()
 	if err == nil {
