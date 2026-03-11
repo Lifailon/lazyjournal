@@ -10,6 +10,15 @@
       "args": []
     },
     {
+      "name": "Debug (logging)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-l"]
+    },
+    {
       "name": "Fast mode [1K/2s]",
       "type": "go",
       "request": "launch",
@@ -26,6 +35,15 @@
       "program": "${workspaceFolder}/main.go",
       "console": "integratedTerminal",
       "args": ["-t", "200000", "-u", "10"]
+    },
+    {
+      "name": "All units",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-U", "service,timer,scope,socket,mount"]
     },
     {
       "name": "Show audit",
