@@ -72,7 +72,7 @@ jobs:
         run: docker run --rm -i hadolint/hadolint:latest < ${{ github.event.inputs.Dockerfile }}
 
       - name: Check build image
-        id: build
+        id: buildCheck
         if: ${{ github.event.inputs.Build == 'true' }}
         run: docker build -t lifailon/lazyjournal:test -f ${{ github.event.inputs.Dockerfile }} .
 
@@ -88,10 +88,11 @@ jobs:
           docker compose version
 
       - name: Check run container
-        id: containerCheck
+        id: runContainerCheck
         if: ${{ github.event.inputs.Container == 'true' }}
         run: |
           cd docker/debian && docker compose up -d
+          sleep 5
           docker exec lazyjournal lazyjournal -v
           script -e -c "timeout 10s docker exec -t lazyjournal lazyjournal" interface.log || [ $? -eq 124 ]
           cat interface.log
@@ -186,7 +187,7 @@ jobs:
             Results:
             ${{ steps.lint.outcome == 'success' && '✅' || (steps.lint.outcome == 'skipped' && '➖' || '❌') }} **Dockerfile basic linters check**: ${{ steps.lint.outcome }}
             ${{ steps.hadolint.outcome == 'success' && '✅' || (steps.hadolint.outcome == 'skipped' && '➖' || '❌') }} **Dockerfile hadolint check**: ${{ steps.hadolint.outcome }}
-            ${{ steps.build.outcome == 'success' && '✅' || (steps.build.outcome == 'skipped' && '➖' || '❌') }} **Docker build only check**: ${{ steps.build.outcome }}
+            ${{ steps.buildCheck.outcome == 'success' && '✅' || (steps.buildCheck.outcome == 'skipped' && '➖' || '❌') }} **Docker build only check**: ${{ steps.build.outcome }}
+            ${{ steps.runContainerCheck.outcome == 'success' && '✅' || (steps.runContainerCheck.outcome == 'skipped' && '➖' || '❌') }} **Docker run container check**: ${{ steps.containerCheck.outcome }}
             ${{ steps.latestPush.outcome == 'success' && '✅' || (steps.latestPush.outcome == 'skipped' && '➖' || '❌') }} **Docker image build and push using latest tag**: ${{ steps.latestPush.outcome }}
             ${{ steps.customPush.outcome == 'success' && '✅' || (steps.customPush.outcome == 'skipped' && '➖' || '❌') }} **Docker image build and push using custom tag**: ${{ steps.customPush.outcome }}
-            ${{ steps.containerCheck.outcome == 'success' && '✅' || (steps.containerCheck.outcome == 'skipped' && '➖' || '❌') }} **Docker run container check**: ${{ steps.containerCheck.outcome }}

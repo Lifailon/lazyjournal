@@ -22,6 +22,7 @@ results.md
 *report.md
 *.out
 test.log
+interface.log
 
 # Profiling
 *.pprof
