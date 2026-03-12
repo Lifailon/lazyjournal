@@ -33,7 +33,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var programVersion string = "0.8.6"
+var appVersion string = "0.8.6"
 
 // Структура конфигурации
 type Config struct {
@@ -199,7 +199,7 @@ type App struct {
 	unitType   string // фильтрация списка юнитов по типу (#46)
 	customPath string // пользовательский путь для поиска логов в файловой системе (#31)
 
-	selectUnits                  string // название журнала (systemUnits/userUnits/kernelBoot/auditd)
+	selectUnits                  string // название журнала (systemUnits/userUnits/systemJournals/kernelBoot/auditd)
 	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
 	selectContainerizationSystem string // название системы контейнеризации (docker/compose/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (default/fuzzy/regex/timestamp)
@@ -587,8 +587,9 @@ func (app *App) showAudit() {
 				name        string
 				journalName string
 			}{
-				{"System unit list", "systemUnits"},
-				{"User unit list", "userUnits"},
+				{"System units", "systemUnits"},
+				{"User units", "userUnits"},
+				{"System journals", "systemJournals"},
 				{"Kernel boot", "kernelBoot"},
 			}
 			for _, journal := range journalList {
@@ -1075,7 +1076,7 @@ func runGoCui(mock bool) {
 	}
 
 	if *version {
-		fmt.Println(programVersion)
+		fmt.Println(appVersion)
 		os.Exit(0)
 	}
 
@@ -1238,6 +1239,7 @@ func runGoCui(mock bool) {
 			logger = slog.New(textHandler)
 		}
 		slog.SetDefault(logger)
+		slog.Info("Launching lazyjournal")
 	}
 
 	// Проверяем значение флага на валидность
@@ -1368,41 +1370,23 @@ func runGoCui(mock bool) {
 
 	// Определяем списки в панелях по умолчанию при запуске интерфейса (#37)
 
-	// selectUnits=SystemLogList
-	// selectPath=FileLogList
-	// selectContainerizationSystem=ContainerLogList
-
 	switch config.Interface.SystemLogList {
-	case "systemUnits":
-		app.selectUnits = "systemUnits"
-	case "userUnits":
-		app.selectUnits = "userUnits"
-	case "kernelBoot":
-		app.selectUnits = "kernelBoot"
-	case "auditd":
-		app.selectUnits = "auditd"
+	case "userUnits", "systemJournals", "kernelBoot", "auditd":
+		app.selectUnits = config.Interface.SystemLogList
 	default:
 		app.selectUnits = "systemUnits"
 	}
 
 	switch config.Interface.FileLogList {
-	case "customPath":
-		app.selectPath = "customPath"
-	case "home":
-		app.selectPath = "home"
-	case "descriptor":
-		app.selectPath = "descriptor"
+	case "customPath", "home", "descriptor":
+		app.selectPath = config.Interface.FileLogList
 	default:
 		app.selectPath = "varlog"
 	}
 
 	switch config.Interface.ContainerLogList {
-	case "compose":
-		app.selectContainerizationSystem = "compose"
-	case "podman":
-		app.selectContainerizationSystem = "podman"
-	case "kubernetes":
-		app.selectContainerizationSystem = "kubernetes"
+	case "compose", "podman", "kubernetes":
+		app.selectContainerizationSystem = config.Interface.ContainerLogList
 	default:
 		app.selectContainerizationSystem = "docker"
 	}
@@ -1710,9 +1694,11 @@ func (app *App) layout(g *gocui.Gui) error {
 		// Определяем заголовок панели в зависимости от выбранного журнала в конфигурации по умолчанию
 		switch app.selectUnits {
 		case "systemUnits":
-			v.Title = " < System unit list (0) > "
+			v.Title = " < System units (0) > "
 		case "userUnits":
-			v.Title = " < User unit list (0) > "
+			v.Title = " < User units (0) > "
+		case "systemJournals":
+			v.Title = " < System journals (0) > "
 		case "kernelBoot":
 			v.Title = " < Kernel boot (0) > "
 		case "auditd":
@@ -1869,7 +1855,7 @@ func (app *App) layout(g *gocui.Gui) error {
 	return nil
 }
 
-// ---------------------------------------- journald/auditd/wineventlog ----------------------------------------
+// ---------------------------------------- systemd/journald/auditd/wineventlog ----------------------------------------
 
 // Функция для удаления ANSI-символов покраски
 func removeANSI(input string) string {
@@ -1919,8 +1905,7 @@ func (app *App) loadServices(journalName string) {
 		log.Print("Error: systemd-journald not supported")
 	}
 	switch journalName {
-	// Services list from systemd
-	// case "units", "userUnits":
+	// Unit list from systemd
 	case "systemUnits", "userUnits":
 		app.journals = append(app.journals, Journal{
 			name:    "_all",
@@ -1928,7 +1913,7 @@ func (app *App) loadServices(journalName string) {
 		})
 		// (1) Получаем список всех юнитов со статусом работы через systemctl в формате JSON
 		var unitsList *exec.Cmd
-		var unitTypeFlag string = "--type=" + app.unitType
+		var unitTypeFlag string = "--type=" + app.unitType // "service,timer,scope,socket,mount" (default: service)
 		if app.sshMode {
 			if journalName == "systemUnits" {
 				unitsList = exec.Command(
@@ -1955,9 +1940,9 @@ func (app *App) loadServices(journalName string) {
 		if app.logging {
 			var logSource string
 			if journalName == "systemUnits" {
-				logSource = "Loading the system unit list"
+				logSource = "Loading the system units"
 			} else {
-				logSource = "Loading the user unit list"
+				logSource = "Loading the user units"
 			}
 			slog.Info(unitsList.String(), "action", logSource)
 		}
@@ -2021,9 +2006,9 @@ func (app *App) loadServices(journalName string) {
 		if app.logging {
 			var logSource string
 			if journalName == "systemUnits" {
-				logSource = "Loading the system unit list"
+				logSource = "Loading the system units"
 			} else {
-				logSource = "Loading the user unit list"
+				logSource = "Loading the user units"
 			}
 			slog.Info(unitFilesList.String(), "action", logSource)
 		}
@@ -2111,94 +2096,86 @@ func (app *App) loadServices(journalName string) {
 				})
 			}
 		}
-	// Audit rules keys from auditd
-	case "auditd":
-		// Получаем список правил
-		var auditRulesList *exec.Cmd
+	// System journals from journald
+	case "systemJournals":
+		app.journals = append(app.journals, Journal{
+			name:    "_all",
+			boot_id: "_all",
+		})
+		// journalctl -n 1 -o json | jq keys
+		// var field string = "--field=" + app.journalField // SYSLOG_IDENTIFIER/_UID/_PID/_EXE/_COMM
+		var fieldFlag string = "--field=" + "SYSLOG_IDENTIFIER"
+		var cmd *exec.Cmd
 		if app.sshMode {
-			auditRulesList = exec.Command(
+			cmd = exec.Command(
 				"ssh", append(app.sshOptions,
-					"auditctl", "-l",
+					"journalctl", "--no-pager", fieldFlag,
 				)...)
 		} else {
-			auditRulesList = exec.Command(
-				"auditctl", "-l",
+			cmd = exec.Command(
+				"journalctl", "--no-pager", fieldFlag,
 			)
 		}
 		if app.logging {
-			slog.Info(auditRulesList.String(), "action", "Loading the audit rules keys")
+			slog.Info(cmd.String(), "action", "Loading the system journals")
 		}
-		output, err := auditRulesList.Output()
-		// Проверяем, что auditd установлен и на ошибку доступа
+		output, err := cmd.Output()
 		if !app.testMode {
 			if err != nil {
-				var errorText string
-				if err.Error() == "exit status 4" {
-					errorText = "Access denied in auditd via auditctl (root only)"
-				} else {
-					errorText = "Auditd not installed"
-				}
 				vError, _ := app.gui.View("services")
 				vError.Clear()
 				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31m"+errorText+"\033[0m")
+				fmt.Fprintln(vError, "\033[31mError getting system journals by field from journald\033[0m")
 				return
+			} else {
+				vError, _ := app.gui.View("services")
+				app.journalListFrameColor = app.frameColor
+				if vError.FrameColor != app.frameColor {
+					vError.FrameColor = app.selectedFrameColor
+				}
+				vError.Highlight = true
 			}
-			v, _ := app.gui.View("services")
-			app.journalListFrameColor = app.frameColor
-			if v.FrameColor != app.frameColor {
-				v.FrameColor = app.selectedFrameColor
-			}
-			v.Highlight = true
 		}
 		if err != nil && app.testMode {
-			if strings.Contains(err.Error(), "root to run") {
-				log.Print("Access denied in auditd via auditctl (root only)")
-			} else {
-				log.Print("Auditd not installed")
-			}
+			log.Print("Error: getting system journals by field from journald")
 		}
-		// Заполняем список всех уникальный ключей
-		keysMap := make(map[string]bool)
+		// Создаем массив (хеш-таблица с доступом по ключу) для уникальных имен
+		journalMap := make(map[string]bool)
 		scanner := bufio.NewScanner(strings.NewReader(string(output)))
 		for scanner.Scan() {
-			rule := scanner.Text()
-			if strings.Contains(rule, "-k ") {
-				// Разбиваем строку правила на 2 части (split) до ключа
-				rulePart := strings.Split(rule, "-k ")
-				if len(rulePart) > 1 {
-					// Разбиваем на слова (fields) из второй части правила после ключа и извлекаем первое слово
-					keyPart := strings.Fields(rulePart[1])[0]
-					if !keysMap[keyPart] {
-						keysMap[keyPart] = true
-						app.journals = append(app.journals, Journal{
-							name:    keyPart,
-							boot_id: keyPart,
-						})
-					}
-				}
+			journalName := strings.TrimSpace(scanner.Text())
+			if journalName != "" && !journalMap[journalName] {
+				journalMap[journalName] = true
+				app.journals = append(app.journals, Journal{
+					name:    journalName,
+					boot_id: "",
+				})
 			}
 		}
-	// Kernel boots list from journald
+		// Сортируем список по алфавиту
+		sort.Slice(app.journals, func(i, j int) bool {
+			return app.journals[i].name < app.journals[j].name
+		})
+	// Kernel boot list from journald
 	case "kernelBoot":
 		// Получаем список загрузок системы
-		var bootCmd *exec.Cmd
+		var cmd *exec.Cmd
 		if app.sshMode {
-			bootCmd = exec.Command(
+			cmd = exec.Command(
 				"ssh", append(app.sshOptions,
 					"journalctl", "--list-boots", "-o", "json",
 				)...)
 		} else {
-			bootCmd = exec.Command(
+			cmd = exec.Command(
 				"journalctl", "--list-boots", "-o", "json",
 			)
 		}
 		if app.logging {
-			slog.Info(bootCmd.String(), "action", "Loading the kernel boot")
+			slog.Info(cmd.String(), "action", "Loading the kernel boot")
 		}
-		bootOutput, err := bootCmd.Output()
+		bootOutput, err := cmd.Output()
 		if !app.testMode {
 			if err != nil {
 				vError, _ := app.gui.View("services")
@@ -2289,6 +2266,76 @@ func (app *App) loadServices(journalName string) {
 			// Сравниваем по второй дате в обратном порядке (After для сортировки по убыванию)
 			return date1.After(date2)
 		})
+	// Audit rules keys from auditd
+	case "auditd":
+		// Получаем список правил
+		var cmd *exec.Cmd
+		if app.sshMode {
+			cmd = exec.Command(
+				"ssh", append(app.sshOptions,
+					"auditctl", "-l",
+				)...)
+		} else {
+			cmd = exec.Command(
+				"auditctl", "-l",
+			)
+		}
+		if app.logging {
+			slog.Info(cmd.String(), "action", "Loading the audit rules keys")
+		}
+		output, err := cmd.Output()
+		// Проверяем, что auditd установлен и на ошибку доступа
+		if !app.testMode {
+			if err != nil {
+				var errorText string
+				if err.Error() == "exit status 4" {
+					errorText = "Access denied in auditd via auditctl (root only)"
+				} else {
+					errorText = "Auditd not installed"
+				}
+				vError, _ := app.gui.View("services")
+				vError.Clear()
+				app.journalListFrameColor = app.errorColor
+				vError.FrameColor = app.journalListFrameColor
+				vError.Highlight = false
+				fmt.Fprintln(vError, "\033[31m"+errorText+"\033[0m")
+				return
+			}
+			v, _ := app.gui.View("services")
+			app.journalListFrameColor = app.frameColor
+			if v.FrameColor != app.frameColor {
+				v.FrameColor = app.selectedFrameColor
+			}
+			v.Highlight = true
+		}
+		if err != nil && app.testMode {
+			if strings.Contains(err.Error(), "root to run") {
+				log.Print("Access denied in auditd via auditctl (root only)")
+			} else {
+				log.Print("Auditd not installed")
+			}
+		}
+		// Заполняем список всех уникальный ключей
+		keysMap := make(map[string]bool)
+		scanner := bufio.NewScanner(strings.NewReader(string(output)))
+		for scanner.Scan() {
+			rule := scanner.Text()
+			if strings.Contains(rule, "-k ") {
+				// Разбиваем строку правила на 2 части (split) до ключа
+				rulePart := strings.Split(rule, "-k ")
+				if len(rulePart) > 1 {
+					// Разбиваем на слова (fields) из второй части правила после ключа и извлекаем первое слово
+					keyPart := strings.Fields(rulePart[1])[0]
+					if !keysMap[keyPart] {
+						keysMap[keyPart] = true
+						app.journals = append(app.journals, Journal{
+							name:    keyPart,
+							boot_id: keyPart,
+						})
+					}
+				}
+			}
+		}
 	}
 	if !app.testMode {
 		// Сохраняем неотфильтрованный список
@@ -2605,7 +2652,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if err != nil && app.testMode {
 			log.Print("Error: getting kernal logs. ", err)
 		}
-	// Загрузка журналов юнитов systemd (--unit=UNIT)
+	// Загрузка журналов для юнитов systemd (--unit=UNIT) и системных журналов с фильтрацией (--field=FIELD)
 	default:
 		// Удаляем статусы сервисов из навзания
 		serviceNameNew := strings.Split(serviceName, "] ")
@@ -2615,15 +2662,22 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		var cmd *exec.Cmd
 		// #34 Используем массив для формирования аргументов команды
 		var args []string
-		if serviceName != "_all" {
+		// Фильтрация по юниту
+		if serviceName != "_all" && selectUnits != "systemJournals" {
 			args = []string{"--unit=" + serviceName}
+		}
+		// Фильтрация по filed
+		if serviceName != "_all" && selectUnits == "systemJournals" {
+			args = []string{"SYSLOG_IDENTIFIER=" + serviceName}
 		}
 		// #46 Добавляем аргумент для пользовательских журналов
 		if app.selectUnits == "userUnits" {
 			args = append(args, "--user")
 		}
 		// Добавляем основные аргументы
-		args = append(args, "--no-pager", "-n", app.logViewCount, "-p", app.priority)
+		args = append(args, "--no-pager")
+		args = append(args, "--priority="+app.priority)
+		args = append(args, "--lines="+app.logViewCount)
 		// Добавляем аргументы для фильтрации по времени
 		if app.sinceDateFilterMode {
 			args = append(args, "--since", app.sinceFilterText)
@@ -2644,10 +2698,13 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		}
 		if app.logging {
 			var logSource string
-			if app.selectUnits == "systemUnits" {
-				logSource = "Reading logs from system unit list"
-			} else {
-				logSource = "Reading logs from user unit list"
+			switch app.selectUnits {
+			case "systemUnits":
+				logSource = "Reading logs from system units"
+			case "userUnits":
+				logSource = "Reading logs from user units"
+			default:
+				logSource = "Reading logs from system journals"
 			}
 			slog.Info(cmd.String(), "action", logSource)
 		}
@@ -2659,7 +2716,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			return
 		}
 		if err != nil && app.testMode {
-			log.Print("Error: getting journald logs.  ", err)
+			log.Print("Error: getting journald logs.", err)
 		}
 	}
 	// Сохраняем строки журнала в массив
@@ -8687,7 +8744,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	fmt.Fprintln(helpView, "                  \033[32m|______|\\__,_|/___| \\__, | \033[36m\\____/  \\___/  \\__,_||_|   |_| |_| \\__,_||_|")
 	fmt.Fprintln(helpView, "                  \033[32m					 __/ |                                             ")
 	fmt.Fprintln(helpView, "                  \033[32m                    |___/\033[0m")
-	fmt.Fprintln(helpView, "\n    Version: "+app.wordColor(programVersion))
+	fmt.Fprintln(helpView, "\n    Version: "+app.wordColor(appVersion))
 	fmt.Fprintln(helpView, "\n    Hotkeys description (default values):")
 	fmt.Fprintln(helpView, "\n      \033[32mF2\033[0m - interface for ssh manager and contexts switching.")
 	fmt.Fprintln(helpView, "      \033[32mTab\033[0m - switch to next window.")
@@ -9339,9 +9396,13 @@ func (app *App) setUnitListRight(g *gocui.Gui, v *gocui.View) error {
 	switch app.selectUnits {
 	case "systemUnits":
 		app.selectUnits = "userUnits"
-		selectedServices.Title = " < User unit list (0) > "
+		selectedServices.Title = " < User units (0) > "
 		app.loadServices(app.selectUnits)
 	case "userUnits":
+		app.selectUnits = "systemJournals"
+		selectedServices.Title = " < System journals (0) > "
+		app.loadServices(app.selectUnits)
+	case "systemJournals":
 		app.selectUnits = "kernelBoot"
 		selectedServices.Title = " < Kernel boot (0) > "
 		app.loadServices(app.selectUnits)
@@ -9351,7 +9412,7 @@ func (app *App) setUnitListRight(g *gocui.Gui, v *gocui.View) error {
 		app.loadServices(app.selectUnits)
 	case "auditd":
 		app.selectUnits = "systemUnits"
-		selectedServices.Title = " < System unit list (0) > "
+		selectedServices.Title = " < System units (0) > "
 		app.loadServices(app.selectUnits)
 	}
 	return nil
@@ -9375,12 +9436,16 @@ func (app *App) setUnitListLeft(g *gocui.Gui, v *gocui.View) error {
 		selectedServices.Title = " < Kernel boot (0) > "
 		app.loadServices(app.selectUnits)
 	case "kernelBoot":
+		app.selectUnits = "systemJournals"
+		selectedServices.Title = " < System journals (0) > "
+		app.loadServices(app.selectUnits)
+	case "systemJournals":
 		app.selectUnits = "userUnits"
-		selectedServices.Title = " < User unit list (0) > "
+		selectedServices.Title = " < User units (0) > "
 		app.loadServices(app.selectUnits)
 	case "userUnits":
 		app.selectUnits = "systemUnits"
-		selectedServices.Title = " < System unit list (0) > "
+		selectedServices.Title = " < System units (0) > "
 		app.loadServices(app.selectUnits)
 	}
 	return nil

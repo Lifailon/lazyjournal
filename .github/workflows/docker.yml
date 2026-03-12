@@ -98,9 +98,10 @@ jobs:
           export COLUMNS=150
           export LINES=50
           script -e -q -c "stty cols 160 rows 60 && timeout 10s docker exec -e TERM=xterm-256color -e COLUMNS=150 -e LINES=50 -t lazyjournal lazyjournal" interface.log || [ $? -eq 124 ]
+          sed -ri 's/\x1b\[[0-9;?]*[a-zA-Z]//g' interface.log
           sed -i '1d;$d' interface.log
           cat interface.log
-          grep -ai "System var logs" interface.log && grep -ai "Docker containers" interface.log && echo "Container started successfully" || echo "Error reading interface"
+          grep -ai "System unit list" interface.log && echo "Container started successfully" || echo "Error reading interface"
 
       - name: Install Go
         if: ${{ github.event.inputs.Push == 'true' && github.event.inputs.Tag == '' }}
