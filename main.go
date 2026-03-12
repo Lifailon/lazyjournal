@@ -62,6 +62,7 @@ type Settings struct {
 	KubernetesNamespace string `yaml:"kubernetesNamespace"`
 	UnitType            string `yaml:"unitType"`
 	JournalField        string `yaml:"journalField"`
+	JournalBoot         string `yaml:"journalBoot"`
 	CustomPath          string `yaml:"customPath"`
 	ColorMode           string `yaml:"colorMode"`
 	ColorActionsDisable string `yaml:"colorActionsDisable"`
@@ -197,8 +198,9 @@ type App struct {
 	systemDisk    string   // порядковая буква системного диска для Windows
 	userNameArray []string // список всех пользователей
 
-	unitType     string // фильтрация списка юнитов по типу (#46)
-	journalField string // фильтрация списка журналов по полю
+	unitType     string // фильтрация списков системных и пользовательских юнитов по типу (#46)
+	journalField string // фильтрация списка системных журналов по полю
+	journalBoot  string // фильтрация вывода системных и пользовательских журналов по порядковому номеру загрузки системы
 	customPath   string // пользовательский путь для поиска логов в файловой системе (#31)
 
 	selectUnits                  string // название журнала (systemUnits/userUnits/systemJournals/kernelBoot/auditd)
@@ -382,6 +384,7 @@ func showConfig() {
 	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
 	fmt.Printf("  unitType:                 %s\n", config.Settings.UnitType)
 	fmt.Printf("  journalField:             %s\n", config.Settings.JournalField)
+	fmt.Printf("  journalBoot:              %s\n", config.Settings.JournalBoot)
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
 	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
 	fmt.Printf("  colorActionsDisable:      %s\n", config.Settings.ColorActionsDisable)
@@ -1060,6 +1063,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(unitTypeFlag, "U", "service", "Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
 	journalFieldFlag := flag.String("journal-field", "SYSLOG_IDENTIFIER", "Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)")
 	flag.StringVar(journalFieldFlag, "j", "SYSLOG_IDENTIFIER", "Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)")
+	journalBootFlag := flag.String("journal-boot", "all", "Limit log output to the specified system boot period, e.g. 0 current or -1 previous (default: all)")
+	flag.StringVar(journalBootFlag, "b", "all", "Limit log output to the specified system boot period, e.g. 0 current or -1 previous (default: all)")
 	pathFlag := flag.String("path", "", "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
 	flag.StringVar(pathFlag, "p", "", "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
 	colorModeFlag := flag.String("color-mode", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
@@ -1197,6 +1202,12 @@ func runGoCui(mock bool) {
 		app.journalField = config.Settings.JournalField
 	} else {
 		app.journalField = *journalFieldFlag
+	}
+
+	if config.Settings.JournalBoot != "" && *journalBootFlag == "all" {
+		app.journalBoot = config.Settings.JournalBoot
+	} else {
+		app.journalBoot = *journalBootFlag
 	}
 
 	if config.Settings.CustomPath != "" && *pathFlag == "" {
@@ -1836,7 +1847,7 @@ func (app *App) layout(g *gocui.Gui) error {
 				"Update interval: \033[32m%d\033[0m sec | "+
 				"Color mode: \033[32m%s\033[0m | "+
 				"Filter by date: \033[32m%s\033[0m | "+
-				"Priority for journald: \033[32m%s\033[0m | "+
+				"Filter by priority/boot: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 				"Show timestamp: \033[32m%t\033[0m \n "+
 				"SSH mode: \033[32m%s\033[0m | "+
 				"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
@@ -1847,6 +1858,7 @@ func (app *App) layout(g *gocui.Gui) error {
 			app.colorMode,
 			app.filterByDateStatus,
 			app.priority,
+			app.journalBoot,
 			app.timestampDocker,
 			app.sshStatus,
 			app.dockerStreamLogsStatus,
@@ -2673,21 +2685,24 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		var cmd *exec.Cmd
 		// #34 Используем массив для формирования аргументов команды
 		var args []string
-		// Фильтрация по юниту
-		if serviceName != "_all" && selectUnits != "systemJournals" {
-			args = []string{"--unit=" + serviceName}
-		}
-		// Фильтрация по filed
-		if serviceName != "_all" && selectUnits == "systemJournals" {
-			args = []string{app.journalField + "=" + serviceName}
-		}
 		// #46 Добавляем аргумент для пользовательских журналов
 		if app.selectUnits == "userUnits" {
 			args = append(args, "--user")
 		}
-		// Добавляем основные аргументы
-		args = append(args, "--no-pager")
+		// Фильтрация по юниту (unit)
+		if serviceName != "_all" && selectUnits != "systemJournals" {
+			args = []string{"--unit=" + serviceName}
+		}
+		// Фильтрация по полю (field)
+		if serviceName != "_all" && selectUnits == "systemJournals" {
+			args = []string{app.journalField + "=" + serviceName}
+		}
+		// Фильтрация по порядковому номеру загрузки системы (boot)
+		args = append(args, "--boot="+app.journalBoot)
+		// Фильтрация по приоритету
 		args = append(args, "--priority="+app.priority)
+		// Добавляем базовые аргументы
+		args = append(args, "--no-pager")
 		args = append(args, "--lines="+app.logViewCount)
 		// Добавляем аргументы для фильтрации по времени
 		if app.sinceDateFilterMode {
@@ -5615,7 +5630,7 @@ func (app *App) updateStatus() {
 			"Update interval: \033[32m%d\033[0m sec | "+
 			"Color mode: \033[32m%s\033[0m | "+
 			"Filter by date: \033[32m%s\033[0m | "+
-			"Priority for journald: \033[32m%s\033[0m | "+
+			"Filter by priority/boot: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 			"Show timestamp: \033[32m%t\033[0m \n "+
 			"SSH mode: \033[32m%s\033[0m | "+
 			"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
@@ -5626,6 +5641,7 @@ func (app *App) updateStatus() {
 		app.colorMode,
 		app.filterByDateStatus,
 		app.priority,
+		app.journalBoot,
 		app.timestampDocker,
 		app.sshStatus,
 		app.dockerStreamLogsStatus,
