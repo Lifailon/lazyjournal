@@ -46,7 +46,7 @@ type Config struct {
 // Структура доступных параметров для переопределения значений по умолчанию при запуске (#27)
 type Settings struct {
 	LoggingEnable       string `yaml:"loggingEnable"`
-	loggingPath         string `yaml:"loggingPath"`
+	LoggingPath         string `yaml:"loggingPath"`
 	LoggingType         string `yaml:"loggingType"`
 	TailModeDisable     string `yaml:"tailModeDisable"`
 	TailModeLines       string `yaml:"tailModeLines"`
@@ -313,6 +313,37 @@ type App struct {
 	uniquePrefixColorMap map[string]string // карта для хранения уникального цвета для каждого контейнера в стеках compose
 }
 
+// Описание флагов
+var (
+	helpDescription              = "Show help"
+	versionDescription           = "Show version"
+	configDescription            = "Show configuration of hotkeys and settings (check values)"
+	auditDescription             = "Show audit information"
+	loggingDescription           = "Enable logging of executed commands for debugging"
+	tailModeDisableDescription   = "Disable streaming of new events (log is loaded once without update)"
+	tailLinesDescription         = "Change the number of log lines to output (range: 200-200000, default: 10K)"
+	updateIntervalDescription    = "Change the update interval of the log output (range: 2-10, default: 5)"
+	minSymbolsFilterDescription  = "Minimum number of symbols for filtering output (range: 1-10, default: 3)"
+	timezoneFilterDescription    = "UTC offset when filtering by date (default: +00:00)"
+	mouseDisableDescription      = "Disable mouse control support"
+	wrapDisableDescription       = "Disable wrap mode in log content"
+	dockerStreamOnlyDescription  = "Force reading of Docker container logs in stream mode (by default from the file system)"
+	dockerContextDescription     = "Use the specified Docker context (default: default)"
+	podmanContextDescription     = "Use the specified Podman context (not used by default)"
+	kubernetesContextDescription = "Use the specified Kubernetes context (default: default)"
+	namespaceDescription         = "Use the specified Kubernetes namespace (default: all)"
+	unitTypeDescription          = "Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)"
+	journalFieldDescription      = "Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)"
+	journalBootDescription       = "Limit log output to the specified system boot period, e.g. 0 current or -1 previous (default: all)"
+	pathDescription              = "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)"
+	colorModeDescription         = "Highlighting mode for logs (available values: default, tailspin, bat or disable)"
+	commandColorDescription      = "ANSI coloring in command line mode"
+	commandFuzzyDescription      = "Filtering using fuzzy search in command line mode"
+	commandRegexDescription      = "Filtering using regular expression (regexp) in command line mode"
+	sshDescription               = "Connect to a remote host using standard ssh options (e.g. lazyjournal --ssh \"root@192.168.3.100 -p 22\")"
+)
+
+// Help flag (-h/--help)
 func showHelp() {
 	fmt.Println("lazyjournal - A TUI for viewing logs from journald, auditd, file system, Docker and Podman containers,")
 	fmt.Println("Compose stacks and Kubernetes pods with supports log highlighting and several filtering modes.")
@@ -320,36 +351,36 @@ func showHelp() {
 	fmt.Println("If you have problems with the application, please open issue: https://github.com/Lifailon/lazyjournal/issues")
 	fmt.Println()
 	fmt.Println("  Flags:")
-	fmt.Println("    --help, -h                 Show help")
-	fmt.Println("    --version, -v              Show version")
-	fmt.Println("    --config, -g               Show configuration of hotkeys and settings (check values)")
-	fmt.Println("    --audit, -a                Show audit information")
-	fmt.Println("    --logging, -l              Enable logging of executed commands for debugging")
-	fmt.Println("    --tail-mode-disable, -d    Disable streaming of new events (log is loaded once without update)")
-	fmt.Println("    --tail-lines, -t           Change the number of log lines to output (range: 200-200000, default: 10K)")
-	fmt.Println("    --update-interval, -u      Change the update interval of the log output (range: 2-10, default: 5)")
-	fmt.Println("    --min-symbols-filter, -F   Minimum number of symbols for filtering output (range: 1-10, default: 3)")
-	fmt.Println("    --timezone-filter, -T      UTC offset when filtering by date (default: +00:00)")
-	fmt.Println("    --mouse-disable, -m        Disable mouse control support")
-	fmt.Println("    --wrap-disable, -w         Disable wrap mode in log content")
-	fmt.Println("    --docker-stream-only, -o   Force reading of Docker container logs in stream mode (by default from the file system)")
-	fmt.Println("    --docker-context, -D       Use the specified Docker context (default: default)")
-	fmt.Println("    --podman-context, -P       Use the specified Podman context (not used by default)")
-	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
-	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
-	fmt.Println("    --unit-type, -U            Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
-	fmt.Println("    --journal-field, -j        Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)")
-	fmt.Println("    --path, -p                 Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
-	fmt.Println("    --color-mode, -C           Highlighting mode for logs (available values: default, tailspin, bat or disable)")
-	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
-	fmt.Println("    --command-fuzzy, -f        Filtering using fuzzy search in command line mode")
-	fmt.Println("    --command-regex, -r        Filtering using regular expression (regexp) in command line mode")
-	fmt.Println("    --ssh, -s                  Connect to remote host (use standard ssh options, separated by spaces in quotes)")
-	fmt.Println("                               Example: lazyjournal --ssh \"lifailon@192.168.3.101 -p 22\"")
+	fmt.Println("    --help, -h                 " + helpDescription)
+	fmt.Println("    --version, -v              " + versionDescription)
+	fmt.Println("    --config, -g               " + configDescription)
+	fmt.Println("    --audit, -a                " + auditDescription)
+	fmt.Println("    --logging, -l              " + loggingDescription)
+	fmt.Println("    --tail-mode-disable, -d    " + tailModeDisableDescription)
+	fmt.Println("    --tail-lines, -t           " + tailLinesDescription)
+	fmt.Println("    --update-interval, -u      " + updateIntervalDescription)
+	fmt.Println("    --min-symbols-filter, -F   " + minSymbolsFilterDescription)
+	fmt.Println("    --timezone-filter, -T      " + timezoneFilterDescription)
+	fmt.Println("    --mouse-disable, -m        " + mouseDisableDescription)
+	fmt.Println("    --wrap-disable, -w         " + wrapDisableDescription)
+	fmt.Println("    --docker-stream-only, -o   " + dockerStreamOnlyDescription)
+	fmt.Println("    --docker-context, -D       " + dockerContextDescription)
+	fmt.Println("    --podman-context, -P       " + podmanContextDescription)
+	fmt.Println("    --kubernetes-context, -K   " + kubernetesContextDescription)
+	fmt.Println("    --namespace, -n            " + namespaceDescription)
+	fmt.Println("    --unit-type, -U            " + unitTypeDescription)
+	fmt.Println("    --journal-field, -j        " + journalFieldDescription)
+	fmt.Println("    --journal-boot, -b         " + journalBootDescription)
+	fmt.Println("    --path, -p                 " + pathDescription)
+	fmt.Println("    --color-mode, -C           " + colorModeDescription)
+	fmt.Println("    --command-color, -c        " + commandColorDescription)
+	fmt.Println("    --command-fuzzy, -f        " + commandFuzzyDescription)
+	fmt.Println("    --command-regex, -r        " + commandRegexDescription)
+	fmt.Println("    --ssh, -s                  " + sshDescription)
 	fmt.Println()
 }
 
-// Config (-g/--config)
+// Config flag (-g/--config)
 func showConfig() {
 	// Читаем конфигурацию (извлекаем путь и ошибки)
 	configPath, err := config.getConfig()
@@ -367,9 +398,9 @@ func showConfig() {
 	// fmt.Println(string(configData))
 	// Выводим полученные значения из конфигурации (форматированный вывод) с проверкой на пустые значения
 	fmt.Println("settings:")
-	fmt.Printf("  LoggingEnable:            %s\n", config.Settings.LoggingEnable)
-	fmt.Printf("  LoggingPath:              %s\n", config.Settings.loggingPath)
-	fmt.Printf("  LoggingType:              %s\n", config.Settings.LoggingType)
+	fmt.Printf("  loggingEnable:            %s\n", config.Settings.LoggingEnable)
+	fmt.Printf("  loggingPath:              %s\n", config.Settings.LoggingPath)
+	fmt.Printf("  loggingType:              %s\n", config.Settings.LoggingType)
 	fmt.Printf("  tailModeDisable:          %s\n", config.Settings.TailModeDisable)
 	fmt.Printf("  tailModeLines:            %s\n", config.Settings.TailModeLines)
 	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
@@ -1025,58 +1056,58 @@ func runGoCui(mock bool) {
 	}
 
 	// Аргументы
-	help := flag.Bool("help", false, "Show help")
-	flag.BoolVar(help, "h", false, "Show help")
-	version := flag.Bool("version", false, "Show version")
-	flag.BoolVar(version, "v", false, "Show version")
-	configFlag := flag.Bool("config", false, "Show configuration of hotkeys and settings (check values)")
-	flag.BoolVar(configFlag, "g", false, "Show configuration of hotkeys and settings (check values)")
-	audit := flag.Bool("audit", false, "Show audit information")
-	flag.BoolVar(audit, "a", false, "Show audit information")
-	loggingFlag := flag.Bool("logging", false, "Enable logging of executed commands for debugging")
-	flag.BoolVar(loggingFlag, "l", false, "Enable logging of executed commands for debugging")
-	disableScroll := flag.Bool("tail-mode-disable", false, "Disable streaming of new events (log is loaded once without update)")
-	flag.BoolVar(disableScroll, "d", false, "Disable streaming of new events (log is loaded once without update)")
-	tailFlag := flag.String("tail-lines", "10000", "Change the number of log lines to output (range: 200-200000, default: 10K)")
-	flag.StringVar(tailFlag, "t", "10000", "Change the number of log lines to output (range: 200-200000, default: 10K)")
-	updateFlag := flag.Int("update-interval", 5, "Change the update interval of the log output (range: 2-10, default: 5)")
-	flag.IntVar(updateFlag, "u", 5, "Change the update interval of the log output (range: 2-10, default: 5)")
-	minSymbolFilterFlag := flag.Int("min-symbols-filter", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
-	flag.IntVar(minSymbolFilterFlag, "F", 3, "Minimum number of symbols for filtering output (range: 1-10, default: 3)")
-	timezoneFilterFlag := flag.String("timezone-filter", "+00:00", "UTC offset when filtering by date (default: +00:00)")
-	flag.StringVar(timezoneFilterFlag, "T", "+00:00", "UTC offset when filtering by date (default: +00:00)")
-	mouseDisable := flag.Bool("mouse-disable", false, "Disable mouse control support")
-	flag.BoolVar(mouseDisable, "m", false, "Disable mouse control support")
-	wrapModeDisable := flag.Bool("wrap-disable", false, "Disable wrap mode in log content")
-	flag.BoolVar(wrapModeDisable, "w", false, "Disable wrap mode in log content")
-	dockerStreamFlag := flag.Bool("docker-stream-only", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
-	flag.BoolVar(dockerStreamFlag, "o", false, "Force reading of Docker container logs in stream mode (by default from the file system)")
-	dockerContextFlag := flag.String("docker-context", "default", "Use the specified Docker context (default: default)")
-	flag.StringVar(dockerContextFlag, "D", "default", "Use the specified Docker context (default: default)")
-	podmanContextFlag := flag.String("podman-context", "", "Use the specified Podman context (not used by default)")
-	flag.StringVar(podmanContextFlag, "P", "", "Use the specified Podman context (not used by default)")
-	kubernetesContextFlag := flag.String("kubernetes-context", "default", "Use the specified Kubernetes context (default: default)")
-	flag.StringVar(kubernetesContextFlag, "K", "default", "Use the specified Kubernetes context (default: default)")
-	kubernetesNamespaceFlag := flag.String("namespace", "all", "Use the specified Kubernetes namespace (default: all)")
-	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
-	unitTypeFlag := flag.String("unit-type", "service", "Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
-	flag.StringVar(unitTypeFlag, "U", "service", "Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
-	journalFieldFlag := flag.String("journal-field", "SYSLOG_IDENTIFIER", "Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)")
-	flag.StringVar(journalFieldFlag, "j", "SYSLOG_IDENTIFIER", "Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)")
-	journalBootFlag := flag.String("journal-boot", "all", "Limit log output to the specified system boot period, e.g. 0 current or -1 previous (default: all)")
-	flag.StringVar(journalBootFlag, "b", "all", "Limit log output to the specified system boot period, e.g. 0 current or -1 previous (default: all)")
-	pathFlag := flag.String("path", "", "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
-	flag.StringVar(pathFlag, "p", "", "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
-	colorModeFlag := flag.String("color-mode", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
-	flag.StringVar(colorModeFlag, "C", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
-	commandColor := flag.Bool("command-color", false, "ANSI coloring in command line mode")
-	flag.BoolVar(commandColor, "c", false, "ANSI coloring in command line mode")
-	commandFuzzy := flag.String("command-fuzzy", "", "Filtering using fuzzy search in command line mode")
-	flag.StringVar(commandFuzzy, "f", "", "Filtering using fuzzy search in command line mode")
-	commandRegex := flag.String("command-regex", "", "Filtering using regular expression (regexp) in command line mode")
-	flag.StringVar(commandRegex, "r", "", "Filtering using regular expression (regexp) in command line mode")
-	sshModeFlag := flag.String("ssh", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
-	flag.StringVar(sshModeFlag, "s", "", "Connect to remote host (use standard SSH options, separated by spaces in quotes)")
+	help := flag.Bool("help", false, helpDescription)
+	flag.BoolVar(help, "h", false, helpDescription)
+	version := flag.Bool("version", false, versionDescription)
+	flag.BoolVar(version, "v", false, versionDescription)
+	configFlag := flag.Bool("config", false, configDescription)
+	flag.BoolVar(configFlag, "g", false, configDescription)
+	audit := flag.Bool("audit", false, auditDescription)
+	flag.BoolVar(audit, "a", false, auditDescription)
+	loggingFlag := flag.Bool("logging", false, loggingDescription)
+	flag.BoolVar(loggingFlag, "l", false, loggingDescription)
+	disableScroll := flag.Bool("tail-mode-disable", false, tailModeDisableDescription)
+	flag.BoolVar(disableScroll, "d", false, tailModeDisableDescription)
+	tailFlag := flag.String("tail-lines", "10000", tailLinesDescription)
+	flag.StringVar(tailFlag, "t", "10000", tailLinesDescription)
+	updateFlag := flag.Int("update-interval", 5, updateIntervalDescription)
+	flag.IntVar(updateFlag, "u", 5, updateIntervalDescription)
+	minSymbolFilterFlag := flag.Int("min-symbols-filter", 3, minSymbolsFilterDescription)
+	flag.IntVar(minSymbolFilterFlag, "F", 3, minSymbolsFilterDescription)
+	timezoneFilterFlag := flag.String("timezone-filter", "+00:00", timezoneFilterDescription)
+	flag.StringVar(timezoneFilterFlag, "T", "+00:00", timezoneFilterDescription)
+	mouseDisable := flag.Bool("mouse-disable", false, mouseDisableDescription)
+	flag.BoolVar(mouseDisable, "m", false, mouseDisableDescription)
+	wrapModeDisable := flag.Bool("wrap-disable", false, wrapDisableDescription)
+	flag.BoolVar(wrapModeDisable, "w", false, wrapDisableDescription)
+	dockerStreamFlag := flag.Bool("docker-stream-only", false, dockerStreamOnlyDescription)
+	flag.BoolVar(dockerStreamFlag, "o", false, dockerStreamOnlyDescription)
+	dockerContextFlag := flag.String("docker-context", "default", dockerContextDescription)
+	flag.StringVar(dockerContextFlag, "D", "default", dockerContextDescription)
+	podmanContextFlag := flag.String("podman-context", "", podmanContextDescription)
+	flag.StringVar(podmanContextFlag, "P", "", podmanContextDescription)
+	kubernetesContextFlag := flag.String("kubernetes-context", "default", kubernetesContextDescription)
+	flag.StringVar(kubernetesContextFlag, "K", "default", kubernetesContextDescription)
+	kubernetesNamespaceFlag := flag.String("namespace", "all", namespaceDescription)
+	flag.StringVar(kubernetesNamespaceFlag, "n", "all", namespaceDescription)
+	unitTypeFlag := flag.String("unit-type", "service", unitTypeDescription)
+	flag.StringVar(unitTypeFlag, "U", "service", unitTypeDescription)
+	journalFieldFlag := flag.String("journal-field", "SYSLOG_IDENTIFIER", journalFieldDescription)
+	flag.StringVar(journalFieldFlag, "j", "SYSLOG_IDENTIFIER", journalFieldDescription)
+	journalBootFlag := flag.String("journal-boot", "all", journalBootDescription)
+	flag.StringVar(journalBootFlag, "b", "all", journalBootDescription)
+	pathFlag := flag.String("path", "", pathDescription)
+	flag.StringVar(pathFlag, "p", "", pathDescription)
+	colorModeFlag := flag.String("color-mode", "default", colorModeDescription)
+	flag.StringVar(colorModeFlag, "C", "default", colorModeDescription)
+	commandColor := flag.Bool("command-color", false, commandColorDescription)
+	flag.BoolVar(commandColor, "c", false, commandColorDescription)
+	commandFuzzy := flag.String("command-fuzzy", "", commandFuzzyDescription)
+	flag.StringVar(commandFuzzy, "f", "", commandFuzzyDescription)
+	commandRegex := flag.String("command-regex", "", commandRegexDescription)
+	flag.StringVar(commandRegex, "r", "", commandRegexDescription)
+	sshModeFlag := flag.String("ssh", "", sshDescription)
+	flag.StringVar(sshModeFlag, "s", "", sshDescription)
 
 	// Обработка аргументов
 	flag.Parse()
@@ -1117,8 +1148,8 @@ func runGoCui(mock bool) {
 	}
 
 	// Настройки логирования
-	if config.Settings.loggingPath != "" {
-		app.loggingPath = config.Settings.loggingPath
+	if config.Settings.LoggingPath != "" {
+		app.loggingPath = config.Settings.LoggingPath
 	} else {
 		app.loggingPath = "lazyjournal.log"
 	}
