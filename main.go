@@ -61,6 +61,7 @@ type Settings struct {
 	KubernetesContext   string `yaml:"kubernetesContext"`
 	KubernetesNamespace string `yaml:"kubernetesNamespace"`
 	UnitType            string `yaml:"unitType"`
+	JournalField        string `yaml:"journalField"`
 	CustomPath          string `yaml:"customPath"`
 	ColorMode           string `yaml:"colorMode"`
 	ColorActionsDisable string `yaml:"colorActionsDisable"`
@@ -196,8 +197,9 @@ type App struct {
 	systemDisk    string   // порядковая буква системного диска для Windows
 	userNameArray []string // список всех пользователей
 
-	unitType   string // фильтрация списка юнитов по типу (#46)
-	customPath string // пользовательский путь для поиска логов в файловой системе (#31)
+	unitType     string // фильтрация списка юнитов по типу (#46)
+	journalField string // фильтрация списка журналов по полю
+	customPath   string // пользовательский путь для поиска логов в файловой системе (#31)
 
 	selectUnits                  string // название журнала (systemUnits/userUnits/systemJournals/kernelBoot/auditd)
 	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
@@ -334,6 +336,7 @@ func showHelp() {
 	fmt.Println("    --kubernetes-context, -K   Use the specified Kubernetes context (default: default)")
 	fmt.Println("    --namespace, -n            Use the specified Kubernetes namespace (default: all)")
 	fmt.Println("    --unit-type, -U            Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
+	fmt.Println("    --journal-field, -j        Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)")
 	fmt.Println("    --path, -p                 Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
 	fmt.Println("    --color-mode, -C           Highlighting mode for logs (available values: default, tailspin, bat or disable)")
 	fmt.Println("    --command-color, -c        ANSI coloring in command line mode")
@@ -378,6 +381,7 @@ func showConfig() {
 	fmt.Printf("  kubernetesContext:        %s\n", config.Settings.KubernetesContext)
 	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
 	fmt.Printf("  unitType:                 %s\n", config.Settings.UnitType)
+	fmt.Printf("  journalField:             %s\n", config.Settings.JournalField)
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
 	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
 	fmt.Printf("  colorActionsDisable:      %s\n", config.Settings.ColorActionsDisable)
@@ -1054,6 +1058,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(kubernetesNamespaceFlag, "n", "all", "Use the specified Kubernetes namespace (default: all)")
 	unitTypeFlag := flag.String("unit-type", "service", "Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
 	flag.StringVar(unitTypeFlag, "U", "service", "Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)")
+	journalFieldFlag := flag.String("journal-field", "SYSLOG_IDENTIFIER", "Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)")
+	flag.StringVar(journalFieldFlag, "j", "SYSLOG_IDENTIFIER", "Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)")
 	pathFlag := flag.String("path", "", "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
 	flag.StringVar(pathFlag, "p", "", "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)")
 	colorModeFlag := flag.String("color-mode", "default", "Highlighting mode for logs (available values: default, tailspin, bat or disable)")
@@ -1185,6 +1191,12 @@ func runGoCui(mock bool) {
 		app.unitType = config.Settings.UnitType
 	} else {
 		app.unitType = *unitTypeFlag
+	}
+
+	if config.Settings.JournalField != "" && *journalFieldFlag == "SYSLOG_IDENTIFIER" {
+		app.journalField = config.Settings.JournalField
+	} else {
+		app.journalField = *journalFieldFlag
 	}
 
 	if config.Settings.CustomPath != "" && *pathFlag == "" {
@@ -2103,8 +2115,7 @@ func (app *App) loadServices(journalName string) {
 			boot_id: "_all",
 		})
 		// journalctl -n 1 -o json | jq keys
-		// var field string = "--field=" + app.journalField // SYSLOG_IDENTIFIER/_UID/_PID/_EXE/_COMM
-		var fieldFlag string = "--field=" + "SYSLOG_IDENTIFIER"
+		var fieldFlag string = "--field=" + app.journalField // SYSLOG_IDENTIFIER/_UID/_PID/_COMM/_EXE/_CMDLINE
 		var cmd *exec.Cmd
 		if app.sshMode {
 			cmd = exec.Command(
@@ -2668,7 +2679,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		}
 		// Фильтрация по filed
 		if serviceName != "_all" && selectUnits == "systemJournals" {
-			args = []string{"SYSLOG_IDENTIFIER=" + serviceName}
+			args = []string{app.journalField + "=" + serviceName}
 		}
 		// #46 Добавляем аргумент для пользовательских журналов
 		if app.selectUnits == "userUnits" {
