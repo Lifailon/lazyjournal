@@ -364,17 +364,17 @@ func showHelp() {
 	fmt.Println("    --timezone-filter, -T      " + timezoneFilterDescription)
 	fmt.Println("    --mouse-disable, -m        " + mouseDisableDescription)
 	fmt.Println("    --wrap-disable, -w         " + wrapDisableDescription)
-	fmt.Println("    --docker-stream-only, -o   " + dockerStreamOnlyDescription)
-	fmt.Println("    --docker-context, -D       " + dockerContextDescription)
-	fmt.Println("    --podman-context, -P       " + podmanContextDescription)
-	fmt.Println("    --kubernetes-context, -K   " + kubernetesContextDescription)
-	fmt.Println("    --namespace, -n            " + namespaceDescription)
+	fmt.Println("    --color-mode, -C           " + colorModeDescription)
 	fmt.Println("    --unit-type, -U            " + unitTypeDescription)
 	fmt.Println("    --journal-field, -j        " + journalFieldDescription)
 	fmt.Println("    --journal-priority, -J     " + journalPriorityDescription)
 	fmt.Println("    --journal-boot, -b         " + journalBootDescription)
-	fmt.Println("    --path, -p                 " + pathDescription)
-	fmt.Println("    --color-mode, -C           " + colorModeDescription)
+	fmt.Println("    --custom-path, -p          " + pathDescription)
+	fmt.Println("    --docker-stream-only, -o   " + dockerStreamOnlyDescription)
+	fmt.Println("    --docker-context, -D       " + dockerContextDescription)
+	fmt.Println("    --podman-context, -P       " + podmanContextDescription)
+	fmt.Println("    --kubernetes-context, -K   " + kubernetesContextDescription)
+	fmt.Println("    --kubernetes-namespace, -n " + namespaceDescription)
 	fmt.Println("    --command-color, -c        " + commandColorDescription)
 	fmt.Println("    --command-fuzzy, -f        " + commandFuzzyDescription)
 	fmt.Println("    --command-regex, -r        " + commandRegexDescription)
@@ -410,18 +410,18 @@ func showConfig() {
 	fmt.Printf("  timezoneFilter:           %s\n", config.Settings.TimezoneFilter)
 	fmt.Printf("  mouseDisable:             %s\n", config.Settings.MouseDisable)
 	fmt.Printf("  wrapModeDisable:          %s\n", config.Settings.WrapModeDisable)
-	fmt.Printf("  dockerStreamOnly:         %s\n", config.Settings.DockerStreamOnly)
-	fmt.Printf("  dockerContext:            %s\n", config.Settings.DockerContext)
-	fmt.Printf("  podmanContext:            %s\n", config.Settings.PodmanContext)
-	fmt.Printf("  kubernetesContext:        %s\n", config.Settings.KubernetesContext)
-	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
+	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
+	fmt.Printf("  colorActionsDisable:      %s\n", config.Settings.ColorActionsDisable)
 	fmt.Printf("  unitType:                 %s\n", config.Settings.UnitType)
 	fmt.Printf("  journalField:             %s\n", config.Settings.JournalField)
 	fmt.Printf("  journalPriority:          %s\n", config.Settings.JournalPriority)
 	fmt.Printf("  journalBoot:              %s\n", config.Settings.JournalBoot)
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
-	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
-	fmt.Printf("  colorActionsDisable:      %s\n", config.Settings.ColorActionsDisable)
+	fmt.Printf("  dockerStreamOnly:         %s\n", config.Settings.DockerStreamOnly)
+	fmt.Printf("  dockerContext:            %s\n", config.Settings.DockerContext)
+	fmt.Printf("  podmanContext:            %s\n", config.Settings.PodmanContext)
+	fmt.Printf("  kubernetesContext:        %s\n", config.Settings.KubernetesContext)
+	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
 	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
 
 	fmt.Println("interface:")
@@ -1068,6 +1068,7 @@ func runGoCui(mock bool) {
 	flag.BoolVar(audit, "a", false, auditDescription)
 	loggingFlag := flag.Bool("logging", false, loggingDescription)
 	flag.BoolVar(loggingFlag, "l", false, loggingDescription)
+	// Общие настройки
 	disableScroll := flag.Bool("tail-mode-disable", false, tailModeDisableDescription)
 	flag.BoolVar(disableScroll, "d", false, tailModeDisableDescription)
 	tailFlag := flag.String("tail-lines", "10000", tailLinesDescription)
@@ -1082,16 +1083,9 @@ func runGoCui(mock bool) {
 	flag.BoolVar(mouseDisable, "m", false, mouseDisableDescription)
 	wrapModeDisable := flag.Bool("wrap-disable", false, wrapDisableDescription)
 	flag.BoolVar(wrapModeDisable, "w", false, wrapDisableDescription)
-	dockerStreamFlag := flag.Bool("docker-stream-only", false, dockerStreamOnlyDescription)
-	flag.BoolVar(dockerStreamFlag, "o", false, dockerStreamOnlyDescription)
-	dockerContextFlag := flag.String("docker-context", "default", dockerContextDescription)
-	flag.StringVar(dockerContextFlag, "D", "default", dockerContextDescription)
-	podmanContextFlag := flag.String("podman-context", "", podmanContextDescription)
-	flag.StringVar(podmanContextFlag, "P", "", podmanContextDescription)
-	kubernetesContextFlag := flag.String("kubernetes-context", "default", kubernetesContextDescription)
-	flag.StringVar(kubernetesContextFlag, "K", "default", kubernetesContextDescription)
-	kubernetesNamespaceFlag := flag.String("namespace", "all", namespaceDescription)
-	flag.StringVar(kubernetesNamespaceFlag, "n", "all", namespaceDescription)
+	colorModeFlag := flag.String("color-mode", "default", colorModeDescription)
+	flag.StringVar(colorModeFlag, "C", "default", colorModeDescription)
+	// Специфические настройки
 	unitTypeFlag := flag.String("unit-type", "service", unitTypeDescription)
 	flag.StringVar(unitTypeFlag, "U", "service", unitTypeDescription)
 	journalFieldFlag := flag.String("journal-field", "SYSLOG_IDENTIFIER", journalFieldDescription)
@@ -1100,16 +1094,26 @@ func runGoCui(mock bool) {
 	flag.StringVar(journalPriorityFlag, "J", "debug", journalPriorityDescription)
 	journalBootFlag := flag.String("journal-boot", "all", journalBootDescription)
 	flag.StringVar(journalBootFlag, "b", "all", journalBootDescription)
-	pathFlag := flag.String("path", "", pathDescription)
+	pathFlag := flag.String("custom-path", "", pathDescription)
 	flag.StringVar(pathFlag, "p", "", pathDescription)
-	colorModeFlag := flag.String("color-mode", "default", colorModeDescription)
-	flag.StringVar(colorModeFlag, "C", "default", colorModeDescription)
+	dockerStreamFlag := flag.Bool("docker-stream-only", false, dockerStreamOnlyDescription)
+	flag.BoolVar(dockerStreamFlag, "o", false, dockerStreamOnlyDescription)
+	dockerContextFlag := flag.String("docker-context", "default", dockerContextDescription)
+	flag.StringVar(dockerContextFlag, "D", "default", dockerContextDescription)
+	podmanContextFlag := flag.String("podman-context", "", podmanContextDescription)
+	flag.StringVar(podmanContextFlag, "P", "", podmanContextDescription)
+	kubernetesContextFlag := flag.String("kubernetes-context", "default", kubernetesContextDescription)
+	flag.StringVar(kubernetesContextFlag, "K", "default", kubernetesContextDescription)
+	kubernetesNamespaceFlag := flag.String("kubernetes-namespace", "all", namespaceDescription)
+	flag.StringVar(kubernetesNamespaceFlag, "n", "all", namespaceDescription)
+	// cli
 	commandColor := flag.Bool("command-color", false, commandColorDescription)
 	flag.BoolVar(commandColor, "c", false, commandColorDescription)
 	commandFuzzy := flag.String("command-fuzzy", "", commandFuzzyDescription)
 	flag.StringVar(commandFuzzy, "f", "", commandFuzzyDescription)
 	commandRegex := flag.String("command-regex", "", commandRegexDescription)
 	flag.StringVar(commandRegex, "r", "", commandRegexDescription)
+	// ssh
 	sshModeFlag := flag.String("ssh", "", sshDescription)
 	flag.StringVar(sshModeFlag, "s", "", sshDescription)
 
@@ -1164,128 +1168,6 @@ func runGoCui(mock bool) {
 		app.loggingType = "text"
 	}
 
-	if config.Settings.TailModeDisable != "" && !*disableScroll {
-		if strings.EqualFold(config.Settings.TailModeDisable, "true") {
-			*disableScroll = true
-		}
-	}
-
-	if config.Settings.TailModeLines != "" && *tailFlag == "10000" {
-		tailFlag = &config.Settings.TailModeLines
-	}
-
-	if config.Settings.UpdateInterval != "" && *updateFlag == 5 {
-		updateIntervalInt, err := strconv.Atoi(config.Settings.UpdateInterval)
-		if err == nil {
-			updateFlag = &updateIntervalInt
-		}
-	}
-
-	if config.Settings.MinSymbolFilter != "" && *minSymbolFilterFlag == 3 {
-		minSymbolFilterInt, err := strconv.Atoi(config.Settings.MinSymbolFilter)
-		if err == nil {
-			minSymbolFilterFlag = &minSymbolFilterInt
-		}
-	}
-
-	if config.Settings.TimezoneFilter != "" && *timezoneFilterFlag == "+00:00" {
-		timezoneFilterFlag = &config.Settings.TimezoneFilter
-	}
-
-	if config.Settings.MouseDisable != "" && !*mouseDisable {
-		if strings.EqualFold(config.Settings.MouseDisable, "true") {
-			*mouseDisable = true
-		}
-	}
-
-	if config.Settings.WrapModeDisable != "" && !*wrapModeDisable {
-		if strings.EqualFold(config.Settings.WrapModeDisable, "true") {
-			*wrapModeDisable = true
-		}
-	}
-
-	if config.Settings.DockerStreamOnly != "" && !*dockerStreamFlag {
-		if strings.EqualFold(config.Settings.DockerStreamOnly, "true") {
-			*dockerStreamFlag = true
-		}
-	}
-
-	if config.Settings.DockerContext != "" && *dockerContextFlag == "default" {
-		dockerContextFlag = &config.Settings.DockerContext
-	}
-
-	// Если в конфигурации не задано значение и значение флага по умолчанию пустое, то присваиваем значение из конфигурации
-	if config.Settings.PodmanContext != "" && *podmanContextFlag == "" {
-		podmanContextFlag = &config.Settings.PodmanContext
-	}
-
-	if config.Settings.KubernetesContext != "" && *kubernetesContextFlag == "default" {
-		kubernetesContextFlag = &config.Settings.KubernetesContext
-	}
-
-	if config.Settings.KubernetesNamespace != "" && *kubernetesNamespaceFlag == "all" {
-		kubernetesNamespaceFlag = &config.Settings.KubernetesNamespace
-	}
-
-	if config.Settings.UnitType != "" && *unitTypeFlag == "service" {
-		app.unitType = config.Settings.UnitType
-	} else {
-		app.unitType = *unitTypeFlag
-	}
-
-	if config.Settings.JournalField != "" && *journalFieldFlag == "SYSLOG_IDENTIFIER" {
-		app.journalField = config.Settings.JournalField
-	} else {
-		app.journalField = *journalFieldFlag
-	}
-
-	if config.Settings.JournalPriority != "" && *journalPriorityFlag == "debug" {
-		*journalPriorityFlag = config.Settings.JournalPriority
-	} else {
-		*journalPriorityFlag = *journalPriorityFlag
-	}
-
-	if config.Settings.JournalBoot != "" && *journalBootFlag == "all" {
-		app.journalBoot = config.Settings.JournalBoot
-	} else {
-		app.journalBoot = *journalBootFlag
-	}
-
-	if config.Settings.CustomPath != "" && *pathFlag == "" {
-		pathFlag = &config.Settings.CustomPath
-	}
-
-	if config.Settings.ColorMode != "" && *colorModeFlag == "default" {
-		colorModeFlag = &config.Settings.ColorMode
-	}
-
-	switch {
-	case app.sinceDateFilterMode && !app.untilDateFilterMode:
-		app.filterByDateStatus = "since only"
-	case !app.sinceDateFilterMode && app.untilDateFilterMode:
-		app.filterByDateStatus = "until only"
-	case app.sinceDateFilterMode && app.untilDateFilterMode:
-		app.filterByDateStatus = "since and until"
-	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
-		app.filterByDateStatus = "false"
-	}
-
-	if config.Settings.ColorActionsDisable != "" {
-		if strings.EqualFold(config.Settings.ColorActionsDisable, "true") {
-			app.colorActionsDisable = true
-		}
-	}
-
-	if config.Settings.DisableFastMode != "" {
-		if strings.EqualFold(config.Settings.DisableFastMode, "true") {
-			app.fastMode = false
-		}
-	}
-
-	// Настройки логирования по умолчанию
-	app.loggingPath = "lazyjournal.log"
-	app.loggingType = "text" // "json"
-
 	// Включаем логирование
 	if *loggingFlag {
 		app.logging = true
@@ -1306,7 +1188,24 @@ func runGoCui(mock bool) {
 		slog.Info("Launching lazyjournal")
 	}
 
-	// Проверяем значение флага на валидность
+	// -d/tail-mode-disable
+	if config.Settings.TailModeDisable != "" && !*disableScroll {
+		if strings.EqualFold(config.Settings.TailModeDisable, "true") {
+			*disableScroll = true
+		}
+	}
+
+	if *disableScroll {
+		app.disableAutoScroll = true
+		app.autoScroll = false
+	}
+
+	// -t/--tail-lines
+	if config.Settings.TailModeLines != "" && *tailFlag == "10000" {
+		tailFlag = &config.Settings.TailModeLines
+	}
+
+	// Проверяем значение флага -t/--tail-lines на валидность
 	if *tailFlag == "200" || *tailFlag == "500" || *tailFlag == "1000" ||
 		*tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" ||
 		*tailFlag == "30000" || *tailFlag == "40000" || *tailFlag == "50000" ||
@@ -1323,6 +1222,15 @@ func runGoCui(mock bool) {
 		}
 	}
 
+	// -u/--update-interval
+	if config.Settings.UpdateInterval != "" && *updateFlag == 5 {
+		updateIntervalInt, err := strconv.Atoi(config.Settings.UpdateInterval)
+		if err == nil {
+			updateFlag = &updateIntervalInt
+		}
+	}
+
+	// Проверяем значение флага -u/--update-interval на валидность
 	if *updateFlag >= 2 && *updateFlag <= 10 {
 		app.logUpdateSeconds = *updateFlag
 	} else {
@@ -1335,6 +1243,15 @@ func runGoCui(mock bool) {
 		}
 	}
 
+	// -F/--min-symbols-filter
+	if config.Settings.MinSymbolFilter != "" && *minSymbolFilterFlag == 3 {
+		minSymbolFilterInt, err := strconv.Atoi(config.Settings.MinSymbolFilter)
+		if err == nil {
+			minSymbolFilterFlag = &minSymbolFilterInt
+		}
+	}
+
+	// Проверяем значение флага -F/--min-symbols-filter на валидность
 	if *minSymbolFilterFlag >= 1 && *minSymbolFilterFlag <= 10 {
 		app.minSymbolFilter = *minSymbolFilterFlag
 	} else {
@@ -1347,25 +1264,132 @@ func runGoCui(mock bool) {
 		}
 	}
 
+	//  -T/--timezone-filter
+	if config.Settings.TimezoneFilter != "" && *timezoneFilterFlag == "+00:00" {
+		timezoneFilterFlag = &config.Settings.TimezoneFilter
+	}
+
 	// Значение для временной зоны по умолчанию
 	app.timezoneFilter = "+00:00"
-	// Проверяем формат временной зоны из флага или конфигурации
+	// Проверяем формат временной зоны для флага -T/--timezone-filter на валидность
 	checkTimezone := regexp.MustCompile(`^[+-][0-9]{2}:[0-9]{2}$`)
 	if checkTimezone.MatchString(*timezoneFilterFlag) {
 		app.timezoneFilter = *timezoneFilterFlag
 	}
 
-	if *disableScroll {
-		app.disableAutoScroll = true
-		app.autoScroll = false
+	// -m/--mouse-disable
+	if config.Settings.MouseDisable != "" && !*mouseDisable {
+		if strings.EqualFold(config.Settings.MouseDisable, "true") {
+			*mouseDisable = true
+		}
 	}
 
 	if *mouseDisable {
 		app.mouseSupport = false
 	}
 
+	// -w/--wrap-disable
+	if config.Settings.WrapModeDisable != "" && !*wrapModeDisable {
+		if strings.EqualFold(config.Settings.WrapModeDisable, "true") {
+			*wrapModeDisable = true
+		}
+	}
+
 	if *wrapModeDisable {
 		app.wrapSupport = false
+	}
+
+	// -C/--color-mode
+	if config.Settings.ColorMode != "" && *colorModeFlag == "default" {
+		colorModeFlag = &config.Settings.ColorMode
+	}
+
+	switch *colorModeFlag {
+	case "default", "tailspin", "bat", "disable":
+		app.colorMode = *colorModeFlag
+	default:
+		if *colorModeFlag != config.Settings.ColorMode {
+			fmt.Println("Available values for color mode: default, tailspin, bat or disable")
+			os.Exit(1)
+		} else {
+			app.colorMode = "default"
+		}
+	}
+
+	if config.Settings.ColorActionsDisable != "" {
+		if strings.EqualFold(config.Settings.ColorActionsDisable, "true") {
+			app.colorActionsDisable = true
+		}
+	}
+
+	// -U/--unit-type
+	if config.Settings.UnitType != "" && *unitTypeFlag == "service" {
+		app.unitType = config.Settings.UnitType
+	} else {
+		app.unitType = *unitTypeFlag
+	}
+
+	// -j/--journal-field
+	if config.Settings.JournalField != "" && *journalFieldFlag == "SYSLOG_IDENTIFIER" {
+		app.journalField = config.Settings.JournalField
+	} else {
+		app.journalField = *journalFieldFlag
+	}
+
+	// -J/--journal-priority
+	if config.Settings.JournalPriority != "" && *journalPriorityFlag == "debug" {
+		*journalPriorityFlag = config.Settings.JournalPriority
+	}
+
+	switch *journalPriorityFlag {
+	case "debug", "info", "notice", "warning", "err", "crit", "alert", "emerg":
+		app.journalPriority = *journalPriorityFlag
+	default:
+		if *journalPriorityFlag != config.Settings.JournalPriority {
+			fmt.Println("Available values for filtering by priority: debug, info, notice, warning, err, crit, alert and emerg")
+			os.Exit(1)
+		} else {
+			app.journalPriority = "debug"
+		}
+	}
+
+	// -b/--journal-boot
+	if config.Settings.JournalBoot != "" && *journalBootFlag == "all" {
+		app.journalBoot = config.Settings.JournalBoot
+	} else {
+		app.journalBoot = *journalBootFlag
+	}
+
+	// -p/--custom-path
+	if config.Settings.CustomPath != "" && *pathFlag == "" {
+		pathFlag = &config.Settings.CustomPath
+	}
+
+	if (app.getOS != "windows" && strings.HasPrefix(*pathFlag, "/")) ||
+		(app.getOS == "windows" && (strings.Contains(*pathFlag, ":\\") || strings.Contains(*pathFlag, ":/"))) {
+		app.customPath = *pathFlag
+		app.customPath = strings.TrimSuffix(app.customPath, "/")
+		app.customPath = strings.TrimSuffix(app.customPath, "\\")
+		app.customPath = strings.ReplaceAll(app.customPath, "//", "/")
+		app.customPath = strings.ReplaceAll(app.customPath, "\\\\", "\\")
+	} else {
+		if *pathFlag != config.Settings.CustomPath {
+			fmt.Println("Invalid custom path for " + app.getOS + ": " + *pathFlag)
+			os.Exit(1)
+		} else {
+			if app.getOS == "windows" {
+				app.customPath = winHomeDocsDir()
+			} else {
+				app.customPath = "/opt"
+			}
+		}
+	}
+
+	// -o/--docker-stream-only
+	if config.Settings.DockerStreamOnly != "" && !*dockerStreamFlag {
+		if strings.EqualFold(config.Settings.DockerStreamOnly, "true") {
+			*dockerStreamFlag = true
+		}
 	}
 
 	if *dockerStreamFlag {
@@ -1389,59 +1413,58 @@ func runGoCui(mock bool) {
 		}
 	}
 
+	// -D/--docker-context
+	if config.Settings.DockerContext != "" && *dockerContextFlag == "default" {
+		dockerContextFlag = &config.Settings.DockerContext
+	}
+
 	app.dockerContext = *dockerContextFlag
+
+	// -P/--podman-context
+	// Если в конфигурации не задано значение и значение флага по умолчанию пустое, то присваиваем значение из конфигурации
+	if config.Settings.PodmanContext != "" && *podmanContextFlag == "" {
+		podmanContextFlag = &config.Settings.PodmanContext
+	}
+
 	app.podmanContext = *podmanContextFlag
 
+	// -K/--kubernetes-context
+	if config.Settings.KubernetesContext != "" && *kubernetesContextFlag == "default" {
+		kubernetesContextFlag = &config.Settings.KubernetesContext
+	}
+
 	app.kubernetesContext = *kubernetesContextFlag
+
+	// -n/--kubernetes-namespace
+	if config.Settings.KubernetesNamespace != "" && *kubernetesNamespaceFlag == "all" {
+		kubernetesNamespaceFlag = &config.Settings.KubernetesNamespace
+	}
+
 	app.kubernetesNamespaceStatus = *kubernetesNamespaceFlag
+
 	if *kubernetesNamespaceFlag == "all" {
 		app.kubernetesNamespace = "--all-namespaces"
 	} else {
 		app.kubernetesNamespace = "--namespace=" + *kubernetesNamespaceFlag
 	}
 
-	switch *journalPriorityFlag {
-	case "debug", "info", "notice", "warning", "err", "crit", "alert", "emerg":
-		app.journalPriority = *journalPriorityFlag
-	default:
-		if *journalPriorityFlag != config.Settings.JournalPriority {
-			fmt.Println("Available values for filtering by priority: debug, info, notice, warning, err, crit, alert and emerg")
-			os.Exit(1)
-		} else {
-			app.journalPriority = "debug"
+	// Fast mode (demo)
+	if config.Settings.DisableFastMode != "" {
+		if strings.EqualFold(config.Settings.DisableFastMode, "true") {
+			app.fastMode = false
 		}
 	}
 
-	if (app.getOS != "windows" && strings.HasPrefix(*pathFlag, "/")) ||
-		(app.getOS == "windows" && (strings.Contains(*pathFlag, ":\\") || strings.Contains(*pathFlag, ":/"))) {
-		app.customPath = *pathFlag
-		app.customPath = strings.TrimSuffix(app.customPath, "/")
-		app.customPath = strings.TrimSuffix(app.customPath, "\\")
-		app.customPath = strings.ReplaceAll(app.customPath, "//", "/")
-		app.customPath = strings.ReplaceAll(app.customPath, "\\\\", "\\")
-	} else {
-		if *pathFlag != config.Settings.CustomPath {
-			fmt.Println("Invalid custom path for " + app.getOS + ": " + *pathFlag)
-			os.Exit(1)
-		} else {
-			if app.getOS == "windows" {
-				app.customPath = winHomeDocsDir()
-			} else {
-				app.customPath = "/opt"
-			}
-		}
-	}
-
-	switch *colorModeFlag {
-	case "default", "tailspin", "bat", "disable":
-		app.colorMode = *colorModeFlag
-	default:
-		if *colorModeFlag != config.Settings.ColorMode {
-			fmt.Println("Available values for color mode: default, tailspin, bat or disable")
-			os.Exit(1)
-		} else {
-			app.colorMode = "default"
-		}
+	// Определяем режим фильтрации по времени для статуса
+	switch {
+	case app.sinceDateFilterMode && !app.untilDateFilterMode:
+		app.filterByDateStatus = "since only"
+	case !app.sinceDateFilterMode && app.untilDateFilterMode:
+		app.filterByDateStatus = "until only"
+	case app.sinceDateFilterMode && app.untilDateFilterMode:
+		app.filterByDateStatus = "since and until"
+	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
+		app.filterByDateStatus = "false"
 	}
 
 	// Определяем списки в панелях по умолчанию при запуске интерфейса (#37)
