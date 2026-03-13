@@ -62,6 +62,7 @@ type Settings struct {
 	KubernetesNamespace string `yaml:"kubernetesNamespace"`
 	UnitType            string `yaml:"unitType"`
 	JournalField        string `yaml:"journalField"`
+	JournalPriority     string `yaml:"journalPriority"`
 	JournalBoot         string `yaml:"journalBoot"`
 	CustomPath          string `yaml:"customPath"`
 	ColorMode           string `yaml:"colorMode"`
@@ -198,10 +199,11 @@ type App struct {
 	systemDisk    string   // порядковая буква системного диска для Windows
 	userNameArray []string // список всех пользователей
 
-	unitType     string // фильтрация списков системных и пользовательских юнитов по типу (#46)
-	journalField string // фильтрация списка системных журналов по полю
-	journalBoot  string // фильтрация вывода системных и пользовательских журналов по порядковому номеру загрузки системы
-	customPath   string // пользовательский путь для поиска логов в файловой системе (#31)
+	unitType        string // фильтрация списков системных и пользовательских юнитов по типу (#46)
+	journalField    string // фильтрация списка системных журналов по полю
+	journalPriority string // фильтрация вывода системных и пользовательских журналов по приоритету
+	journalBoot     string // фильтрация вывода системных и пользовательских журналов по порядковому номеру загрузки системы
+	customPath      string // пользовательский путь для поиска логов в файловой системе (#31)
 
 	selectUnits                  string // название журнала (systemUnits/userUnits/systemJournals/kernelBoot/auditd)
 	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
@@ -241,8 +243,6 @@ type App struct {
 
 	// Текст для фильтрации список журналов
 	filterListText string
-	// Приоритет для фильтрации журналов
-	priority string
 
 	// Массивы для хранения списка журналов без фильтрации
 	journalsNotFilter         []Journal
@@ -332,9 +332,10 @@ var (
 	podmanContextDescription     = "Use the specified Podman context (not used by default)"
 	kubernetesContextDescription = "Use the specified Kubernetes context (default: default)"
 	namespaceDescription         = "Use the specified Kubernetes namespace (default: all)"
-	unitTypeDescription          = "Filtering the unit list by type, e.g. \"service,timer,scope,socket,mount\" (default: service)"
-	journalFieldDescription      = "Filtering the system journal list by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)"
-	journalBootDescription       = "Limit log output to the specified system boot period, e.g. 0 current or -1 previous (default: all)"
+	unitTypeDescription          = "Filter the list of user and system units by type, e.g. \"service,timer,scope,socket,mount\" (default: service)"
+	journalFieldDescription      = "Filter the list of system journals by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)"
+	journalPriorityDescription   = "Filter the log output by priority (available values: debug, info, notice, warning, err, crit, alert, emerg)"
+	journalBootDescription       = "Filter the log output by system boot period, e.g. 0 current or -1 previous (default: all)"
 	pathDescription              = "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)"
 	colorModeDescription         = "Highlighting mode for logs (available values: default, tailspin, bat or disable)"
 	commandColorDescription      = "ANSI coloring in command line mode"
@@ -370,6 +371,7 @@ func showHelp() {
 	fmt.Println("    --namespace, -n            " + namespaceDescription)
 	fmt.Println("    --unit-type, -U            " + unitTypeDescription)
 	fmt.Println("    --journal-field, -j        " + journalFieldDescription)
+	fmt.Println("    --journal-priority, -J     " + journalPriorityDescription)
 	fmt.Println("    --journal-boot, -b         " + journalBootDescription)
 	fmt.Println("    --path, -p                 " + pathDescription)
 	fmt.Println("    --color-mode, -C           " + colorModeDescription)
@@ -415,6 +417,7 @@ func showConfig() {
 	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
 	fmt.Printf("  unitType:                 %s\n", config.Settings.UnitType)
 	fmt.Printf("  journalField:             %s\n", config.Settings.JournalField)
+	fmt.Printf("  journalPriority:          %s\n", config.Settings.JournalPriority)
 	fmt.Printf("  journalBoot:              %s\n", config.Settings.JournalBoot)
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
 	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
@@ -1028,7 +1031,6 @@ func runGoCui(mock bool) {
 	}
 
 	// Значения по умолчанию
-	app.priority = "debug"
 	app.globalCurrentView = "filterList"
 
 	// Фиксируем дату для фильтрации
@@ -1094,6 +1096,8 @@ func runGoCui(mock bool) {
 	flag.StringVar(unitTypeFlag, "U", "service", unitTypeDescription)
 	journalFieldFlag := flag.String("journal-field", "SYSLOG_IDENTIFIER", journalFieldDescription)
 	flag.StringVar(journalFieldFlag, "j", "SYSLOG_IDENTIFIER", journalFieldDescription)
+	journalPriorityFlag := flag.String("journal-priority", "debug", journalPriorityDescription)
+	flag.StringVar(journalPriorityFlag, "J", "debug", journalPriorityDescription)
 	journalBootFlag := flag.String("journal-boot", "all", journalBootDescription)
 	flag.StringVar(journalBootFlag, "b", "all", journalBootDescription)
 	pathFlag := flag.String("path", "", pathDescription)
@@ -1233,6 +1237,12 @@ func runGoCui(mock bool) {
 		app.journalField = config.Settings.JournalField
 	} else {
 		app.journalField = *journalFieldFlag
+	}
+
+	if config.Settings.JournalPriority != "" && *journalPriorityFlag == "debug" {
+		*journalPriorityFlag = config.Settings.JournalPriority
+	} else {
+		*journalPriorityFlag = *journalPriorityFlag
 	}
 
 	if config.Settings.JournalBoot != "" && *journalBootFlag == "all" {
@@ -1390,6 +1400,18 @@ func runGoCui(mock bool) {
 		app.kubernetesNamespace = "--namespace=" + *kubernetesNamespaceFlag
 	}
 
+	switch *journalPriorityFlag {
+	case "debug", "info", "notice", "warning", "err", "crit", "alert", "emerg":
+		app.journalPriority = *journalPriorityFlag
+	default:
+		if *journalPriorityFlag != config.Settings.JournalPriority {
+			fmt.Println("Available values for filtering by priority: debug, info, notice, warning, err, crit, alert and emerg")
+			os.Exit(1)
+		} else {
+			app.journalPriority = "debug"
+		}
+	}
+
 	if (app.getOS != "windows" && strings.HasPrefix(*pathFlag, "/")) ||
 		(app.getOS == "windows" && (strings.Contains(*pathFlag, ":\\") || strings.Contains(*pathFlag, ":/"))) {
 		app.customPath = *pathFlag
@@ -1410,10 +1432,10 @@ func runGoCui(mock bool) {
 		}
 	}
 
-	// Проверяем значение флага на валидность
-	if *colorModeFlag == "default" || *colorModeFlag == "tailspin" || *colorModeFlag == "bat" || *colorModeFlag == "disable" {
+	switch *colorModeFlag {
+	case "default", "tailspin", "bat", "disable":
 		app.colorMode = *colorModeFlag
-	} else {
+	default:
 		if *colorModeFlag != config.Settings.ColorMode {
 			fmt.Println("Available values for color mode: default, tailspin, bat or disable")
 			os.Exit(1)
@@ -1888,7 +1910,7 @@ func (app *App) layout(g *gocui.Gui) error {
 			app.logUpdateSeconds,
 			app.colorMode,
 			app.filterByDateStatus,
-			app.priority,
+			app.journalPriority,
 			app.journalBoot,
 			app.timestampDocker,
 			app.sshStatus,
@@ -2731,7 +2753,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		// Фильтрация по порядковому номеру загрузки системы (boot)
 		args = append(args, "--boot="+app.journalBoot)
 		// Фильтрация по приоритету
-		args = append(args, "--priority="+app.priority)
+		args = append(args, "--priority="+app.journalPriority)
 		// Добавляем базовые аргументы
 		args = append(args, "--no-pager")
 		args = append(args, "--lines="+app.logViewCount)
@@ -5671,7 +5693,7 @@ func (app *App) updateStatus() {
 		app.logUpdateSeconds,
 		app.colorMode,
 		app.filterByDateStatus,
-		app.priority,
+		app.journalPriority,
 		app.journalBoot,
 		app.timestampDocker,
 		app.sshStatus,
@@ -8466,23 +8488,23 @@ func (app *App) setupKeybindings() error {
 	// switch priority for journald (Ctrl+P)
 	customPriority, altMode := getHotkey(config.Hotkeys.SwitchPriority, "ctrl+p")
 	if err := app.gui.SetKeybinding("", customPriority, altMode, func(g *gocui.Gui, v *gocui.View) error {
-		switch app.priority {
+		switch app.journalPriority {
 		case "debug":
-			app.priority = "info"
+			app.journalPriority = "info"
 		case "info":
-			app.priority = "notice"
+			app.journalPriority = "notice"
 		case "notice":
-			app.priority = "warning"
+			app.journalPriority = "warning"
 		case "warning":
-			app.priority = "err"
+			app.journalPriority = "err"
 		case "err":
-			app.priority = "crit"
+			app.journalPriority = "crit"
 		case "crit":
-			app.priority = "alert"
+			app.journalPriority = "alert"
 		case "alert":
-			app.priority = "emerg"
+			app.journalPriority = "emerg"
 		case "emerg":
-			app.priority = "debug"
+			app.journalPriority = "debug"
 		}
 		if len(app.currentLogLines) != 0 {
 			app.updateLogsView(true)
