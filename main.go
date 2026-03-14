@@ -961,6 +961,36 @@ var logViewCountMap = map[string]string{
 	"200000": "200K",
 }
 
+// Функция получения списка всех доступных полей в журналах или списка загрузкок системы для проверки значения флага
+func (app *App) journalCheck(mode string) ([]string, error) {
+	var flag string
+	switch mode {
+	case "fields":
+		flag = "--fields"
+	case "boots":
+		flag = "--list-boots"
+	}
+	var cmd *exec.Cmd
+	if app.sshMode {
+		cmd = exec.Command(
+			"ssh", append(app.sshOptions,
+				"journalctl", "--no-pager", flag,
+			)...)
+	} else {
+		cmd = exec.Command(
+			"journalctl", "--no-pager", flag)
+	}
+	if app.logging {
+		slog.Info(cmd.String(), "action", "Check the flag for filter journal")
+	}
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("%s", string(output))
+	} else {
+		return strings.Split(strings.TrimSpace(string(output)), "\n"), nil
+	}
+}
+
 // Функция для опредиления название удаленной системы с timeout в 5 секунд
 func remoteGetOS(sshOptions []string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1177,11 +1207,14 @@ func runGoCui(mock bool) {
 		}
 		defer logFile.Close()
 		var logger *slog.Logger
+		loggingOpts := &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		}
 		if app.loggingType == "json" {
-			jsonHandler := slog.NewJSONHandler(logFile, nil)
+			jsonHandler := slog.NewJSONHandler(logFile, loggingOpts)
 			logger = slog.New(jsonHandler)
 		} else {
-			textHandler := slog.NewTextHandler(logFile, nil)
+			textHandler := slog.NewTextHandler(logFile, loggingOpts)
 			logger = slog.New(textHandler)
 		}
 		slog.SetDefault(logger)
@@ -1336,16 +1369,31 @@ func runGoCui(mock bool) {
 		app.journalField = *journalFieldFlag
 	}
 
+	// Проверяем значение флага -j/--journal-field на валидность и возвращяем список существующих полей
+	if app.journalBoot != "SYSLOG_IDENTIFIER" {
+		fieldList, fieldErr := app.journalCheck("fields")
+		if fieldErr == nil {
+			if !slices.Contains(fieldList, app.journalField) {
+				journaldFieldString := strings.Join(fieldList, ", ")
+				fmt.Println("Field " + app.journalField + " not found")
+				fmt.Println("Available values: " + journaldFieldString)
+				os.Exit(1)
+			}
+		}
+	}
+
 	// -J/--journal-priority
 	if config.Settings.JournalPriority != "" && *journalPriorityFlag == "debug" {
 		*journalPriorityFlag = config.Settings.JournalPriority
 	}
 
+	// Проверяем значение флага -J/--journal-priority на валидность и возвращяем список доступных приоритетов
 	switch *journalPriorityFlag {
 	case "debug", "info", "notice", "warning", "err", "crit", "alert", "emerg":
 		app.journalPriority = *journalPriorityFlag
 	default:
 		if *journalPriorityFlag != config.Settings.JournalPriority {
+			fmt.Println("Priority " + app.journalPriority + " not found")
 			fmt.Println("Available values for filtering by priority: debug, info, notice, warning, err, crit, alert and emerg")
 			os.Exit(1)
 		} else {
@@ -1358,6 +1406,29 @@ func runGoCui(mock bool) {
 		app.journalBoot = config.Settings.JournalBoot
 	} else {
 		app.journalBoot = *journalBootFlag
+	}
+
+	// Проверяем значение флага -b/--journal-boot на валидность и возвращяем список загрузок системы
+	if app.journalBoot != "all" {
+		bootsList, bootsErr := app.journalCheck("boots")
+		if bootsErr == nil {
+			// Переварачиваем массив
+			slices.Reverse(bootsList)
+			// Извлекаем номера загрузок в новый массив для проверки переданного значения
+			bootNumbers := make([]string, 0, len(bootsList))
+			for _, line := range bootsList {
+				bootNumber := strings.Fields(line)[0]
+				bootNumbers = append(bootNumbers, bootNumber)
+			}
+			if !slices.Contains(bootNumbers, app.journalBoot) {
+				fmt.Println("Boot number " + app.journalBoot + " not found")
+				fmt.Println("Available list boots:")
+				for _, line := range bootsList {
+					fmt.Println(line)
+				}
+				os.Exit(1)
+			}
+		}
 	}
 
 	// -p/--custom-path
@@ -2226,7 +2297,7 @@ func (app *App) loadServices(journalName string) {
 				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31mError getting system journals by field from journald\033[0m")
+				fmt.Fprintln(vError, "\033[31mError getting journals by "+app.journalField+" field from journald\033[0m")
 				return
 			} else {
 				vError, _ := app.gui.View("services")
@@ -2238,7 +2309,7 @@ func (app *App) loadServices(journalName string) {
 			}
 		}
 		if err != nil && app.testMode {
-			log.Print("Error: getting system journals by field from journald")
+			log.Print("Error: getting journals by " + app.journalField + " field from journald")
 		}
 		// Создаем массив (хеш-таблица с доступом по ключу) для уникальных имен
 		journalMap := make(map[string]bool)
