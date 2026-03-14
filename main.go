@@ -365,7 +365,7 @@ func showHelp() {
 	fmt.Println("    --mouse-disable, -m        " + mouseDisableDescription)
 	fmt.Println("    --wrap-disable, -w         " + wrapDisableDescription)
 	fmt.Println("    --color-mode, -C           " + colorModeDescription)
-	fmt.Println("    --unit-type, -U            " + unitTypeDescription)
+	fmt.Println("    --unit-types, -U            " + unitTypeDescription)
 	fmt.Println("    --journal-field, -j        " + journalFieldDescription)
 	fmt.Println("    --journal-priority, -J     " + journalPriorityDescription)
 	fmt.Println("    --journal-boot, -b         " + journalBootDescription)
@@ -617,6 +617,11 @@ func (app *App) showAudit() {
 		auditText = append(auditText,
 			"journald:",
 		)
+		// default values
+		app.unitType = "service"
+		app.journalField = "SYSLOG_IDENTIFIER"
+		app.journalPriority = "debug"
+		app.journalBoot = "all"
 		csCheck := exec.Command("journalctl", "--version")
 		_, err := csCheck.Output()
 		if err == nil {
@@ -984,9 +989,6 @@ func (app *App) journalCheck(mode string) ([]string, error) {
 		cmd = exec.Command(
 			cli, "--no-pager", flag)
 	}
-	if app.logging {
-		slog.Info(cmd.String(), "action", "Check the flag")
-	}
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("%s", string(output))
@@ -1120,7 +1122,7 @@ func runGoCui(mock bool) {
 	colorModeFlag := flag.String("color-mode", "default", colorModeDescription)
 	flag.StringVar(colorModeFlag, "C", "default", colorModeDescription)
 	// Специфические настройки
-	unitTypeFlag := flag.String("unit-type", "service", unitTypeDescription)
+	unitTypeFlag := flag.String("unit-types", "service", unitTypeDescription)
 	flag.StringVar(unitTypeFlag, "U", "service", unitTypeDescription)
 	journalFieldFlag := flag.String("journal-field", "SYSLOG_IDENTIFIER", journalFieldDescription)
 	flag.StringVar(journalFieldFlag, "j", "SYSLOG_IDENTIFIER", journalFieldDescription)
@@ -1357,14 +1359,14 @@ func runGoCui(mock bool) {
 		}
 	}
 
-	// -U/--unit-type
+	// -U/--unit-types
 	if config.Settings.UnitType != "" && *unitTypeFlag == "service" {
 		app.unitType = config.Settings.UnitType
 	} else {
 		app.unitType = *unitTypeFlag
 	}
 
-	// Проверяем значение флага -U/--unit-type на валидность и возвращяем список всех существующих типов юнитов
+	// Проверяем значение флага -U/--unit-types на валидность и возвращяем список всех существующих типов юнитов
 	if app.unitType != "service" {
 		unitTypesList, unitTypesErr := app.journalCheck("units")
 		if unitTypesErr == nil {
