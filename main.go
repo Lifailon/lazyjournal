@@ -964,7 +964,11 @@ var logViewCountMap = map[string]string{
 // Функция получения списка всех доступных полей в журналах или списка загрузкок системы для проверки значения флага
 func (app *App) journalCheck(mode string) ([]string, error) {
 	var flag string
+	cli := "journalctl"
 	switch mode {
+	case "units":
+		cli = "systemctl"
+		flag = "--type=help"
 	case "fields":
 		flag = "--fields"
 	case "boots":
@@ -974,14 +978,14 @@ func (app *App) journalCheck(mode string) ([]string, error) {
 	if app.sshMode {
 		cmd = exec.Command(
 			"ssh", append(app.sshOptions,
-				"journalctl", "--no-pager", flag,
+				cli, "--no-pager", flag,
 			)...)
 	} else {
 		cmd = exec.Command(
-			"journalctl", "--no-pager", flag)
+			cli, "--no-pager", flag)
 	}
 	if app.logging {
-		slog.Info(cmd.String(), "action", "Check the flag for filter journal")
+		slog.Info(cmd.String(), "action", "Check the flag")
 	}
 	output, err := cmd.Output()
 	if err != nil {
@@ -1239,12 +1243,10 @@ func runGoCui(mock bool) {
 	}
 
 	// Проверяем значение флага -t/--tail-lines на валидность
-	if *tailFlag == "200" || *tailFlag == "500" || *tailFlag == "1000" ||
-		*tailFlag == "5000" || *tailFlag == "10000" || *tailFlag == "20000" ||
-		*tailFlag == "30000" || *tailFlag == "40000" || *tailFlag == "50000" ||
-		*tailFlag == "100000" || *tailFlag == "150000" || *tailFlag == "200000" {
+	switch *tailFlag {
+	case "200", "500", "1000", "5000", "10000", "20000", "30000", "40000", "50000", "100000", "150000", "200000":
 		app.logViewCount = *tailFlag
-	} else {
+	default:
 		if *tailFlag != config.Settings.TailModeLines {
 			// Если ошибка в флаге, возвращяем ошибку
 			fmt.Println("Available values for tail mode: 200, 500, 1000, 5000, 10000, 20000, 30000, 40000, 50000, 100000, 150000 or 200000 (default: 10K lines)")
@@ -1362,6 +1364,23 @@ func runGoCui(mock bool) {
 		app.unitType = *unitTypeFlag
 	}
 
+	// Проверяем значение флага -U/--unit-type на валидность и возвращяем список всех существующих типов юнитов
+	if app.unitType != "service" {
+		unitTypesList, unitTypesErr := app.journalCheck("units")
+		if unitTypesErr == nil {
+			unitFlagArr := strings.SplitSeq(app.unitType, ",")
+			for unit := range unitFlagArr {
+				if !slices.Contains(unitTypesList, unit) {
+					unitTypesList = unitTypesList[1:]
+					unitTypesString := strings.Join(unitTypesList, ", ")
+					fmt.Println("Unit type " + unit + " not found")
+					fmt.Println("Available unit types: " + unitTypesString)
+					os.Exit(1)
+				}
+			}
+		}
+	}
+
 	// -j/--journal-field
 	if config.Settings.JournalField != "" && *journalFieldFlag == "SYSLOG_IDENTIFIER" {
 		app.journalField = config.Settings.JournalField
@@ -1376,7 +1395,7 @@ func runGoCui(mock bool) {
 			if !slices.Contains(fieldList, app.journalField) {
 				journaldFieldString := strings.Join(fieldList, ", ")
 				fmt.Println("Field " + app.journalField + " not found")
-				fmt.Println("Available values: " + journaldFieldString)
+				fmt.Println("Available fields: " + journaldFieldString)
 				os.Exit(1)
 			}
 		}
@@ -1394,7 +1413,7 @@ func runGoCui(mock bool) {
 	default:
 		if *journalPriorityFlag != config.Settings.JournalPriority {
 			fmt.Println("Priority " + app.journalPriority + " not found")
-			fmt.Println("Available values for filtering by priority: debug, info, notice, warning, err, crit, alert and emerg")
+			fmt.Println("Available priorities: debug, info, notice, warning, err, crit, alert and emerg")
 			os.Exit(1)
 		} else {
 			app.journalPriority = "debug"
