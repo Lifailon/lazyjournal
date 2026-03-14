@@ -10,21 +10,28 @@ settings:
   timezoneFilter: +00:00
   mouseDisable: false
   wrapModeDisable: false
+  colorMode: default
+  colorActionsDisable: false
+  # Filter the list of user and system units by type (e.g. service,timer,scope,socket,mount)
+  unitType: service
+  # Filter the list of system journals by field (e.g. _UID/_PID/_COMM/_EXE/_CMDLINE)
+  journalField: SYSLOG_IDENTIFIER
+  # Filter the log output by priority (available values: debug, info, notice, warning, err, crit, alert, emerg)
+  journalPriority: debug
+  # Filter the log output by system boot period (e.g. 0 current or -1 previous)
+  journalBoot: all
+  customPath: ""
   dockerStreamOnly: false
   dockerContext: default
   podmanContext: ""
   kubernetesContext: default
   kubernetesNamespace: all
-  unitType: service
-  customPath: ""
-  colorMode: default
-  colorActionsDisable: false
   disableFastMode: false
 
 # Default interface settings
 interface:
   # Lists in panels when the interface is started
-  # Available system log lists: systemUnits, userUnits, kernelBoot, auditd
+  # Available system log lists: systemUnits, userUnits, systemJournals, kernelBoot, auditd
   systemLogList: systemUnits
   # Available file log lists: varlog, customPath, home, descriptor
   fileLogList: varlog
