@@ -24,7 +24,7 @@ on:
         default: false
         type: boolean
       Release:
-        description: 'Check flags and release in tmux'
+        description: 'Check pre-release (flags and tmux)'
         default: false
         type: boolean
       Binary:
@@ -95,7 +95,7 @@ jobs:
           echo "- **OS**: ${{ github.event.inputs.Distro }}" >> build-info.md
           echo "- **Update dependencies in modules**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}" >> build-info.md
           echo "- **Go unit testing**: ${{ github.event.inputs.Test == 'true' && '✅' || '❌' }}" >> build-info.md
-          echo "- **Check flags and release in [tmux](https://github.com/tmux/tmux)**: ${{ github.event.inputs.Release == 'true' && '✅' || '❌' }}" >> build-info.md
+          echo "- **Check pre-release (flags and tmux)**: ${{ github.event.inputs.Release == 'true' && '✅' || '❌' }}" >> build-info.md
           echo "- **Build binary and deb packages**: ${{ github.event.inputs.Binary == 'true' && '✅' || '❌' }}" >> build-info.md
           echo "- **Update version in README**: ${{ github.event.inputs.README == 'true' && '✅' || '❌' }}" >> build-info.md
           
@@ -171,13 +171,19 @@ jobs:
           env "PATH=$PATH" go test -v -cover --run "TestDockerContainer"
           cat -e lazyjournal.log
 
-      - name: Check cli mode (color and filter) for container
+      - name: Check cli mode (color and filter) for container logs
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'ubuntu-24.04' }}
         continue-on-error: true
         run: |
+          echo "=== Check color ==="
           docker logs lazyjournal | go run main.go -c
+          echo "=== Check fuzzy search ==="
           docker logs lazyjournal | go run main.go -f "start"
+          echo "=== Check fuzzy search and color ==="
           docker logs lazyjournal | go run main.go -r "start|close"
+          echo "=== Check regex search ==="
+          docker logs lazyjournal | go run main.go -c -f "start"
+          echo "=== Check regex search and color ==="
           docker logs lazyjournal | go run main.go -c -r "start|close"
 
       # Unit testing in macOS
@@ -259,7 +265,7 @@ jobs:
         shell: pwsh
         run: Get-Content test-report.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
 
-      # Release check (flags and tmux)
+      # Check pre-release (flags and tmux)
 
       - name: Install binary from last commit on GitHub
         if: ${{ github.event.inputs.Release == 'true' }}
@@ -270,22 +276,33 @@ jobs:
       - name: Check flags (cli mode)
         if: ${{ github.event.inputs.Release == 'true' }}
         run: |
-          echo -e "\n\033[32mVersion:\033[0m\n"
+          green="\n\033[32m"
+          uncolor="\033[0m"
+          echo -e "$green Help: $uncolor"
+          lazyjournal -h
+          echo -e "$green Version: $uncolor"
           lazyjournal -v
-          echo -e "\n\033[32mConfig:\033[0m\n"
+          echo -e "$green Config: $uncolor"
           lazyjournal -g
-          echo -e "\n\033[32mAudit:\033[0m\n"
+          echo -e "$green Audit: $uncolor"
           lazyjournal -a
-          echo -e "\n\033[32mColoring:\033[0m\n"
+          echo -e "$green Coloring: $uncolor"
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -c
-          echo -e "\n\033[32mFiltering in fuzzy mode:\033[0m\n"
+          echo -e "$green Filtering in fuzzy mode: $uncolor"
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -f "error"
-          echo -e "\n\033[32mFiltering in fuzzy mode with output coloring:\033[0m\n"
+          echo -e "$green Filtering in fuzzy mode with output coloring: $uncolor"
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -f "error" -c
-          echo -e "\n\033[32mFiltering in regex mode:\033[0m\n"
+          echo -e "$green Filtering in regex mode: $uncolor"
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -r "error|fatal|fail|crash"
-          echo -e "\n\033[32mFiltering in regex mode with output coloring:\033[0m\n"
+          echo -e "$green Filtering in regex mode with output coloring: $uncolor"
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -r "error|fatal|fail|crash" -c
+
+      - name: Check interface run and get log
+        if: ${{ github.event.inputs.Release == 'true' }}
+        run: |
+          script -e -q -c "timeout 10s env TERM=xterm-256color COLUMNS=150 LINES=50 lazyjournal -l" interface.log > /dev/null
+          cat interface.log
+          cat lazyjournal.log
 
       - name: Check interface in TMUX
         if: ${{ github.event.inputs.Release == 'true' }}
