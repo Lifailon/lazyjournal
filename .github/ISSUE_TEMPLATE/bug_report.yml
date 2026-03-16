@@ -36,12 +36,6 @@ body:
     validations:
       required: true
 
-  - type: markdown
-    attributes:
-      value: |
-        Before opening an issue, please check the log source content manually, this will help understand the problem more accurately and resolve it faster.
-        If you have an error running the executable, check running from source code (if you have the ability to install Go) and specify it in the installation method.
-
   - type: checkboxes
     id: install-method
     attributes:
@@ -51,6 +45,11 @@ body:
         - label: Source code
         - label: Docker container
 
+  - type: markdown
+    attributes:
+      value: |
+        If you get errors using the executable, check that it works when running it from source (if you have Go installed), and add that to your list of installation methods.
+
   - type: textarea
     id: description
     attributes:
@@ -58,3 +57,9 @@ body:
       description: Briefly describe the problem and transmit the contents of the error
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        Before opening an issue if you have trouble loading lists or logs, please test access to logs on the command line. This will help us better understand the issue and resolve it faster.
+        To find out what system commands are used during application execution, enable logging when starting the interface using the `-l/--logging` flag and check the `lazyjournal.log` file.

@@ -10,12 +10,13 @@ body:
       default: 0
       options:
         - Interface
+        - Configuration
         - System journals
-        - File system
-        - Containerization system
+        - File journals
+        - Container journals
         - Filtering
-        - Coloring
-        - Output
+        - Highlighting/Coloring
+        - Log output
         - New
     validations:
       required: true
