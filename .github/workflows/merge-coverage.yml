@@ -89,7 +89,13 @@ jobs:
       - name: Run all unit test in Linux
         run: |
           sudo go test -v -cover -coverprofile linux-coverage.out
-          cat -e lazyjournal.log
+          cat lazyjournal.log
+          echo "```log" >> lazyjournal-log.md
+          cat lazyjournal.log >> lazyjournal-log.md
+          echo "```" >> lazyjournal-log.md
+          if [[ "${{ inputs.Debug }}" == "true" ]]; then
+              cat lazyjournal-log.md >> $GITHUB_STEP_SUMMARY
+          fi
         continue-on-error: true
         timeout-minutes: 10
 
@@ -112,6 +118,12 @@ jobs:
         with:
           name: linux-coverage
           path: linux-coverage.out
+
+      - name: Upload lazyjournal log file
+        uses: actions/upload-artifact@v7
+        with:
+          name: lazyjournal-log
+          path: lazyjournal-log.md
 
   Docker:
     runs-on: ubuntu-24.04
@@ -286,6 +298,12 @@ jobs:
           name: linux-coverage
           path: .
 
+      - name: Download lazyjournal log file
+        uses: actions/download-artifact@v8
+        with:
+          name: lazyjournal-log
+          path: .
+
       - name: Download coverage report for Docker without root
         uses: actions/download-artifact@v8
         with:
@@ -359,7 +377,7 @@ jobs:
           mdReport=$(echo "$out" | sed -E 's/.+\///' | sed "s/:/ /g" | head -n -1)
           title="File Line Function Coverage"
           separator="- - - -"
-          echo "# 📚 Merge test results" >> $GITHUB_STEP_SUMMARY
+          echo "# 📚 Functions Coverage" >> $GITHUB_STEP_SUMMARY
           echo "Test coverage results for all functions:" >> $GITHUB_STEP_SUMMARY
           mdReport=$(echo -e "$title\n$separator\n$mdReport")
           echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
@@ -423,11 +441,17 @@ jobs:
       - name: Merge all reports
         run: |
           echo "# 🐧 Linux" >> all-report.md
+          echo "Log reading and coloring performance results when testing on Linux" >> all-report.md
           cat "test-linux-report.md" >> all-report.md
           echo "# 🍏 macOS" >> all-report.md
+          echo "Log reading and coloring performance results when testing on macOS" >> all-report.md
           cat "test-macos-report.md" >> all-report.md
           echo "# 💻 Windows" >> all-report.md
+          echo "Log reading and coloring performance results when testing on Windows" >> all-report.md
           cat "test-windows-report.md" >> all-report.md
+          echo "# 📄 Log" >> all-report.md
+          echo "Log of executed commands during interface testing" >> all-report.md
+          cat "lazyjournal-log.md" >> all-report.md
 
       - name: Upload final report
         uses: actions/upload-artifact@v7
