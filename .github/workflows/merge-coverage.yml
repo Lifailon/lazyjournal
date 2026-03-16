@@ -144,7 +144,6 @@ jobs:
           docker compose version
           cd docker/debian
           sed "s/TTYD=false/TTYD=true/" docker-compose.yml -i
-          cd docker/debian
           docker compose up -d
           docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
 
