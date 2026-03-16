@@ -32,7 +32,7 @@ func TestWinFiles(t *testing.T) {
 	// Создаем файл отчета
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
-	file.WriteString("## Windows File Logs\n")
+	file.WriteString("## Windows file logs\n")
 	file.WriteString("| Lines | Read | Color | Path |\n")
 	file.WriteString("|-------|------|-------|------|\n")
 
@@ -174,7 +174,7 @@ func TestUnixFiles(t *testing.T) {
 
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
-	file.WriteString("## Unix File Logs\n")
+	file.WriteString("## Unix file logs\n")
 	file.WriteString("| Lines | Read | Color | Path |\n")
 	file.WriteString("|-------|------|-------|------|\n")
 
@@ -244,7 +244,7 @@ func TestLinuxJournal(t *testing.T) {
 
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
-	file.WriteString("## Linux journals\n")
+	file.WriteString("## System logs\n")
 	file.WriteString("| Lines | Read | Color | Journal Name |\n")
 	file.WriteString("|-------|------|-------|--------------|\n")
 
@@ -318,7 +318,7 @@ func TestLinuxJournal(t *testing.T) {
 func TestDockerContainer(t *testing.T) {
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
-	file.WriteString("## Containers\n")
+	file.WriteString("## Container logs\n")
 	file.WriteString("| Lines | Read | Color | Container Name |\n")
 	file.WriteString("|-------|------|-------|----------------|\n")
 
@@ -863,7 +863,7 @@ func TestMockInterface(t *testing.T) {
 		if err != nil {
 			log.Panicln(err)
 		}
-		v.Title = " < Windows Event Logs (0) > "
+		v.Title = " < Windows event logs (0) > "
 		go func() {
 			app.loadWinEvents()
 		}()
