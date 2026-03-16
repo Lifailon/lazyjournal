@@ -60,7 +60,7 @@ Supports 4 filtering modes:
 - **Default** - case sensitive exact search.
 - **Fuzzy** (like `fzf`) - custom inexact case-insensitive search (searches for all phrases separated by a space anywhere on a line).
 - **Regex** (like `grep`) - search with regular expression support, based on the built-in [regexp](https://pkg.go.dev/regexp) library, case-insensitive by default (in case a regular expression syntax error occurs, the input field will be highlighted in red).
-- **Date** - filtering by date (`since` and/or `until`) for journald logs, as well as Docker or Podman containers (only supported in streaming mode) using the left and right arrow keys. This mode affects log loading (this is especially relevant for large logs, thereby increasing performance) and can be used in combination with other filtering modes.
+- **Date** - filtering by date (`since` and/or `until`) for journald logs, as well as Docker or Podman containers (only supported in streaming mode) using the left and right arrow keys. This mode can be used in combination with other filtering modes and can improve loading performance for large logs. Changing the UTC offset is supported using the `-T/--timezone-filter` flag or the `timezoneFilter` configuration parameter (default: `+00:00`).
 
 ### Highlighting
 
@@ -113,7 +113,7 @@ sudo apt install -y lazyjournal
 Or download the `deb` package from the GitHub releases page for installation on any Debian-based system.
 
 ```bash
-curl -sSL https://github.com/Lifailon/lazyjournal/releases/download/0.8.5/lazyjournal-0.8.5-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
+curl -sSL https://github.com/Lifailon/lazyjournal/releases/download/0.8.6/lazyjournal-0.8.6-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
 sudo apt install -y /tmp/lazyjournal.deb && rm /tmp/lazyjournal.deb
 ```
 
@@ -156,16 +156,16 @@ Download the [docker-compose](/docker/debian/docker-compose.yml) file and run th
 mkdir lazyjournal && cd lazyjournal
 curl -sSL https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/docker/debian/docker-compose.yml -o docker-compose.yml
 docker compose up -d
-docker exec -it lazyjournal lazyjournal
+docker attach lazyjournal
 ```
 
-The image is based on Debian with `systemd`, docker cli, `docker-compose` and `kubectl` pre-installed. The necessary permissions are already pre-set in the file to support all log sources from the host system.
+The image comes pre-installed with the packages required for the application to run. Read-only access rights are pre-configured in the compose file to support all log sources from the host system.
 
-To access Kubernetes logs, you need to forward the configuration to the container. If you're using a local cluster (e.g., k3s), change the cluster server address in the configuration to the host address on the local network.
+To access Kubernetes logs, you need to forward the configuration to the container. If you're using a local cluster (e.g. k3s), change the cluster server address in the configuration to the host address on the local network.
 
 ### Web mode
 
-Supports running in a container with a Web interface, using [ttyd](https://github.com/tsl0922/ttyd) to access logs via a browser. To do this, edit the variables:
+The container comes pre-configured with a [ttyd](https://github.com/tsl0922/ttyd). To manage the interface via a web browser, edit the following variables:
 
 ```env
 # Enable Web mode
@@ -212,13 +212,13 @@ go install github.com/Lifailon/lazyjournal@latest
 
 You can start the interface from anywhere: `lazyjournal` or use `lazyjournal -h` for help on available flags.
 
-The application is an interface for viewing logs with the ability to filter them for analysis. Therefore, to access the logs themselves, it is necessary that such programs as [docker-cli](https://github.com/docker/cli), [compose](https://github.com/docker/compose), [podman](https://github.com/containers/podman) and [kubectl](https://github.com/kubernetes/kubectl) are already installed on your system.
+The application is an interface for viewing logs with the ability to filter them for analysis. Therefore, to access the logs themselves, it is necessary that such programs as [docker-cli](https://github.com/docker/cli), [docker-compose](https://github.com/docker/compose), [podman](https://github.com/containers/podman) and [kubectl](https://github.com/kubernetes/kubectl) are already installed on your system. To write executed commands to a log file, use the `-l/--logging` flag when starting the application.
 
 Access to all system logs and containers may require elevated privileges for the current user. For example, if a user does not have read permission to the directory `/var/lib/docker/containers`, they will not be able to access all archived logs from the moment the container is started, but only from the moment the containerization system is started, so the process of reading logs is different. However, reading in streaming mode is faster than parsing json logs from the file system.
 
 ### Configuration
 
-Hotkeys, interface settings and application flag values can be overridden using the [config](/config.yml) file (see [#23](https://github.com/Lifailon/lazyjournal/issues/23), [#27](https://github.com/Lifailon/lazyjournal/issues/27) and [#37](https://github.com/Lifailon/lazyjournal/issues/37) issues), which can be located in `~/.config/lazyjournal/config.yml`, as well as next to the executable file or in the current startup directory (has high priority).
+Hotkeys, interface settings and application flag values can be overridden using the [config](/config.yml) file (see [#23](https://github.com/Lifailon/lazyjournal/issues/23), [#27](https://github.com/Lifailon/lazyjournal/issues/27) and [#37](https://github.com/Lifailon/lazyjournal/issues/37) issues), which can be located in `~/.config/lazyjournal/config.yml`, as well as next to the executable file or in the current directory from which the program is run (has high priority).
 
 Mouse control is supported (but can also be disabled with the `-m` flag or configuration) for selecting window and the log from list, as well as lists and logs scrolling. To copy text, use the `Alt+Shift` key combination while selecting.
 
