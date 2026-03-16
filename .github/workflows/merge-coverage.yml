@@ -90,9 +90,9 @@ jobs:
         run: |
           sudo go test -v -cover -coverprofile linux-coverage.out
           cat lazyjournal.log
-          echo "```log" > lazyjournal-log.md
+          echo "\`\`\`log" > lazyjournal-log.md
           cat lazyjournal.log >> lazyjournal-log.md
-          echo "```" >> lazyjournal-log.md
+          echo "\`\`\`" >> lazyjournal-log.md
           if [[ "${{ inputs.Debug }}" == "true" ]]; then
               cat lazyjournal-log.md >> $GITHUB_STEP_SUMMARY
           fi
