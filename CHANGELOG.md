@@ -1,3 +1,29 @@
+## Release 0.8.6
+
+### New features
+
+- Added new journal settings to the configuration file for enhanced control.
+- Introduced `journal-boot` flag to limit log output to the specified system boot period.
+- Added `journal-field` flag for filtering system journals.
+- Implemented system journal list feature with filtering by field.
+- Added journal priority flag for prioritizing log entries.
+- Introduced unit types check flag and corresponding config parameter for filtering the unit list by type.
+- Added checks for scroll position and filtered log length in the UI.
+- Enhanced logging functionality in test and CI environments, including exec commands and tmux tests.
+- Added Docker support improvements, such as light Alpine-based images, additional flags for VSCode config, Docker ignore file, and new Dockerfile path parameter for workflows.
+- Improved package installation in Docker images, including ca-certificates and build-app dependencies.
+- Updated Go version and implemented go install/check during builds for consistency.
+
+### Fixes
+
+- Moved flag descriptions to environment variables and fixed logging path in config.
+- Changed flags' order for improved usability and consistency.
+- Updated retrieval of unit lists to replace old logs and fixed loading of user logs.
+- Relocated install scripts, Dockerfiles, and compose files for better project structure and maintainability.
+- Fixed build and workflow issues related to Docker image creation, install paths, and branch handling for new releases.
+- Updated test scenarios for Linux journals and CLI mode to improve coverage and reliability.
+- Improved audit configuration and check run container functionality.
+
 ## Release 0.8.5
 
 ### New features
