@@ -262,6 +262,7 @@ type App struct {
 
 	// Настройка логирования приложения
 	logging     bool
+	loggingFile *os.File
 	loggingPath string
 	loggingType string
 
@@ -903,6 +904,32 @@ func (config *Config) getConfig() (string, error) {
 	return configPath, err
 }
 
+func (app *App) setupLogging() {
+	app.logging = true
+	logFile, err := os.OpenFile(
+		app.loggingPath,
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+		0666,
+	)
+	if err != nil {
+		return
+	}
+	app.loggingFile = logFile
+	var logger *slog.Logger
+	loggingOpts := &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}
+	if app.loggingType == "json" {
+		jsonHandler := slog.NewJSONHandler(logFile, loggingOpts)
+		logger = slog.New(jsonHandler)
+	} else {
+		textHandler := slog.NewTextHandler(logFile, loggingOpts)
+		logger = slog.New(textHandler)
+	}
+	slog.SetDefault(logger)
+	slog.Info("Launching lazyjournal")
+}
+
 // Предварительная компиляция регулярных выражений для покраски вывода и их доступности в тестах
 var (
 	// Исключаем все до http:// (включительно) в начале строки
@@ -1191,7 +1218,7 @@ func runGoCui(mock bool) {
 		}
 	}
 
-	// Настройки логирования
+	// Настройки логирования из конфигурации
 	if config.Settings.LoggingPath != "" {
 		app.loggingPath = config.Settings.LoggingPath
 	} else {
@@ -1206,25 +1233,8 @@ func runGoCui(mock bool) {
 
 	// Включаем логирование
 	if *loggingFlag {
-		app.logging = true
-		logFile, errOpenFile := os.OpenFile(app.loggingPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if errOpenFile != nil {
-			return
-		}
-		defer logFile.Close()
-		var logger *slog.Logger
-		loggingOpts := &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		}
-		if app.loggingType == "json" {
-			jsonHandler := slog.NewJSONHandler(logFile, loggingOpts)
-			logger = slog.New(jsonHandler)
-		} else {
-			textHandler := slog.NewTextHandler(logFile, loggingOpts)
-			logger = slog.New(textHandler)
-		}
-		slog.SetDefault(logger)
-		slog.Info("Launching lazyjournal")
+		app.setupLogging()
+		defer app.loggingFile.Close()
 	}
 
 	// -d/tail-mode-disable
