@@ -2115,7 +2115,7 @@ func (app *App) loadServices(journalName string) {
 		})
 		// (1) Получаем список всех юнитов со статусом работы через systemctl в формате JSON
 		var unitsList *exec.Cmd
-		var unitTypeFlag string = "--type=" + app.unitType // "service,timer,scope,socket,mount" (default: service)
+		var unitTypeFlag = "--type=" + app.unitType // "service,timer,scope,socket,mount" (default: service)
 		if app.sshMode {
 			if journalName == "systemUnits" {
 				unitsList = exec.Command(
@@ -2305,7 +2305,7 @@ func (app *App) loadServices(journalName string) {
 			boot_id: "_all",
 		})
 		// journalctl -n 1 -o json | jq keys
-		var fieldFlag string = "--field=" + app.journalField // SYSLOG_IDENTIFIER/_UID/_PID/_COMM/_EXE/_CMDLINE
+		var fieldFlag = "--field=" + app.journalField // SYSLOG_IDENTIFIER/_UID/_PID/_COMM/_EXE/_CMDLINE
 		var cmd *exec.Cmd
 		if app.sshMode {
 			cmd = exec.Command(
@@ -7231,11 +7231,9 @@ func (app *App) updateLogsView(lowerDown bool) {
 		var viewLines = 0                             // количество строк для вывода
 		var viewCounter = 0                           // обратный счетчик видимых строк для остановки
 		var viewIndex = len(app.filteredLogLines) - 1 // начальный индекс для строк с конца
-		for {
+		for viewIndex >= 0 && viewIndex < len(app.filteredLogLines) {
 			// #45 Проверка, что индекс не вышел за пределы массива (исправлено: проверка ДО использования индекса)
-			if viewIndex < 0 || viewIndex >= len(app.filteredLogLines) {
-				break
-			}
+
 			// Фиксируем текущую входную строку и счетчик
 			viewLines += 1
 			viewCounter += 1
