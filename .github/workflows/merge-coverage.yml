@@ -87,7 +87,9 @@ jobs:
           tailspin --version
 
       - name: Run all unit test in Linux
-        run: sudo go test -v -cover -coverprofile linux-coverage.out
+        run: |
+          sudo go test -v -cover -coverprofile linux-coverage.out
+          cat -e lazyjournal.log
         continue-on-error: true
         timeout-minutes: 10
 

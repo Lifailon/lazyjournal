@@ -167,7 +167,9 @@ jobs:
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'ubuntu-24.04' }}
         continue-on-error: true
         timeout-minutes: 5
-        run: env "PATH=$PATH" go test -v -cover --run "TestDockerContainer"
+        run: |
+          env "PATH=$PATH" go test -v -cover --run "TestDockerContainer"
+          cat -e lazyjournal.log
 
       - name: Check cli mode (color and filter) for container
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'ubuntu-24.04' }}
