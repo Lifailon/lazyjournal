@@ -167,9 +167,7 @@ jobs:
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'ubuntu-24.04' }}
         continue-on-error: true
         timeout-minutes: 5
-        run: |
-          env "PATH=$PATH" go test -v -cover --run "TestDockerContainer"
-          cat lazyjournal.log
+        run: env "PATH=$PATH" go test -v -cover --run "TestDockerContainer"
 
       - name: Check cli mode (color and filter) for container logs
         if: ${{ github.event.inputs.Test == 'true' && github.event.inputs.Distro == 'ubuntu-24.04' }}
@@ -332,7 +330,7 @@ jobs:
           echo -e "$green Filter logs using regex: $uncolor"
           tmux capture-pane -p
           tmux kill-session -t test-session
-          echo -e "\nLog:\n"
+          echo -e "$green Log: $uncolor"
           cat lazyjournal.log
 
       # Telegram report

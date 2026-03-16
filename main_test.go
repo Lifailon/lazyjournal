@@ -926,7 +926,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "test help interface (F1)"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// Check ssh and context manager (F2)
@@ -935,7 +935,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "test ssh and context manager interface (F2)"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// Check highlighting (coloring)
@@ -958,7 +958,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "test highlighting (coloring)"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// Обновить вывод лога
@@ -966,7 +966,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "update log (Ctrl+R)"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// Проверяем фильтрацию текста для списков
@@ -979,7 +979,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "test filter lists"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// Очистка фильтров
@@ -988,7 +988,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "clear filters before exit (Ctrl+C)"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// Проверяем фильтрацию по timestamp
@@ -998,14 +998,14 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "test filter timestamp"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// TAB journals
 	if debug {
 		textLog := "tab to journals"
 		t.Log(debugLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
@@ -1027,97 +1027,97 @@ func TestMockInterface(t *testing.T) {
 			if debug {
 				textLog := "List next (right)"
 				t.Log(debugLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "User units (UNIT)"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "System journals (USER_UNIT)"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "Kernel boot"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "Audit rules keys (auditd)"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "System units (services)"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			// Влево
 			if debug {
 				textLog := "List back (left)"
 				t.Log(debugLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "Audit rules keys (auditd)"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "Kernel boot"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "System journals (USER_UNIT)"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "User units (UNIT)"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "System units (services)"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 		}
 	}
 	if debug {
 		textLog := "test journals"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// TAB filesystem
 	if debug {
 		textLog := "tab to filesystem"
 		t.Log(debugLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
@@ -1138,83 +1138,83 @@ func TestMockInterface(t *testing.T) {
 			if debug {
 				textLog := "List next (right)"
 				t.Log(debugLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Optional package logs and custom path"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Users home logs"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Process descriptor logs"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "System var logs"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			// Влево
 			if debug {
 				textLog := "List back (left)"
 				t.Log(debugLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Process descriptor logs"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Users home logs"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Optional package logs and custom path"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "System var logs"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 		}
 	}
 	if debug {
 		textLog := "test filesystem"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// TAB containerization system
 	if debug {
 		textLog := "tab to containerization system"
 		t.Log(debugLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
@@ -1235,83 +1235,83 @@ func TestMockInterface(t *testing.T) {
 			if debug {
 				textLog := "List next (right)"
 				t.Log(debugLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setContainersListRight(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Compose"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setContainersListRight(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Podman"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setContainersListRight(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Kubernetes"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setContainersListRight(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Docker"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			// Влево
 			if debug {
 				textLog := "List back (left)"
 				t.Log(debugLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setContainersListLeft(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Kubernetes"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setContainersListLeft(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Podman"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setContainersListLeft(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Compose"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 			app.setContainersListLeft(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Docker"
 				t.Log(passLog + textLog)
-				slog.Info(textLog, "action", "test")
+				slog.Debug(textLog)
 			}
 		}
 	}
 	if debug {
 		textLog := "test containers"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// TAB filter logs
 	if debug {
 		textLog := "tab to filter logs"
 		t.Log(debugLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 	app.nextView(g, nil)
 
@@ -1326,7 +1326,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "test filter logs output"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// Проверяем режимы фильтрации
@@ -1335,82 +1335,82 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Filter mode next (up)"
 			t.Log(debugLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter fuzzy"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter regex"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter timestamp"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter default"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		// Вниз
 		if debug {
 			textLog := "Filter mode back (down)"
 			t.Log(debugLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter timestamp"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter regex"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter fuzzy"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter default"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 	}
 	if debug {
 		textLog := "test filter modes"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// TAB logs output
 	if debug {
 		textLog := "Tab to logs output"
 		t.Log(debugLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 	app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
@@ -1419,49 +1419,49 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Up tail"
 			t.Log(debugLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 20K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 30K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 40K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 50K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 100K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 150K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
@@ -1470,83 +1470,83 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Tail 200K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		// Down tail
 		if debug {
 			textLog := "Down tail"
 			t.Log(debugLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 150K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 100K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 50K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 40K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 30K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 20K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 10K (default)"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 5K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 1K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 500"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
@@ -1555,48 +1555,48 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Tail 200"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 
 		}
 		// Up tail (return)
 		if debug {
 			textLog := "Up tail (return)"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 500"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 1K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 5K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 10K"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		// Up logs output on 1
 		if debug {
 			textLog := "Up logs output on 1"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.scrollUpLogs(1)
 		time.Sleep(1 * time.Second)
@@ -1604,7 +1604,7 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Up logs output on 10 (Shift+Up)"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.scrollUpLogs(10)
 		time.Sleep(1 * time.Second)
@@ -1612,7 +1612,7 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Up logs output on 500 (Alt+Up)"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.scrollUpLogs(500)
 		time.Sleep(1 * time.Second)
@@ -1622,7 +1622,7 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Down logs output on 1"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.scrollDownLogs(1)
 		time.Sleep(1 * time.Second)
@@ -1630,7 +1630,7 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Down logs output on 10 (Shift+Down)"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.scrollDownLogs(10)
 		time.Sleep(1 * time.Second)
@@ -1638,7 +1638,7 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Down logs output on 500 (Alt+Down)"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.scrollDownLogs(500)
 		time.Sleep(1 * time.Second)
@@ -1646,7 +1646,7 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Move log output to top (Ctrl+A/Home)"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.pageUpLogs()
 		time.Sleep(1 * time.Second)
@@ -1654,7 +1654,7 @@ func TestMockInterface(t *testing.T) {
 		if debug {
 			textLog := "Move log output to down (Ctrl+E/End)"
 			t.Log(passLog + textLog)
-			slog.Info(textLog, "action", "test")
+			slog.Debug(textLog)
 		}
 		app.updateLogsView(true)
 		time.Sleep(1 * time.Second)
@@ -1662,7 +1662,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "test log output"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// TAB filter lists
@@ -1687,7 +1687,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "test back tab (Shift+Tab)"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// Проверяем переключение окон с помощью мыши
@@ -1706,7 +1706,7 @@ func TestMockInterface(t *testing.T) {
 	if debug {
 		textLog := "test mouse"
 		t.Log(passLog + textLog)
-		slog.Info(textLog, "action", "test")
+		slog.Debug(textLog)
 	}
 
 	// Переключаем режим фильтрации на timestamp
