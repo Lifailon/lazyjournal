@@ -107,13 +107,13 @@ jobs:
             Title: ${{ github.event.issue.title }}
             Description: ${{ github.event.issue.body }}
 
-      - name: Post comment from AI
+      - name: Post comment to Issue from AI
         if: ${{ github.event_name == 'issues' && github.event.action == 'opened' && steps.ai_query.outputs.response != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           AI_RESPONSE: ${{ steps.ai_query.outputs.response }}
         run: |
-          gh pr comment "$PR_NUMBER" --body "### AI Issue Analysis
+          gh issue comment "$ISSUE_NUMBER" --body "### AI Issue Analysis
           
           $AI_RESPONSE"
