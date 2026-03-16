@@ -61,7 +61,8 @@ jobs:
           max-tokens: 2048
           system-prompt: |
             You are a technical writer.
-            Analyze the Git commit log and create a summary of the changes. Focus on code changes.
+            Analyze the Git commit log and create a summary of the changes.
+            Focus on changes in the code and ignore any changes related to the GitHub Actions system.
             The summary must be in Markdown format in English and contain two key headings: "### New features" and "### Fixes"
             There is no need to add a release title and commit numbers.
           prompt: |
