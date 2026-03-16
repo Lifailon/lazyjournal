@@ -278,10 +278,9 @@ jobs:
         run: |
           green="\n\033[32m"
           uncolor="\033[0m"
+          echo -e "$green Version: $uncolor $(lazyjournal -v)"
           echo -e "$green Help: $uncolor"
           lazyjournal -h
-          echo -e "$green Version: $uncolor"
-          lazyjournal -v
           echo -e "$green Config: $uncolor"
           lazyjournal -g
           echo -e "$green Audit: $uncolor"
@@ -300,8 +299,7 @@ jobs:
       - name: Check interface run and get log
         if: ${{ github.event.inputs.Release == 'true' }}
         run: |
-          script -e -q -c "timeout 10s env TERM=xterm-256color COLUMNS=150 LINES=50 lazyjournal -l" interface.log > /dev/null || [ $? -eq 124 ]
-          cat interface.log
+          script -e -q -c "timeout 10s lazyjournal -l" /dev/null > /dev/null 2>&1 || [ $? -eq 124 ]
           cat lazyjournal.log
 
       - name: Check interface in TMUX

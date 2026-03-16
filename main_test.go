@@ -275,6 +275,10 @@ func TestLinuxJournal(t *testing.T) {
 				dateTimeRegex:      dateTimeRegex,
 				integersInputRegex: integersInputRegex,
 				syslogUnitRegex:    syslogUnitRegex,
+				unitType:           "service",
+				journalField:       "SYSLOG_IDENTIFIER",
+				journalPriority:    "debug",
+				journalBoot:        "all",
 			}
 
 			app.loadServices(app.selectUnits)
