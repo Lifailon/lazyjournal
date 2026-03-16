@@ -296,43 +296,44 @@ jobs:
           echo -e "$green Filtering in regex mode with output coloring: $uncolor"
           curl -s https://raw.githubusercontent.com/Lifailon/lazyjournal/refs/heads/main/color.log | lazyjournal -r "error|fatal|fail|crash" -c
 
-      - name: Check interface run and get log
-        if: ${{ github.event.inputs.Release == 'true' }}
-        run: |
-          script -e -q -c "timeout 10s lazyjournal -l" /dev/null > /dev/null 2>&1 || [ $? -eq 124 ]
-          cat lazyjournal.log
-
       - name: Check interface in TMUX
         if: ${{ github.event.inputs.Release == 'true' }}
         run: |
-          tmux new-session -d -s test-session "lazyjournal"
+          green="\n\033[32m"
+          uncolor="\033[0m"
+          tmux new-session -d -s test-session "lazyjournal -l"
           sleep 1
           tmux capture-pane -p
           tmux send-keys -t test-session "$(echo -e 'cron')"
           tmux send-keys -t test-session "$(echo -e '\t')"        # Tab
           tmux send-keys -t test-session "$(echo -e '\r')"        # Enter
           sleep 3
+          echo -e "$green Cron.service logs: $uncolor"
           tmux capture-pane -p
           tmux send-keys -t test-session "$(echo -e '\t\t\t\t\t')"
           for i in {1..4}; do tmux send-keys -t test-session "$(echo -e '\x7f')"; done
           tmux send-keys -t test-session "$(echo -e 'lazy')"
-          tmux send-keys -t test-session "$(echo -e '\t\t\t')"
+          tmux send-keys -t test-session "$(echo -e '\t\t\t')"    # Tab x3
           tmux send-keys -t test-session "$(echo -e '\x1b[C')"    # Right
           sleep 1
           tmux send-keys -t test-session "$(echo -e '\x1b[D')"    # Left
           sleep 1
-          tmux send-keys -t test-session "$(echo -e '\r')"
+          tmux send-keys -t test-session "$(echo -e '\r')"        # Enter
           sleep 3
+          echo -e "$green Container logs: $uncolor"
           tmux capture-pane -p
-          tmux send-keys -t test-session "$(echo -e '\t')"
+          tmux send-keys -t test-session "$(echo -e '\t')"        # Tab
           tmux send-keys -t test-session "$(echo -e '\x1b[A')"    # Up
           tmux send-keys -t test-session "$(echo -e '\x1b[B')"    # Down
-          tmux send-keys -t test-session "$(echo -e '\x1b[B')"
-          tmux send-keys -t test-session "$(echo -e '\x1b[B')"
+          tmux send-keys -t test-session "$(echo -e '\x1b[B')"    # Down
+          tmux send-keys -t test-session "$(echo -e '\x1b[B')"    # Down
           tmux send-keys -t test-session "$(echo -e 'tty|port')"
           sleep 3
+          echo -e "$green Filter logs using regex: $uncolor"
           tmux capture-pane -p
           tmux kill-session -t test-session
+          echo -e "\nLog:\n"
+          cat lazyjournal.log
 
       # Telegram report
 
