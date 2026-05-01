@@ -2869,11 +2869,11 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		}
 		// Фильтрация по юниту (unit)
 		if serviceName != "_all" && selectUnits != "systemJournals" {
-			args = []string{"--unit=" + serviceName}
+			args = append(args, "--unit="+serviceName)
 		}
 		// Фильтрация по полю (field)
 		if serviceName != "_all" && selectUnits == "systemJournals" {
-			args = []string{app.journalField + "=" + serviceName}
+			args = append(args, app.journalField+"="+serviceName)
 		}
 		// Фильтрация по порядковому номеру загрузки системы (boot)
 		args = append(args, "--boot="+app.journalBoot)
