@@ -38,6 +38,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Build deb package and push to PPA
