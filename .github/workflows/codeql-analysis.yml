@@ -1,12 +1,10 @@
-name: CodeQL Advanced
+name: CodeQL Security Scan
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  schedule:
-    - cron: '44 6 * * 5'
 
 jobs:
   analyze:
