@@ -17,12 +17,9 @@ engines:
 languages:
   go:
     enabled: true
-include_paths:
-  - "**/*.go"
-  - "go.mod"
-  - "go.sum"
 exclude_paths:
-  - "playground/**"
   - "img/**"
+  - "playground/**"
+  - "scripts/**"
   - "**/*.md"
   - "**/*.log"

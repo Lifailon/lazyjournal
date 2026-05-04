@@ -72,7 +72,7 @@ jobs:
           sed -i "s/latest/$version/g" snapcraft.yaml
           mkdir packages
           for arch in amd64 arm64; do
-            sed -i "s/latest/$arch/g" snapcraft.yaml
+            sed -i -E "s/(amd64|arm64)/$arch/g" snapcraft.yaml            
             snapcraft --destructive-mode
             mv *.snap packages/lazyjournal-$version-$arch.snap
             sed -i "s/$arch/latest/g" snapcraft.yaml
