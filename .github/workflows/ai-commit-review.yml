@@ -1,4 +1,4 @@
-name: AI Commit Review
+name: "[AI] Commit review"
 
 on:
   workflow_dispatch:

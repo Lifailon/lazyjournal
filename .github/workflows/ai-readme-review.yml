@@ -1,4 +1,4 @@
-name: AI README Review
+name: "[AI] README review"
 
 on:
   workflow_dispatch:

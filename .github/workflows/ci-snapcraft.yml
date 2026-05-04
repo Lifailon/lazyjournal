@@ -74,9 +74,8 @@ jobs:
           for arch in amd64 arm64; do
             sed -i -E "s/(amd64|arm64)/$arch/g" snapcraft.yaml
             snapcraft clean --destructive-mode
-            GOARCH=$arch snapcraft --destructive-mode --build-for=$arch
+            GOARCH=$arch snapcraft pack --destructive-mode
             mv *.snap packages/lazyjournal-$version-$arch.snap
-            sed -i "s/$arch/latest/g" snapcraft.yaml
           done
           ls packages/*.snap
 

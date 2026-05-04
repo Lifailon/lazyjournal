@@ -24,12 +24,10 @@ jobs:
 
       - name: Fix encoding to UTF-8
         run: |
-          sudo apt-get install -y uchardet
           find . -type f -name "*.go" | while read -r file; do
-            encoding=$(uchardet "$file")
-            if [ "$encoding" != "UTF-8" ] && [ "$encoding" != "ASCII" ]; then
-              echo "Converting $file from $encoding to UTF-8"
-              iconv -f "$encoding" -t UTF-8 "$file" -o "$file.tmp" && mv "$file.tmp" "$file"
+            if ! iconv -f UTF-8 -t UTF-8 "$file" >/dev/null 2>&1; then
+              echo "File $file is not UTF-8"
+              iconv -f CP1251 -t UTF-8 "$file" -o "$file.tmp" && mv "$file.tmp" "$file"
             fi
           done
 
