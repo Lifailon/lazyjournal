@@ -1,5 +1,5 @@
 # build-app lazyjournal and download dependency packages
-FROM golang:1.24-alpine3.23 AS build-app
+FROM golang:1.25-alpine3.23 AS build-app
 
 COPY go.mod go.sum ./
 RUN go mod download

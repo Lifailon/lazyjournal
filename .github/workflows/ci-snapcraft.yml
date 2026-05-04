@@ -56,12 +56,14 @@ jobs:
                 command: bin/lazyjournal
             parts:
               lazyjournal:
-                  plugin: dump
-                  source: .
-                  override-build: |
-                    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/lazyjournal-latest-linux-amd64
-                    mkdir -p $SNAPCRAFT_PART_INSTALL/bin
-                    cp ./bin/lazyjournal-latest-linux-amd64 $SNAPCRAFT_PART_INSTALL/bin/lazyjournal
+                plugin: go
+                source: .
+                build-snaps:
+                  - go/1.25/stable
+                override-build: |
+                  CGO_ENABLED=0 go build -o bin/lazyjournal-latest-linux-amd64
+                  mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+                  cp ./bin/lazyjournal-latest-linux-amd64 $SNAPCRAFT_PART_INSTALL/bin/lazyjournal
             EOF
 
       - name: Build snap package for amd64 and arm64

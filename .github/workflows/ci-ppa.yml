@@ -37,6 +37,10 @@ on:
         description: 'Publish to PPA'
         default: false
         type: boolean
+      Upload:
+        description: 'Upload deb packages to artifacts'
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -155,3 +159,11 @@ jobs:
         if: ${{ github.event.inputs.Install != 'true' && github.event.inputs.Push == 'true' }}
         run: |
           dput ppa:lifailon/lazyjournal *.changes
+
+      - name: Upload deb package to artifacts
+        if: ${{ github.event.inputs.Install != 'true' && github.event.inputs.Upload == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: deb-packages
+          path: ./*.deb
+          if-no-files-found: error
