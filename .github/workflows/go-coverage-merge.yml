@@ -494,7 +494,7 @@ jobs:
       - name: Update markdown report on Wiki
         if: ${{ github.event.inputs.Markdown == 'true' }}
         run: |
-          echo -e '# Report for $(go run main.go -v) release\n' > wiki/home.md
+          echo -e "# Report for $(go run main.go -v) release\n" > wiki/home.md
           echo -e 'The test coverage report in `html` format using [go-coverage-report](https://github.com/marketplace/actions/go-coverage-report) is available [here](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.html).\n' >> wiki/home.md
           echo -e 'During testing, the interface operation is checked in the disabled `tcell` mode, as well as the reading and coloring time of all available logs in Linux, macOS and Windows systems.\n' >> wiki/home.md
           echo -e 'To combine test results from different systems [gosovmerge](https://github.com/wadey/gocovmerge) is used.\n' >> wiki/home.md

@@ -1,4 +1,4 @@
-name: "[CI] Build binary and unit testing"
+name: "[CI] Build and unit testing"
 
 on:
   workflow_dispatch:
@@ -458,8 +458,8 @@ jobs:
         if: ${{ github.event.inputs.README == 'true' && env.VERSION != '' }}
         run: | 
           sed -i -E "s|releases/download/[0-9.]+/lazyjournal-[0-9.]+-|releases/download/$VERSION/lazyjournal-$VERSION-|" README.md
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
           git add README.md
           git commit -m "update version on $VERSION for install deb package"
           git push origin main

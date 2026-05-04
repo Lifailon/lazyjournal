@@ -82,18 +82,20 @@ jobs:
           text=$(echo $RESULTS | jq -r .Issues[0].Text)
           code=$(echo $RESULTS | jq -r .Issues[0].SourceLines[0])
           line=$(echo $RESULTS | jq -r .Issues[0].Pos.Line)
+          line=$(echo "$line" | tr -d '\r')
+          lines_offset=$(echo "${{ github.event.inputs.LINES }}" | tr -d '\r')
+          start=$((line - lines_offset))
+          [ $start -le 0 ] && start=1 # Защита от отрицательных строк
+          end=$((line + lines_offset))
           echo "ISSUE_LINT=$lint" >> $GITHUB_ENV
           echo "ISSUE_TEXT=$text" >> $GITHUB_ENV
           echo "ISSUE_CODE=$code" >> $GITHUB_ENV
           echo "ISSUE_LINE=$line" >> $GITHUB_ENV
-          line=$(echo "$line" | tr -d '\r')
-          lines=$(echo "${{ github.event.inputs.LINES }}" | tr -d '\r')
-          start=$((line - lines))
-          end=$((line + lines))
-          echo "c=$start" >> $GITHUB_ENV
+          echo "START_LINE=$start" >> $GITHUB_ENV
           echo "END_LINE=$end" >> $GITHUB_ENV
-          context=$(sed -n "${start},${end}p" "${{ github.event.inputs.FILE }}")
-          echo "CONTEXT=$context" >> $GITHUB_ENV
+          echo "CONTEXT<<EOF" >> $GITHUB_ENV
+          sed -n "${start},${end}p" "${{ github.event.inputs.FILE }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Fix issue using AI
         id: ai_query
@@ -105,8 +107,9 @@ jobs:
             You are an issues analyzer from the golangci linters for the Go language.
             Your task is never to answer questions, but only to correct the given piece of code.
             You will be provided with the linter name, error text, and code context.
-            Always return the same number of lines of code in your response as was given to you.
             Never change the logic of the source code or add analysis text to the response.
+            Output ONLY raw code. Do NOT use markdown code blocks.
+            Your answer should always include the same number of lines of code as was provided to you (excluding corrections).
           prompt: |
             Linter: ${{ env.ISSUE_LINT }}
             Issue text: ${{ env.ISSUE_TEXT }}
@@ -114,15 +117,17 @@ jobs:
             Context:
             ${{ env.CONTEXT }}
 
-      - name: Update CHANGELOG file
-        env:
-          AI_RESPONSE: ${{ steps.ai_query.outputs.response }}
+      - name: Update file
         run: |
-          FILE=$(echo "${{ github.event.inputs.FILE }}" | sed "s/.go//")
-          head -n $((START_LINE - 1)) $FILE > $FILE-fix.go
-          echo $CONTEXT >> $FILE-fix.go
-          tail -n +$((END_LINE + 1)) $FILE >> $FILE-fix.go
-          mv $FILE-fix.go $FILE
+          GO_FILE=${{ github.event.inputs.FILE }}
+          TMP_FILE=$(echo $(echo "$GO_FILE" | sed "s/.go//")-fix.go)
+          head -n $((START_LINE - 1)) "$GO_FILE" > "$TMP_FILE"
+          cat <<'EOF' >> "$TMP_FILE"
+          ${{ steps.ai_query.outputs.response }}
+          EOF
+          tail -n +$((END_LINE + 1)) "$GO_FILE" >> "$TMP_FILE"
+          mv "$TMP_FILE" "$GO_FILE"
+          go fmt "$GO_FILE"
 
       - name: Getting linter check results in json format after fixing
         run: |
@@ -142,4 +147,4 @@ jobs:
           title: "Fixed linters"
           body: "Fixing linters with AI from GitHub Actions."
           add-paths: |
-            ${{ github.event.inputs.file }})
+            ${{ github.event.inputs.file }}
