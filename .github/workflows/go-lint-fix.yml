@@ -104,12 +104,14 @@ jobs:
           model: gpt-4.1
           max-tokens: 2048
           system-prompt: |
-            You are an issues analyzer from the golangci linters for the Go language.
-            Your task is never to answer questions, but only to correct the given piece of code.
-            You will be provided with the linter name, error text, and code context.
-            Never change the logic of the source code or add analysis text to the response.
-            Output ONLY raw code. Do NOT use markdown code blocks.
-            Your answer should always include the same number of lines of code as was provided to you (excluding corrections).
+            You are a Go code refactoring expert. 
+            Task: Fix golangci-lint issues in the provided code snippet.
+            Rules:
+            1. Output ONLY the fixed code.
+            2. NO explanations, NO markdown blocks (no ```go).
+            3. Do not change any logic except what is required by the linter.
+            4. You must return the FULL provided context, including the fixes.
+            5. Ensure the code is syntactically complete and doesn't cut off.
           prompt: |
             Linter: ${{ env.ISSUE_LINT }}
             Issue text: ${{ env.ISSUE_TEXT }}
@@ -126,13 +128,23 @@ jobs:
           ${{ steps.ai_query.outputs.response }}
           EOF
           tail -n +$((END_LINE + 1)) "$GO_FILE" >> "$TMP_FILE"
+          echo "## Issue" >> $GITHUB_STEP_SUMMARY
+          echo "Linter: ${{ env.ISSUE_LINT }}" >> $GITHUB_STEP_SUMMARY
+          echo "Issue text: ${{ env.ISSUE_TEXT }}" >> $GITHUB_STEP_SUMMARY
+          echo "Line of code with an error: `${{ env.ISSUE_CODE }}`" >> $GITHUB_STEP_SUMMARY
+          echo "Issue count before fixing: ${{ env.ISSUES_COUNT }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Fix diff" >> $GITHUB_STEP_SUMMARY
+          go fmt "$TMP_FILE"
+          echo "```diff" >> $GITHUB_STEP_SUMMARY
+          diff -u "$GO_FILE" "$TMP_FILE" >> $GITHUB_STEP_SUMMARY || true
+          echo "```" >> $GITHUB_STEP_SUMMARY
           mv "$TMP_FILE" "$GO_FILE"
-          go fmt "$GO_FILE"
 
       - name: Getting linter check results in json format after fixing
         run: |
           results=$(golangci-lint run --output.json.path stdout --show-stats=false --issues-exit-code 0 ${{ github.event.inputs.file }})
           count=$(echo "$results" | jq ".Issues | length")
+          echo "Issue count after fixing: $count" >> $GITHUB_STEP_SUMMARY
           if [ "$count" -lt "$ISSUES_COUNT" ]; then
             echo "FIXED=true" >> $GITHUB_ENV
           fi
@@ -144,7 +156,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "fix linters using ai"
           branch: "fix/${{ env.APP_VERSION }}-lint"
-          title: "Fixed linters"
-          body: "Fixing linters with AI from GitHub Actions."
+          title: "Fixing linters"
+          body: |
+            Fixing linters with AI from GitHub Actions.
+            Linter: ${{ env.ISSUE_LINT }}
+            Issue text: ${{ env.ISSUE_TEXT }}
+            Line of code with an error: `${{ env.ISSUE_CODE }}`
           add-paths: |
             ${{ github.event.inputs.file }}

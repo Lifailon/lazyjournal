@@ -198,7 +198,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "autofix linters using golangci"
           branch: "fix/${{ env.APP_VERSION }}-lint"
-          title: "Fixed linters"
+          title: "Fixing linters"
           body: "Automatically fixing linters with golangci from GitHub Actions."
           add-paths: |
             main.go
