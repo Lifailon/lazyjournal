@@ -1,4 +1,9 @@
 ---
+engines:
+  remark-lint:
+    enabled: false
+  cloc:
+    enabled: true
 languages:
   go:
     enabled: true
@@ -9,3 +14,5 @@ include_paths:
 exclude_paths:
   - "playground/**"
   - "img/**"
+  - "**/*.md"
+  - "**/*.txt"
