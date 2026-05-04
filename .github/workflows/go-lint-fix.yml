@@ -128,22 +128,23 @@ jobs:
           ${{ steps.ai_query.outputs.response }}
           EOF
           tail -n +$((END_LINE + 1)) "$GO_FILE" >> "$TMP_FILE"
-          echo "## Issue" >> $GITHUB_STEP_SUMMARY
-          echo "Linter: ${{ env.ISSUE_LINT }}" >> $GITHUB_STEP_SUMMARY
-          echo "Issue text: ${{ env.ISSUE_TEXT }}" >> $GITHUB_STEP_SUMMARY
-          echo "Line of code with an error: `${{ env.ISSUE_CODE }}`" >> $GITHUB_STEP_SUMMARY
-          echo "Issue count before fixing: ${{ env.ISSUES_COUNT }}" >> $GITHUB_STEP_SUMMARY
-          echo "## Fix diff" >> $GITHUB_STEP_SUMMARY
           go fmt "$TMP_FILE"
-          echo "```diff" >> $GITHUB_STEP_SUMMARY
-          diff -u "$GO_FILE" "$TMP_FILE" >> $GITHUB_STEP_SUMMARY || true
-          echo "```" >> $GITHUB_STEP_SUMMARY
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ## Issue ${{ env.ISSUE_LINT }}
+          ${{ env.ISSUE_TEXT }}
+          \`${{ env.ISSUE_CODE }}\`
+          ## Fix diff
+          \`\`\`diff
+          $(diff -u "$GO_FILE" "$TMP_FILE" || true)
+          \`\`\`
+          EOF
           mv "$TMP_FILE" "$GO_FILE"
 
       - name: Getting linter check results in json format after fixing
         run: |
           results=$(golangci-lint run --output.json.path stdout --show-stats=false --issues-exit-code 0 ${{ github.event.inputs.file }})
           count=$(echo "$results" | jq ".Issues | length")
+          echo "Issue count before fixing: $ISSUES_COUNT" >> $GITHUB_STEP_SUMMARY
           echo "Issue count after fixing: $count" >> $GITHUB_STEP_SUMMARY
           if [ "$count" -lt "$ISSUES_COUNT" ]; then
             echo "FIXED=true" >> $GITHUB_ENV
@@ -158,9 +159,8 @@ jobs:
           branch: "fix/${{ env.APP_VERSION }}-lint"
           title: "Fixing linters"
           body: |
-            Fixing linters with AI from GitHub Actions.
-            Linter: ${{ env.ISSUE_LINT }}
-            Issue text: ${{ env.ISSUE_TEXT }}
-            Line of code with an error: `${{ env.ISSUE_CODE }}`
+            ## ${{ env.ISSUE_LINT }}
+            ${{ env.ISSUE_TEXT }}
+            `${{ env.ISSUE_CODE }}`
           add-paths: |
             ${{ github.event.inputs.file }}
