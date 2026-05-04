@@ -20,11 +20,23 @@ jobs:
       actions: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+
+      - name: Fix encoding to UTF-8
+        run: |
+          sudo apt-get install -y uchardet
+          find . -type f -name "*.go" | while read -r file; do
+            encoding=$(uchardet "$file")
+            if [ "$encoding" != "UTF-8" ] && [ "$encoding" != "ASCII" ]; then
+              echo "Converting $file from $encoding to UTF-8"
+              iconv -f "$encoding" -t UTF-8 "$file" -o "$file.tmp" && mv "$file.tmp" "$file"
+            fi
+          done
 
       - name: Run Codacy Analysis CLI
         uses: codacy/codacy-analysis-cli-action@d840f886c4bd4edc059706d09c6a1586111c540b
+        env:
+          JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8"
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           verbose: true
