@@ -1,11 +1,16 @@
 name: "[SAST] Snyk"
 
 on:
-  workflow_dispatch:
   # push:
   #   branches: ["main"]
   # pull_request:
   #   branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      Upload:
+        description: 'Upload SARIF results file'
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -34,7 +39,8 @@ jobs:
       - name: Snyk OSS/SCA analysis and uploads result to Snyk
         run: snyk monitor --all-projects || true
 
-      - name: Upload result to GitHub Code Scanning
+      - name: Upload SARIF results file
+        if: ${{ github.event.inputs.Upload == 'true' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: snyk-code.sarif

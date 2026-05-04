@@ -85,7 +85,7 @@ jobs:
           line=$(echo "$line" | tr -d '\r')
           lines_offset=$(echo "${{ github.event.inputs.LINES }}" | tr -d '\r')
           start=$((line - lines_offset))
-          [ $start -le 0 ] && start=1 # Защита от отрицательных строк
+          [ $start -le 0 ] && start=1
           end=$((line + lines_offset))
           echo "ISSUE_LINT=$lint" >> $GITHUB_ENV
           echo "ISSUE_TEXT=$text" >> $GITHUB_ENV
@@ -107,11 +107,12 @@ jobs:
             You are a Go code refactoring expert. 
             Task: Fix golangci-lint issues in the provided code snippet.
             Rules:
-            1. Output ONLY the fixed code.
+            1. Output ONLY the fixed source code.
             2. NO explanations, NO markdown blocks (no ```go).
             3. Do not change any logic except what is required by the linter.
             4. You must return the FULL provided context, including the fixes.
-            5. Ensure the code is syntactically complete and doesn't cut off.
+            5. It is necessary to fix errors from the linter so that re-checking does not cause errors.
+            6. If the linter complains about dynamic errors, ensure the result doesn't create a new dynamic one.
           prompt: |
             Linter: ${{ env.ISSUE_LINT }}
             Issue text: ${{ env.ISSUE_TEXT }}

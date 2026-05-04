@@ -1,11 +1,16 @@
 name: "[SAST] Semgrep"
 
 on:
+  # push:
+  #   branches: ["main"]
+  # pull_request:
+  #   branches: ["main"]
   workflow_dispatch:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+    inputs:
+      Upload:
+        description: 'Upload SARIF results file'
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -32,8 +37,8 @@ jobs:
 
       - run: semgrep scan --config auto --sarif --output=semgrep.sarif
 
-      - name: Upload SARIF file
+      - name: Upload SARIF results file
+        if: ${{ github.event.inputs.Upload == 'true' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: semgrep.sarif
-        if: always()
