@@ -1,4 +1,4 @@
-name: Build snap packages and push to Snapcraft
+name: "[CI] Build snap packages and push to Snapcraft"
 
 on:
   workflow_dispatch:

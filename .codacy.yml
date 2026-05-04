@@ -2,8 +2,18 @@
 engines:
   remark-lint:
     enabled: false
-  cloc:
+  duplication:
+    enabled: false
+  metrics:
+    enabled: false
+  revive:
     enabled: true
+    include_paths:
+      - "main.go"
+      - "main_test.go"
+    config:
+      languages:
+        - "go"
 languages:
   go:
     enabled: true
@@ -15,4 +25,4 @@ exclude_paths:
   - "playground/**"
   - "img/**"
   - "**/*.md"
-  - "**/*.txt"
+  - "**/*.log"

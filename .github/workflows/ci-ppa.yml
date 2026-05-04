@@ -1,4 +1,4 @@
-name: Build deb packages and push to Ubuntu PPA
+name: "[CI] Build deb packages and push to Ubuntu PPA"
 
 on:
   workflow_dispatch:

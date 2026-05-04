@@ -1,4 +1,4 @@
-name: Build rpm packages and push to Fedora Copr
+name: "[CI] Build rpm packages and push to Fedora Copr"
 
 on:
   workflow_dispatch:
