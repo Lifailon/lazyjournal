@@ -9,11 +9,11 @@ body:
       label: System
       default: 0
       options:
-        - linux
+        - Linux
         - macOS
-        - openbsd
-        - freebsd
-        - windows
+        - OpenBSD
+        - FreeBSD
+        - Windows
     validations:
       required: true
 
@@ -42,8 +42,9 @@ body:
       label: Installation method
       options:
         - label: Binary
-        - label: Source code
+        - label: Package manager
         - label: Docker container
+        - label: Source code
 
   - type: markdown
     attributes:
