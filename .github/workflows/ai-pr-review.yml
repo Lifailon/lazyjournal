@@ -76,7 +76,7 @@ jobs:
 
     steps:
       - name: Checkout repository (merge branch and 1 last commits)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -211,7 +211,7 @@ jobs:
 
     steps:
       - name: Checkout repository (merge branch and 1 last commits)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 

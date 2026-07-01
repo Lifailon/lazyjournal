@@ -28,10 +28,10 @@ jobs:
       actions: read
     
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Snyk CLI to check for security issues
-        uses: snyk/actions/setup@806182742461562b67788a64410098c9d9b96adb
+        uses: snyk/actions/setup@8e119fbb6c251787721d34ba683ed48eba792766
 
       - name: Snyk Code analysis (SAST) and uploads result into GitHub
         run: snyk code test --sarif > snyk-code.sarif || true

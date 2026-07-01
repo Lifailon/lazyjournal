@@ -33,7 +33,7 @@ jobs:
     if: (github.actor != 'dependabot[bot]')
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - run: semgrep scan --config auto --sarif --output=semgrep.sarif
 
