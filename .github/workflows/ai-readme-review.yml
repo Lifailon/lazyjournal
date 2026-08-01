@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Read README
         id: read_file
@@ -45,7 +45,7 @@ jobs:
 
       - name: AI-powered README file review
         id: ai_review
-        uses: actions/ai-inference@v2
+        uses: actions/ai-inference@v2.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           endpoint: https://models.github.ai/inference
