@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout repository (main branch and 2 last commits)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
@@ -50,7 +50,7 @@ jobs:
 
       - name: Generate report using AI
         id: ai_query
-        uses: actions/ai-inference@v2
+        uses: actions/ai-inference@v2.1.1
         with:
           model: gpt-4.1
           max-tokens: 2048
