@@ -100,7 +100,16 @@ curl -sSL https://raw.githubusercontent.com/Lifailon/lazyjournal/main/scripts/in
 
 This command will run a script that will download the latest binary (auto-detect OS and arch) from the GitHub repository to your home directory along with other executables (default path is `~/.local/bin/lazyjournal`) and configurations (`~/.config/lazyjournal/config.yml`) for the current user, and also grant execute permission.
 
-### apt (Ubuntu / Debian)
+### apt (Debian / Ubuntu)
+
+LazyJournal is now officially available in the [Debian repositories](https://tracker.debian.org/pkg/lazyjournal) (unstable and testing), so to install just execute:
+
+```bash
+sudo apt update # Update repositories
+sudo apt install lazyjournal # Install LazyJournal
+lazyjournal -h # View help
+lazyjournal # Execute LazyJournal
+```
 
 To install and remove packages on an Ubuntu system, you can use the `apt` package manager from the [PPA](https://launchpad.net/~lifailon/+archive/ubuntu/lazyjournal) repository:
 
@@ -110,7 +119,7 @@ sudo apt update
 sudo apt install -y lazyjournal
 ```
 
-Or download the `deb` package from the GitHub releases page for installation on any Debian-based system.
+Or download the `deb` package from the GitHub releases page for installation on any Debian-based system, while LazyJournal gradually makes its way into the distribution repositories.
 
 ```bash
 curl -sSL https://github.com/Lifailon/lazyjournal/releases/download/0.8.6/lazyjournal-0.8.6-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
@@ -313,6 +322,7 @@ Thanks to all participants for their contributions:
 
 - [Matteo Giordano](https://github.com/malteo) for upload and update the package in `AUR`.
 - [Ueno M.](https://github.com/eunos-1128) for upload and update the package in `Homebrew` and `Conda`.
+- [Fierro Viejo](https://github.com/fierroviejo) for upload and update the package in `Debian`.
 
 You can also upload the package yourself to any package manager you use and make [Pull Requests](https://github.com/Lifailon/lazyjournal/pulls).
 
