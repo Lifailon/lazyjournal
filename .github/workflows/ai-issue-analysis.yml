@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository (main branch and 1 last commits)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           ref: main
@@ -94,7 +94,7 @@ jobs:
       - name: Generate report using AI
         if: ${{ github.event_name == 'issues' && github.event.action == 'opened'}}
         id: ai_query
-        uses: actions/ai-inference@v2
+        uses: actions/ai-inference@v2.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           endpoint: https://models.github.ai/inference
