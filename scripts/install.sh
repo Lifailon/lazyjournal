@@ -34,12 +34,17 @@ mkdir -p $(dirname "$binPath")
 mkdir -p $(dirname "$configPath")
 touch $shellRc
 
-grep -F 'export PATH=$PATH:$HOME/.local/bin' $shellRc > /dev/null || {
-    echo 'export PATH=$PATH:$HOME/.local/bin' >> $shellRc
-    source "$shellRc" 2> /dev/null || . "$shellRc"
-    echo -e "Added environment variable \033[34m$HOME/.local/bin\033[0m in \033[34m$shellRc\033[0m profile"
-    echo -e "To launch the interface from anywhere, re-login to the current session or run the command: \033[32m. $shellRc\033[0m"
-}
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *)
+        grep -F 'export PATH=$PATH:$HOME/.local/bin' $shellRc > /dev/null || {
+            echo 'export PATH=$PATH:$HOME/.local/bin' >> $shellRc
+            source "$shellRc" 2> /dev/null || . "$shellRc"
+            echo -e "Added environment variable \033[34m$HOME/.local/bin\033[0m in \033[34m$shellRc\033[0m profile"
+            echo -e "To launch the interface from anywhere, re-login to the current session or run the command: \033[32m. $shellRc\033[0m"
+        }
+        ;;
+esac
 
 GITHUB_LATEST_VERSION=$(curl -L -sS -H 'Accept: application/json' https://github.com/Lifailon/lazyjournal/releases/latest | sed -e 's/.*"tag_name":"\([^"]*\)".*/\1/')
 if [ -z "$GITHUB_LATEST_VERSION" ]; then
