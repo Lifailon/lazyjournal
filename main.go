@@ -23,9 +23,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/awesome-gocui/gocui"
 	"golang.org/x/text/encoding/charmap"
@@ -198,6 +201,8 @@ type App struct {
 	userName      string   // текущее имя пользователя
 	systemDisk    string   // порядковая буква системного диска для Windows
 	userNameArray []string // список всех пользователей
+	userNameSet   map[string]struct{}
+	wordRegexes   sync.Map // cached *regexp.Regexp values used by concurrent coloring
 
 	unitType        string // фильтрация списков системных и пользовательских юнитов по типу (#46)
 	journalField    string // фильтрация списка системных журналов по полю
@@ -1091,6 +1096,7 @@ func runGoCui(mock bool) {
 		backCurrentView:         false,
 		dockerCompose:           "docker compose",
 		uniquePrefixColorMap:    make(map[string]string),
+		userNameSet:             make(map[string]struct{}),
 	}
 
 	// Значения по умолчанию
@@ -1103,23 +1109,6 @@ func runGoCui(mock bool) {
 	// Определяем используемую ОС (linux/darwin/*bsd/windows) и архитектуру
 	app.getOS = runtime.GOOS
 	app.getArch = runtime.GOARCH
-	var composeVer *exec.Cmd
-	// Проверяем установку compose как плагин docker или docker-compose
-	if app.sshMode {
-		composeVer = exec.Command(
-			"ssh", append(app.sshOptions,
-				"docker", "compose", "version",
-			)...)
-	} else {
-		composeVer = exec.Command(
-			"docker", "compose", "version",
-		)
-	}
-	_, composeErr := composeVer.Output()
-	if composeErr != nil {
-		app.dockerCompose = "docker-compose"
-	}
-
 	// Аргументы
 	help := flag.Bool("help", false, helpDescription)
 	flag.BoolVar(help, "h", false, helpDescription)
@@ -1401,7 +1390,7 @@ func runGoCui(mock bool) {
 	}
 
 	// Проверяем значение флага -j/--journal-field на валидность и возвращяем список существующих полей
-	if app.journalBoot != "SYSLOG_IDENTIFIER" {
+	if app.journalField != "SYSLOG_IDENTIFIER" {
 		fieldList, fieldErr := app.journalCheck("fields")
 		if fieldErr == nil {
 			if !slices.Contains(fieldList, app.journalField) {
@@ -1699,16 +1688,17 @@ func runGoCui(mock bool) {
 		userName := strings.Split(line, ":")
 		if len(userName) > 0 {
 			app.userNameArray = append(app.userNameArray, userName[0])
+			app.userNameSet[userName[0]] = struct{}{}
 		}
 	}
 
-	// Обработка фильтрации с неточным поиском в режиме командной строки
-	if *commandFuzzy != "" {
+	// Command-line modes consume stdin once. Filtering and coloring are fused into
+	// one streaming pipeline, so input can be processed before the producer exits.
+	switch {
+	case *commandFuzzy != "":
 		app.commandLineFuzzy(*commandFuzzy, *commandColor)
-	}
-
-	// Обработка фильтрации с поддержкой регулярных выражений в режиме командной строки
-	if *commandRegex != "" {
+		return
+	case *commandRegex != "":
 		filter := strings.ToLower(*commandRegex)
 		// Добавляем флаг для нечувствительности к регистру по умолчанию
 		filter = "(?i)" + filter
@@ -1719,15 +1709,10 @@ func runGoCui(mock bool) {
 			os.Exit(1)
 		}
 		app.commandLineRegex(regex, *commandColor)
-	}
-
-	// Обработка покраски вывода в режиме командной строки
-	if *commandColor {
+		return
+	case *commandColor:
 		app.commandLineColor(false)
-	}
-
-	if *commandColor || *commandFuzzy != "" || *commandRegex != "" {
-		os.Exit(0)
+		return
 	}
 
 	// Включаем режим ssh и заполняем параметры (включая sudo и другие стандартные опции ssh подключения, например, порт)
@@ -1747,6 +1732,22 @@ func runGoCui(mock bool) {
 		}
 	} else {
 		app.sshStatus = "false"
+	}
+
+	var composeVer *exec.Cmd
+	// This probe is only needed by the TUI. Keeping it out of command-line mode
+	// avoids starting Docker while processing piped input.
+	if app.sshMode {
+		composeVer = exec.Command(
+			"ssh", append(app.sshOptions,
+				"docker", "compose", "version",
+			)...)
+	} else {
+		composeVer = exec.Command("docker", "compose", "version")
+	}
+	_, composeErr := composeVer.Output()
+	if composeErr != nil {
+		app.dockerCompose = "docker-compose"
 	}
 
 	// Создаем GUI
@@ -4253,22 +4254,31 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						"ssh", append(app.sshOptions,
 							"tail", "-n", app.logViewCount, logFullPath,
 						)...)
+					if app.logging {
+						slog.Info(cmd.String(), "action", "Reading log file")
+					}
+					output, err := cmd.Output()
+					if err != nil && !app.testMode {
+						v, _ := app.gui.View("logs")
+						v.Clear()
+						fmt.Fprintln(v, " \033[31mError reading log using tail tool.\n", err, "\033[0m")
+						return
+					}
+					app.currentLogLines = strings.Split(string(output), "\n")
 				} else {
-					cmd = exec.Command(
-						"tail", "-n", app.logViewCount, logFullPath,
-					)
+					if app.logging {
+						slog.Info(logFullPath, "action", "Reading log file with io_uring")
+					}
+					maxLines, _ := strconv.Atoi(app.logViewCount)
+					output, err := readLastLines(logFullPath, maxLines)
+					if err != nil && !app.testMode {
+						v, _ := app.gui.View("logs")
+						v.Clear()
+						fmt.Fprintln(v, " \033[31mError reading log file.\n", err, "\033[0m")
+						return
+					}
+					app.currentLogLines = strings.Split(string(output), "\n")
 				}
-				if app.logging {
-					slog.Info(cmd.String(), "action", "Reading log file")
-				}
-				output, err := cmd.Output()
-				if err != nil && !app.testMode {
-					v, _ := app.gui.View("logs")
-					v.Clear()
-					fmt.Fprintln(v, " \033[31mError reading log using tail tool.\n", err, "\033[0m")
-					return
-				}
-				app.currentLogLines = strings.Split(string(output), "\n")
 			}
 		}
 		if !app.testMode {
@@ -4927,20 +4937,26 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			log.Print("Error: get log path via docker inspect. ", err)
 		}
 		logFilePath := strings.TrimSpace(string(logFilePathBytes))
-		// Читаем файл с конца с помощью tail
+		// Читаем файл с конца. Для локального файла используем io_uring,
+		// а для удаленного хоста оставляем tail на той стороне SSH.
+		var output []byte
 		if app.sshMode {
 			cmd = exec.CommandContext(
 				ctx,
 				"ssh", append(app.sshOptions,
 					"tail", "-n", app.logViewCount, logFilePath,
 				)...)
+			if app.logging {
+				slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
+			}
+			output, err = cmd.Output()
 		} else {
-			cmd = exec.Command("tail", "-n", app.logViewCount, logFilePath)
+			if app.logging {
+				slog.Info(logFilePath, "action", "Reading "+containerName+" container logs with io_uring")
+			}
+			maxLines, _ := strconv.Atoi(app.logViewCount)
+			output, err = readLastLines(logFilePath, maxLines)
 		}
-		if app.logging {
-			slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
-		}
-		output, err := cmd.Output()
 		// Если ошибка чтения, значит нет доступа и переходим к чтению из потока
 		if err != nil && app.dockerStreamLogsStatus == "json-file" {
 			readFileContainer = false
@@ -5927,6 +5943,63 @@ func (app *App) checkBin(commands []string) (string, error) {
 	}
 }
 
+func (app *App) filterLine(line, mode, filter, exactFilter string, regex *regexp.Regexp) string {
+	switch mode {
+	case "fuzzy":
+		return app.fuzzyFilter(line, filter)
+	case "regex":
+		return app.regexFilter(line, regex)
+	default:
+		if strings.Contains(line, exactFilter) {
+			return strings.ReplaceAll(line, exactFilter, "\x1b[0;44m"+exactFilter+"\033[0m")
+		}
+		return ""
+	}
+}
+
+func (app *App) filterLines(input []string, mode, filter, exactFilter string, regex *regexp.Regexp) []string {
+	workers := min(commandLineWorkers(), len(input))
+	if workers <= 1 || len(input) < 2048 {
+		output := make([]string, 0, len(input))
+		for _, line := range input {
+			if filtered := app.filterLine(line, mode, filter, exactFilter, regex); filtered != "" {
+				output = append(output, filtered)
+			}
+		}
+		return output
+	}
+
+	parts := make([][]string, workers)
+	chunkSize := (len(input) + workers - 1) / workers
+	var workerGroup sync.WaitGroup
+	workerGroup.Add(workers)
+	for worker := range workers {
+		start := worker * chunkSize
+		end := min(start+chunkSize, len(input))
+		go func() {
+			defer workerGroup.Done()
+			part := make([]string, 0, end-start)
+			for _, line := range input[start:end] {
+				if filtered := app.filterLine(line, mode, filter, exactFilter, regex); filtered != "" {
+					part = append(part, filtered)
+				}
+			}
+			parts[worker] = part
+		}()
+	}
+	workerGroup.Wait()
+
+	outputSize := 0
+	for _, part := range parts {
+		outputSize += len(part)
+	}
+	output := make([]string, 0, outputSize)
+	for _, part := range parts {
+		output = append(output, part...)
+	}
+	return output
+}
+
 // Функция для фильтрации записей текущего журнала + покраска
 func (app *App) applyFilter(color bool) {
 	filter := app.filterText
@@ -5988,30 +6061,13 @@ func (app *App) applyFilter(color bool) {
 					return
 				}
 			}
-			// Проходимся по каждой строке
-			for _, line := range app.currentLogLines {
-				switch app.selectFilterMode {
-				// Fuzzy (неточный поиск без учета регистра)
-				case "fuzzy":
-					outputLine := app.fuzzyFilter(line, filter)
-					if outputLine != "" {
-						app.filteredLogLines = append(app.filteredLogLines, outputLine)
-					}
-				// Regex (с использованием регулярных выражений и без учета регистра по умолчанию)
-				case "regex":
-					outputLine := app.regexFilter(line, regex)
-					if outputLine != "" {
-						app.filteredLogLines = append(app.filteredLogLines, outputLine)
-					}
-				// Default (точный поиск с учетом регистра)
-				default:
-					filter = app.filterText
-					if filter == "" || strings.Contains(line, filter) {
-						lineColor := strings.ReplaceAll(line, filter, "\x1b[0;44m"+filter+"\033[0m")
-						app.filteredLogLines = append(app.filteredLogLines, lineColor)
-					}
-				}
-			}
+			app.filteredLogLines = app.filterLines(
+				app.currentLogLines,
+				app.selectFilterMode,
+				filter,
+				app.filterText,
+				regex,
+			)
 		}
 		// Если последняя строка не содержит пустую строку, то добавляем две пустые строки или одну по умолчанию
 		if len(app.filteredLogLines) > 0 && app.filteredLogLines[len(app.filteredLogLines)-1] != "" {
@@ -6147,158 +6203,670 @@ func (app *App) regexFilter(inputLine string, regex *regexp.Regexp) string {
 	}
 }
 
-// -f/--command-fuzzy
-func (app *App) commandLineFuzzy(filter string, color bool) {
+// io_uring's userspace ABI. Keeping the small reader here avoids an additional
+// dependency and lets command-line mode fall back cleanly on older kernels.
+const (
+	ioUringSetupSyscall = 425
+	ioUringEnterSyscall = 426
+	ioUringOffSqRing    = 0
+	ioUringOffCqRing    = 0x08000000
+	ioUringOffSqes      = 0x10000000
+	ioUringFeatSingleMM = 1
+	ioUringEnterGetEvts = 1
+	ioUringOpRead       = 22
+	commandReadSize     = 256 * 1024
+	commandBatchLines   = 512
+)
+
+type ioUringSqOffsets struct {
+	head, tail, ringMask, ringEntries, flags, dropped, array, reserved uint32
+	userAddr                                                           uint64
+}
+
+type ioUringCqOffsets struct {
+	head, tail, ringMask, ringEntries, overflow, cqes, flags, reserved uint32
+	userAddr                                                           uint64
+}
+
+type ioUringParams struct {
+	sqEntries, cqEntries, flags, sqThreadCPU, sqThreadIdle, features, wqFd uint32
+	reserved                                                               [3]uint32
+	sqOffset                                                               ioUringSqOffsets
+	cqOffset                                                               ioUringCqOffsets
+}
+
+type ioUringSqe struct {
+	opcode, flags         uint8
+	ioprio                uint16
+	fd                    int32
+	offset, address       uint64
+	length, rwFlags       uint32
+	userData              uint64
+	bufIndex, personality uint16
+	spliceFdIn            int32
+	address3, pad         uint64
+}
+
+type ioUringCqe struct {
+	userData uint64
+	result   int32
+	flags    uint32
+}
+
+type ioUringReader struct {
+	fd         int
+	inputFd    int32
+	sqRing     []byte
+	cqRing     []byte
+	sqesMemory []byte
+	singleMmap bool
+	sqHead     *uint32
+	sqTail     *uint32
+	sqMask     *uint32
+	sqEntries  *uint32
+	sqArray    []uint32
+	sqes       []ioUringSqe
+	cqHead     *uint32
+	cqTail     *uint32
+	cqMask     *uint32
+	cqes       []ioUringCqe
+}
+
+func ioUringSyscalls() (uintptr, uintptr, bool) {
+	if runtime.GOOS != "linux" {
+		return 0, 0, false
+	}
+	// MIPS syscall tables retain their historical ABI offsets.
+	switch runtime.GOARCH {
+	case "mips", "mipsle":
+		return ioUringSetupSyscall + 4000, ioUringEnterSyscall + 4000, true
+	case "mips64", "mips64le":
+		return ioUringSetupSyscall + 5000, ioUringEnterSyscall + 5000, true
+	default:
+		return ioUringSetupSyscall, ioUringEnterSyscall, true
+	}
+}
+
+func mmapUring(fd int, offset, size int) ([]byte, error) {
+	if size <= 0 {
+		return nil, syscall.EINVAL
+	}
+	return platformIOUringMmap(fd, offset, size)
+}
+
+func uint32At(memory []byte, offset uint32) *uint32 {
+	return (*uint32)(unsafe.Pointer(&memory[int(offset)]))
+}
+
+func newIOUringReader(inputFd int) (_ *ioUringReader, err error) {
+	setupSyscall, _, supported := ioUringSyscalls()
+	if !supported {
+		return nil, syscall.ENOSYS
+	}
+
+	params := ioUringParams{}
+	fd, setupErr := platformIOUringSetup(
+		setupSyscall,
+		8,
+		unsafe.Pointer(&params),
+	)
+	if setupErr != nil {
+		return nil, setupErr
+	}
+
+	ring := &ioUringReader{fd: int(fd), inputFd: int32(inputFd)}
+	defer func() {
+		if err != nil {
+			ring.Close()
+		}
+	}()
+
+	sqRingSize := int(params.sqOffset.array) + int(params.sqEntries)*4
+	cqRingSize := int(params.cqOffset.cqes) + int(params.cqEntries)*int(unsafe.Sizeof(ioUringCqe{}))
+	if params.features&ioUringFeatSingleMM != 0 {
+		ring.singleMmap = true
+		ring.sqRing, err = mmapUring(ring.fd, ioUringOffSqRing, max(sqRingSize, cqRingSize))
+		if err != nil {
+			return nil, err
+		}
+		ring.cqRing = ring.sqRing
+	} else {
+		ring.sqRing, err = mmapUring(ring.fd, ioUringOffSqRing, sqRingSize)
+		if err != nil {
+			return nil, err
+		}
+		ring.cqRing, err = mmapUring(ring.fd, ioUringOffCqRing, cqRingSize)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	sqesSize := int(params.sqEntries) * int(unsafe.Sizeof(ioUringSqe{}))
+	ring.sqesMemory, err = mmapUring(ring.fd, ioUringOffSqes, sqesSize)
+	if err != nil {
+		return nil, err
+	}
+
+	ring.sqHead = uint32At(ring.sqRing, params.sqOffset.head)
+	ring.sqTail = uint32At(ring.sqRing, params.sqOffset.tail)
+	ring.sqMask = uint32At(ring.sqRing, params.sqOffset.ringMask)
+	ring.sqEntries = uint32At(ring.sqRing, params.sqOffset.ringEntries)
+	ring.cqHead = uint32At(ring.cqRing, params.cqOffset.head)
+	ring.cqTail = uint32At(ring.cqRing, params.cqOffset.tail)
+	ring.cqMask = uint32At(ring.cqRing, params.cqOffset.ringMask)
+	ring.sqArray = unsafe.Slice(
+		(*uint32)(unsafe.Pointer(&ring.sqRing[int(params.sqOffset.array)])),
+		int(params.sqEntries),
+	)
+	ring.sqes = unsafe.Slice(
+		(*ioUringSqe)(unsafe.Pointer(&ring.sqesMemory[0])),
+		int(params.sqEntries),
+	)
+	ring.cqes = unsafe.Slice(
+		(*ioUringCqe)(unsafe.Pointer(&ring.cqRing[int(params.cqOffset.cqes)])),
+		int(params.cqEntries),
+	)
+	return ring, nil
+}
+
+func (ring *ioUringReader) readAtOffset(buffer []byte, offset uint64) (int, error) {
+	if len(buffer) == 0 {
+		return 0, nil
+	}
+	_, enterSyscall, supported := ioUringSyscalls()
+	if !supported || ring.fd < 0 {
+		return 0, syscall.ENOSYS
+	}
+
+	tail := atomic.LoadUint32(ring.sqTail)
+	head := atomic.LoadUint32(ring.sqHead)
+	if tail-head >= atomic.LoadUint32(ring.sqEntries) {
+		return 0, syscall.EBUSY
+	}
+	index := tail & atomic.LoadUint32(ring.sqMask)
+	sqe := &ring.sqes[index]
+	*sqe = ioUringSqe{
+		opcode:   ioUringOpRead,
+		fd:       ring.inputFd,
+		offset:   offset,
+		address:  uint64(uintptr(unsafe.Pointer(&buffer[0]))),
+		length:   uint32(len(buffer)),
+		userData: uint64(tail) + 1,
+	}
+	ring.sqArray[index] = index
+	atomic.StoreUint32(ring.sqTail, tail+1)
+
+	enterErr := platformIOUringEnter(
+		enterSyscall,
+		ring.fd,
+		1,
+		1,
+		ioUringEnterGetEvts,
+	)
+	runtime.KeepAlive(buffer)
+	if enterErr != nil {
+		return 0, enterErr
+	}
+
+	cqHead := atomic.LoadUint32(ring.cqHead)
+	cqTail := atomic.LoadUint32(ring.cqTail)
+	if cqHead == cqTail {
+		return 0, syscall.EIO
+	}
+	cqe := ring.cqes[cqHead&atomic.LoadUint32(ring.cqMask)]
+	atomic.StoreUint32(ring.cqHead, cqHead+1)
+	if cqe.result < 0 {
+		return 0, syscall.Errno(-cqe.result)
+	}
+	if cqe.result == 0 {
+		return 0, io.EOF
+	}
+	return int(cqe.result), nil
+}
+
+func (ring *ioUringReader) Read(buffer []byte) (int, error) {
+	return ring.readAtOffset(buffer, ^uint64(0))
+}
+
+func (ring *ioUringReader) ReadAt(buffer []byte, offset int64) (int, error) {
+	if offset < 0 {
+		return 0, syscall.EINVAL
+	}
+	total := 0
+	for total < len(buffer) {
+		n, err := ring.readAtOffset(buffer[total:], uint64(offset)+uint64(total))
+		total += n
+		if err != nil {
+			return total, err
+		}
+		if n == 0 {
+			return total, io.EOF
+		}
+	}
+	return total, nil
+}
+
+func (ring *ioUringReader) Close() error {
+	if len(ring.sqesMemory) != 0 {
+		_ = platformIOUringMunmap(ring.sqesMemory)
+		ring.sqesMemory = nil
+	}
+	if len(ring.cqRing) != 0 && !ring.singleMmap {
+		_ = platformIOUringMunmap(ring.cqRing)
+		ring.cqRing = nil
+	}
+	if len(ring.sqRing) != 0 {
+		_ = platformIOUringMunmap(ring.sqRing)
+		ring.sqRing = nil
+	}
+	if ring.fd >= 0 {
+		err := platformIOUringClose(ring.fd)
+		ring.fd = -1
+		return err
+	}
+	return nil
+}
+
+// fastStdinReader transparently falls back when io_uring is unavailable (for
+// example under an older kernel or a restrictive container seccomp profile).
+type fastStdinReader struct {
+	ring *ioUringReader
+}
+
+func newFastStdinReader() *fastStdinReader {
+	ring, _ := newIOUringReader(int(os.Stdin.Fd()))
+	return &fastStdinReader{ring: ring}
+}
+
+func (reader *fastStdinReader) Read(buffer []byte) (int, error) {
+	if reader.ring != nil {
+		n, err := reader.ring.Read(buffer)
+		if err == nil || errors.Is(err, io.EOF) {
+			return n, err
+		}
+		_ = reader.ring.Close()
+		reader.ring = nil
+	}
+	return os.Stdin.Read(buffer)
+}
+
+func (reader *fastStdinReader) Close() error {
+	if reader.ring != nil {
+		return reader.ring.Close()
+	}
+	return nil
+}
+
+type fastFileReaderAt struct {
+	file *os.File
+	ring *ioUringReader
+}
+
+func newFastFileReaderAt(file *os.File) *fastFileReaderAt {
+	ring, _ := newIOUringReader(int(file.Fd()))
+	return &fastFileReaderAt{file: file, ring: ring}
+}
+
+func (reader *fastFileReaderAt) ReadAt(buffer []byte, offset int64) (int, error) {
+	if reader.ring != nil {
+		n, err := reader.ring.ReadAt(buffer, offset)
+		if err == nil || errors.Is(err, io.EOF) && n > 0 {
+			return n, err
+		}
+		_ = reader.ring.Close()
+		reader.ring = nil
+	}
+	return reader.file.ReadAt(buffer, offset)
+}
+
+func (reader *fastFileReaderAt) Close() error {
+	if reader.ring != nil {
+		return reader.ring.Close()
+	}
+	return nil
+}
+
+func tailBytes(input []byte, maxLines int) []byte {
+	if maxLines <= 0 || len(input) == 0 {
+		return nil
+	}
+	remaining := maxLines
+	index := len(input) - 1
+	if input[index] == '\n' {
+		index--
+	}
+	for ; index >= 0; index-- {
+		if input[index] != '\n' {
+			continue
+		}
+		remaining--
+		if remaining == 0 {
+			return input[index+1:]
+		}
+	}
+	return input
+}
+
+// readLastLines uses offset reads from the end of a regular file, avoiding a
+// tail subprocess and avoiding reads of old data that cannot reach the screen.
+func readLastLines(path string, maxLines int) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() == 0 || maxLines <= 0 {
+		return nil, nil
+	}
+
+	const blockSize int64 = 1024 * 1024
+	reader := newFastFileReaderAt(file)
+	defer reader.Close()
+	chunks := make([][]byte, 0, 4)
+	totalSize := 0
+	newlineCount := 0
+	end := info.Size()
+
+	for end > 0 && newlineCount <= maxLines {
+		start := max(end-blockSize, 0)
+		chunk := make([]byte, int(end-start))
+		n, readErr := reader.ReadAt(chunk, start)
+		if n > 0 {
+			chunk = chunk[:n]
+			chunks = append(chunks, chunk)
+			totalSize += n
+			newlineCount += bytes.Count(chunk, []byte{'\n'})
+		}
+		end = start
+		if readErr != nil {
+			if !errors.Is(readErr, io.EOF) {
+				return nil, readErr
+			}
+			break
+		}
+	}
+
+	output := make([]byte, 0, totalSize)
+	for i := len(chunks) - 1; i >= 0; i-- {
+		output = append(output, chunks[i]...)
+	}
+	return tailBytes(output, maxLines), nil
+}
+
+type commandLineBatch struct {
+	sequence uint64
+	lines    []string
+}
+
+type commandLineReadResult struct {
+	lines int
+	err   error
+}
+
+func commandLineWorkers() int {
+	workers := runtime.GOMAXPROCS(0)
+	if workers < 1 {
+		return 1
+	}
+	return min(workers, 32)
+}
+
+func readCommandLineBatches(ctx context.Context, jobs chan<- commandLineBatch) commandLineReadResult {
+	defer close(jobs)
+	reader := newFastStdinReader()
+	defer reader.Close()
+
+	readBuffer := make([]byte, commandReadSize)
+	pending := make([]byte, 0, commandReadSize)
+	batch := make([]string, 0, commandBatchLines)
+	var sequence uint64
+	totalLines := 0
+
+	sendBatch := func() bool {
+		if len(batch) == 0 {
+			return true
+		}
+		job := commandLineBatch{sequence: sequence, lines: batch}
+		select {
+		case jobs <- job:
+			sequence++
+			batch = make([]string, 0, commandBatchLines)
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
+
+	for {
+		n, readErr := reader.Read(readBuffer)
+		if n > 0 {
+			searchStart := len(pending)
+			pending = append(pending, readBuffer[:n]...)
+			lineStart := 0
+			for i := searchStart; i < len(pending); i++ {
+				if pending[i] != '\n' {
+					continue
+				}
+				lineEnd := i
+				if lineEnd > lineStart && pending[lineEnd-1] == '\r' {
+					lineEnd--
+				}
+				batch = append(batch, string(pending[lineStart:lineEnd]))
+				totalLines++
+				lineStart = i + 1
+				if len(batch) == commandBatchLines && !sendBatch() {
+					return commandLineReadResult{lines: totalLines, err: ctx.Err()}
+				}
+			}
+			if lineStart > 0 {
+				remaining := copy(pending, pending[lineStart:])
+				pending = pending[:remaining]
+			}
+			// Flush complete lines from every read. Slow producers therefore get
+			// output immediately, while fast sources still arrive in large batches.
+			if !sendBatch() {
+				return commandLineReadResult{lines: totalLines, err: ctx.Err()}
+			}
+		}
+		if readErr != nil {
+			if !errors.Is(readErr, io.EOF) {
+				return commandLineReadResult{lines: totalLines, err: readErr}
+			}
+			break
+		}
+	}
+
+	if len(pending) > 0 {
+		if pending[len(pending)-1] == '\r' {
+			pending = pending[:len(pending)-1]
+		}
+		batch = append(batch, string(pending))
+		totalLines++
+	}
+	if !sendBatch() {
+		return commandLineReadResult{lines: totalLines, err: ctx.Err()}
+	}
+	return commandLineReadResult{lines: totalLines}
+}
+
+func (app *App) processCommandLine(transform func(string) string, color bool) {
 	stat, err := os.Stdin.Stat()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	if (stat.Mode() & os.ModeCharDevice) != 0 {
+	if stat.Mode()&os.ModeCharDevice != 0 {
 		fmt.Fprintln(os.Stderr, "No data. Use pipe to transfer data.")
 		return
 	}
-	scanner := bufio.NewScanner(os.Stdin)
-	var inputLines []string
-	for scanner.Scan() {
-		inputLines = append(inputLines, scanner.Text())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	workers := commandLineWorkers()
+	jobs := make(chan commandLineBatch, workers*2)
+	results := make(chan commandLineBatch, workers*2)
+	readDone := make(chan commandLineReadResult, 1)
+
+	go func() {
+		readDone <- readCommandLineBatches(ctx, jobs)
+	}()
+
+	var workerGroup sync.WaitGroup
+	workerGroup.Add(workers)
+	for range workers {
+		go func() {
+			defer workerGroup.Done()
+			for job := range jobs {
+				output := make([]string, 0, len(job.lines))
+				for _, line := range job.lines {
+					if transform != nil {
+						line = transform(line)
+						if line == "" {
+							continue
+						}
+					}
+					if color {
+						line = app.lineColor(line)
+					}
+					output = append(output, line)
+				}
+				job.lines = output
+				select {
+				case results <- job:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
 	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	if len(inputLines) == 0 {
-		fmt.Fprintln(os.Stderr)
-		return
-	}
-	for _, line := range inputLines {
-		outputLine := app.fuzzyFilter(line, filter)
-		if outputLine != "" {
-			app.filteredLogLines = append(app.filteredLogLines, outputLine)
+	go func() {
+		workerGroup.Wait()
+		close(results)
+	}()
+
+	output := bufio.NewWriterSize(os.Stdout, 1024*1024)
+	nextSequence := uint64(0)
+	pendingResults := make(map[uint64][]string, workers)
+	var outputErr error
+	writeLines := func(lines []string) {
+		if outputErr != nil {
+			return
+		}
+		for _, line := range lines {
+			if _, outputErr = output.WriteString(line); outputErr != nil {
+				cancel()
+				return
+			}
+			if outputErr = output.WriteByte('\n'); outputErr != nil {
+				cancel()
+				return
+			}
+		}
+		// Bound latency for producers that deliver one or a few lines at a time.
+		if outputErr = output.Flush(); outputErr != nil {
+			cancel()
 		}
 	}
-	// Если передан второй параметр (аргумент color), используем функцию покраски
-	if color {
-		app.commandLineColor(true)
+
+	for result := range results {
+		pendingResults[result.sequence] = result.lines
+		for {
+			lines, ok := pendingResults[nextSequence]
+			if !ok {
+				break
+			}
+			delete(pendingResults, nextSequence)
+			writeLines(lines)
+			nextSequence++
+		}
+	}
+	_ = output.Flush()
+	var readResult commandLineReadResult
+	if outputErr == nil {
+		readResult = <-readDone
 	} else {
-		for _, line := range app.filteredLogLines {
-			fmt.Println(line)
+		// Do not wait on a slow upstream after the downstream side of the pipe
+		// has closed. Process exit will cancel an in-flight kernel read.
+		select {
+		case readResult = <-readDone:
+		default:
+			return
 		}
 	}
+	if readResult.err != nil && !errors.Is(readResult.err, context.Canceled) {
+		fmt.Fprintln(os.Stderr, readResult.err)
+	} else if readResult.lines == 0 {
+		fmt.Fprintln(os.Stderr)
+	}
+	if outputErr != nil && !errors.Is(outputErr, syscall.EPIPE) {
+		fmt.Fprintln(os.Stderr, outputErr)
+	}
+}
+
+// -f/--command-fuzzy
+func (app *App) commandLineFuzzy(filter string, color bool) {
+	app.processCommandLine(func(line string) string {
+		return app.fuzzyFilter(line, filter)
+	}, color)
 }
 
 // -r/--command-regex
 func (app *App) commandLineRegex(regex *regexp.Regexp, color bool) {
-	stat, err := os.Stdin.Stat()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	if (stat.Mode() & os.ModeCharDevice) != 0 {
-		fmt.Fprintln(os.Stderr, "No data. Use pipe to transfer data.")
-		return
-	}
-	scanner := bufio.NewScanner(os.Stdin)
-	var inputLines []string
-	for scanner.Scan() {
-		inputLines = append(inputLines, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	if len(inputLines) == 0 {
-		fmt.Fprintln(os.Stderr)
-		return
-	}
-	for _, line := range inputLines {
-		outputLine := app.regexFilter(line, regex)
-		if outputLine != "" {
-			app.filteredLogLines = append(app.filteredLogLines, outputLine)
-		}
-	}
-	if color {
-		app.commandLineColor(true)
-	} else {
-		for _, line := range app.filteredLogLines {
-			fmt.Println(line)
-		}
-	}
+	app.processCommandLine(func(line string) string {
+		return app.regexFilter(line, regex)
+	}, color)
 }
 
 // ---------------------------------------- Coloring/Highlighting ----------------------------------------
 
 // Функция для покраски вывода в режиме командной строки
 func (app *App) commandLineColor(fromFilter bool) {
-	var inputColoring []string
-	// Извлекаем текст после фильтрации
-	if fromFilter {
-		inputColoring = app.mainColor(app.filteredLogLines)
-	} else {
-		// Проверяем, подключен ли stdin через pipe или перенаправлен
-		stat, err := os.Stdin.Stat()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return
-		}
-		// Проверяем, пуст ли stdin (например, если нет pipe или перенаправления)
-		if (stat.Mode() & os.ModeCharDevice) != 0 {
-			fmt.Fprintln(os.Stderr, "No data. Use pipe to transfer data.")
-			return
-		}
-		scanner := bufio.NewScanner(os.Stdin)
-		var inputLines []string
-		for scanner.Scan() {
-			inputLines = append(inputLines, scanner.Text())
-		}
-		if err := scanner.Err(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return
-		}
-		if len(inputLines) == 0 {
-			fmt.Fprintln(os.Stderr)
-			return
-		}
-		inputColoring = app.mainColor(inputLines)
+	if !fromFilter {
+		app.processCommandLine(nil, true)
+		return
 	}
-	// Выводим построчно
-	for _, line := range inputColoring {
-		fmt.Println(line)
+	output := bufio.NewWriterSize(os.Stdout, 1024*1024)
+	for _, line := range app.mainColor(app.filteredLogLines) {
+		_, _ = output.WriteString(line)
+		_ = output.WriteByte('\n')
 	}
+	_ = output.Flush()
 }
 
 // (1) Основная функция покраски
 func (app *App) mainColor(inputText []string) []string {
-	// Максимальное количество потоков
-	const maxWorkers = 10
-	// Канал для передачи индексов всех строк
-	tasks := make(chan int, len(inputText))
-	// Срез для хранения обработанных строк
 	colorLogLines := make([]string, len(inputText))
-	// Объявляем группу ожидания для синхронизации всех горутин (воркеров)
+	if len(inputText) == 0 {
+		return colorLogLines
+	}
+
+	workers := min(commandLineWorkers(), len(inputText))
+	if workers == 1 {
+		for i, line := range inputText {
+			colorLogLines[i] = app.lineColor(line)
+		}
+		return colorLogLines
+	}
+
+	// Give each worker a contiguous range. This removes the large per-line task
+	// channel and WaitGroup traffic while retaining deterministic output order.
+	chunkSize := (len(inputText) + workers - 1) / workers
 	var wg sync.WaitGroup
-	// Создаем maxWorkers горутин, где каждая будет обрабатывать задачи из канала tasks
-	for range maxWorkers {
+	wg.Add(workers)
+	for worker := range workers {
+		start := worker * chunkSize
+		end := min(start+chunkSize, len(inputText))
 		go func() {
-			// Горутина будет работать, пока в канале tasks есть задачи
-			for index := range tasks {
-				// Обрабатываем строку и сохраняем результат по соответствующему индексу
+			defer wg.Done()
+			for index := start; index < end; index++ {
 				colorLogLines[index] = app.lineColor(inputText[index])
-				// Уменьшаем счетчик задач в группе ожидания.
-				wg.Done()
 			}
 		}()
 	}
-	// Добавляем задачи в канал
-	for i := range inputText {
-		// Увеличиваем счетчик задач в группе ожидания
-		wg.Add(1)
-		// Передаем индекс строки в канал tasks
-		tasks <- i
-	}
-	// Закрываем канал задач, чтобы воркеры завершили работу после обработки всех задач
-	close(tasks)
-	// Ждем завершения всех задач
 	wg.Wait()
 	return colorLogLines
 }
@@ -6374,7 +6942,13 @@ func (app *App) lineColor(inputLine string) string {
 
 // Игнорируем регистр и проверяем, что слово окружено не буквами и цифрами
 func (app *App) replaceWordLower(word, keyword, color string) string {
-	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(keyword) + `\b`)
+	cacheKey := strings.ToLower(keyword)
+	cached, ok := app.wordRegexes.Load(cacheKey)
+	if !ok {
+		compiled := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(keyword) + `\b`)
+		cached, _ = app.wordRegexes.LoadOrStore(cacheKey, compiled)
+	}
+	re := cached.(*regexp.Regexp)
 	return re.ReplaceAllStringFunc(word, func(match string) string {
 		// Если цвет содержит фон, то добавляем отступы
 		if strings.Contains(color, "30m") {
@@ -6387,6 +6961,10 @@ func (app *App) replaceWordLower(word, keyword, color string) string {
 
 // Поиск пользователей
 func (app *App) containsUser(searchWord string) bool {
+	if app.userNameSet != nil {
+		_, ok := app.userNameSet[searchWord]
+		return ok
+	}
 	return slices.Contains(app.userNameArray, searchWord)
 }
 
