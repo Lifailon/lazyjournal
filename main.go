@@ -9819,6 +9819,14 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 		// Обновляем все списки в менеджере (что бы загрузить удаленный список контекстов Docker и Kubernetes)
 		app.closeManager(g)
 		app.showInterfaceManager(g)
+		// closeManager удаляет сфокусированное окно. Без нового фокуса стрелки
+		// продолжают попадать в старый sshManager, которого уже нет на экране.
+		sshView, err := g.SetCurrentView("sshManager")
+		if err != nil {
+			return err
+		}
+		sshView.FrameColor = app.selectedFrameColor
+		sshView.TitleColor = app.selectedTitleColor
 		// Сбрасываем контексты
 		app.dockerContext = "default"
 		app.kubernetesContext = "default"

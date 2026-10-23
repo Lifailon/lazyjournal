@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -1735,4 +1736,82 @@ func TestMockInterface(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	quit(g, nil)
+}
+
+// TestSSHManagerNavigation проверяет фокус после смены SSH-хоста.
+func TestSSHManagerNavigation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SSH fixture requires a Unix shell")
+	}
+	origConfig, origGui := config, g
+	t.Cleanup(func() {
+		config, g = origConfig, origGui
+	})
+	config = Config{}
+	config.Ssh.Hosts = []string{"user@host-a"}
+
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "ssh"), []byte("#!/bin/sh\ncase \"$*\" in *uname*) printf Linux ;; esac\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+
+	app := &App{
+		testMode:                     true,
+		fastMode:                     false,
+		getOS:                        runtime.GOOS,
+		getArch:                      runtime.GOARCH,
+		selectUnits:                  "systemUnits",
+		selectPath:                   "varlog",
+		selectContainerizationSystem: "docker",
+		selectFilterMode:             "default",
+		logViewCount:                 "10000",
+		unitType:                     "service",
+		colorMode:                    "disable",
+		dockerContext:                "default",
+		kubernetesContext:            "default",
+		kubernetesNamespace:          "--all-namespaces",
+		sshStatus:                    "false",
+		globalCurrentView:            "filterList",
+		keybindingsEnabled:           true,
+		autoScroll:                   true,
+		timestampDocker:              true,
+		frameColor:                   gocui.ColorWhite,
+		titleColor:                   gocui.ColorWhite,
+		selectedFrameColor:           gocui.ColorGreen,
+		selectedTitleColor:           gocui.ColorYellow,
+		filterByDateStatus:           "false",
+		journalPriority:              "debug",
+		journalBoot:                  "all",
+	}
+	var err error
+	g, err = gocui.NewGui(gocui.OutputSimulator, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.gui = g
+	g.Mouse = false
+	if err := app.layout(g); err != nil {
+		t.Fatal(err)
+	}
+	app.showInterfaceManager(g)
+	view, err := g.SetCurrentView("sshManager")
+	if err != nil {
+		t.Fatal(err)
+	}
+	view.Clear()
+	fmt.Fprintln(view, "user@host-a")
+	if err := app.getSelectedLine(g, view); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := g.View("sshManager")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh == view || g.CurrentView() != fresh {
+		t.Fatal("SSH selection did not focus the rebuilt manager")
+	}
+	if fresh.FrameColor != app.selectedFrameColor || fresh.TitleColor != app.selectedTitleColor {
+		t.Fatal("rebuilt SSH manager does not have selected colors")
+	}
 }
