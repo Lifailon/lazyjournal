@@ -78,7 +78,7 @@ jobs:
           echo "- **Update go version**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Update dependencies in** `go.mod`: ${{ github.event.inputs.Modules == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Golangci linters auto-fix in** `main.go`: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Golangci linters auto-fix in** `./...`: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Create Pull Request**: ${{ github.event.inputs.PR == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Go critical linters check**: ${{ github.event.inputs.Gocrit == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Go security linters check**: ${{ github.event.inputs.Gosec == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
@@ -153,21 +153,21 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.8.0
-          args: ./main.go
+          args: ./...
 
       - name: Get issues result from linters check to summary
         if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
         continue-on-error: true
         run: |
           echo "### Linters check results" >> $GITHUB_STEP_SUMMARY
-          golangci-lint run ./main.go > results.md || true
+          golangci-lint run ./... > results.md || true
           sed -n '/issues:/,$p' -i results.md
           cat results.md >> $GITHUB_STEP_SUMMARY
 
-      - name: Golangci linters fix in main.go
+      - name: Golangci linters fix in sources
         if: ${{ github.event.inputs.Fix == 'true' }}
         continue-on-error: true
-        run: golangci-lint run --fix ./main.go
+        run: golangci-lint run --fix ./...
 
       - name: Golangci linters check after fix
         if: ${{ github.event.inputs.Fix == 'true' }}
@@ -175,14 +175,14 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.8.0
-          args: ./main.go
+          args: ./...
 
       - name: Get issues result from linters check to summary after fix
         if: ${{ github.event.inputs.Fix == 'true' }}
         continue-on-error: true
         run: |
           echo "### Linters check results after fix" >> $GITHUB_STEP_SUMMARY
-          golangci-lint run ./main.go > results.md || true
+          golangci-lint run ./... > results.md || true
           sed -n '/issues:/,$p' -i results.md
           cat results.md >> $GITHUB_STEP_SUMMARY
 
@@ -202,6 +202,7 @@ jobs:
           body: "Automatically fixing linters with golangci from GitHub Actions."
           add-paths: |
             main.go
+            internal/**
 
       - name: Go critical linters check
         id: gocrit
@@ -209,7 +210,7 @@ jobs:
         continue-on-error: true
         run: |
           go install github.com/go-critic/go-critic/cmd/gocritic@latest
-          gocritic check -v -enableAll ./main.go
+          gocritic check -v -enableAll ./...
 
       - name: Go security linters check
         id: gosec
@@ -236,7 +237,7 @@ jobs:
             **Update go version**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}
             **Update dependencies in** `go.mod`: ${{ github.event.inputs.Modules == 'true' && '✅' || '❌' }}
             **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}
-            **Golangci linters fix in** `main.go`: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}
+            **Golangci linters fix in** `./...`: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}
             **Create Pull Request**: ${{ github.event.inputs.PR == 'true' && '✅' || '❌' }}
             **Go critical linters check**: ${{ github.event.inputs.Gocrit == 'true' && '✅' || '❌' }}
             **Go security linters check**: ${{ github.event.inputs.Gosec == 'true' && '✅' || '❌' }}

@@ -40,14 +40,14 @@ lint-install:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
 
 lint-run: lint-install
-	golangci-lint run -v ./main.go
+	golangci-lint run -v ./...
 
 lint-fix: lint-install
-	golangci-lint run --fix ./main.go
+	golangci-lint run --fix ./...
 
 gocrit:
 	go install github.com/go-critic/go-critic/cmd/gocritic@latest
-	gocritic check -v -enableAll ./main.go
+	gocritic check -v -enableAll ./...
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest

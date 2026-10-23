@@ -399,12 +399,12 @@ jobs:
           echo "## GolangCI" >> $GITHUB_STEP_SUMMARY
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          golangci-lint run -v ./main.go 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          golangci-lint run -v ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "## Go Critic" >> $GITHUB_STEP_SUMMARY
           go install github.com/go-critic/go-critic/cmd/gocritic@latest
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          gocritic check -v -enableAll ./main.go 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          gocritic check -v -enableAll ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "## Go Security" >> $GITHUB_STEP_SUMMARY
           go install github.com/securego/gosec/v2/cmd/gosec@latest
