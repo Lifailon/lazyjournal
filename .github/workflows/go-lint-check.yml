@@ -3,6 +3,10 @@ name: Go linters check and auto-fix
 on:
   workflow_dispatch:
     inputs:
+      Branch:
+        description: 'Branch for checkout'
+        required: true
+        default: 'main'
       Update:
         description: 'Update go version'
         default: false
@@ -20,7 +24,7 @@ on:
         default: false
         type: boolean
       Fix:
-        description: 'Golangci linters fix'
+        description: 'Golangci linters auto-fix'
         default: false
         type: boolean
       PR:
@@ -51,11 +55,11 @@ jobs:
       APP_VERSION: "latest"
 
     steps:
-      - name: Checkout repository (main branch and last commits)
+      - name: Checkout repository (branch from param and last commits)
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.inputs.Branch }}
           fetch-depth: 1
-          ref: main
 
       - name: Install Go
         uses: actions/setup-go@v7
@@ -75,6 +79,7 @@ jobs:
         shell: bash
         run: |
           echo "### Parameters" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch for checkout**: ${{ github.event.inputs.Branch }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Update go version**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Update dependencies in** `go.mod`: ${{ github.event.inputs.Modules == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
