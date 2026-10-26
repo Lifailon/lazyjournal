@@ -52,7 +52,7 @@ jobs:
     runs-on: ${{ github.event.inputs.Runner }}
 
     steps:
-      - name: Checkout repository (main branch and 1 last commits)
+      - name: Checkout repository (main branch and last commits)
         uses: actions/checkout@v7
         with:
           fetch-depth: 1

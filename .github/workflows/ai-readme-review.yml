@@ -45,7 +45,7 @@ jobs:
 
       - name: AI-powered README file review
         id: ai_review
-        uses: actions/ai-inference@v2.1.1
+        uses: actions/ai-inference@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           endpoint: https://models.github.ai/inference

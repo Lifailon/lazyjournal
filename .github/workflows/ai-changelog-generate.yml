@@ -55,7 +55,7 @@ jobs:
 
       - name: Generate CHANGELOG using AI
         id: ai_query
-        uses: actions/ai-inference@v2.1.1
+        uses: actions/ai-inference@v3
         with:
           model: gpt-4.1
           max-tokens: 2048
