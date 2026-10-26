@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.Branch }}
 
       - name: Install opencode
         run: curl -fsSL https://opencode.ai/v2/install | bash
@@ -38,7 +40,7 @@ jobs:
         run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
       - name: Run opencode in auto mode
-        run: opencode run "${{ github.event.inputs.Prompt }}" --auto
+        run: opencode run "${{ github.event.inputs.Prompt }}" --auto --agent build
 
       - name: Git diff to github summary
         run: |
@@ -53,11 +55,10 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          author: "opencode[bot] <opencode[bot]@users.noreply.github.com>"
-          committer: "opencode[bot] <opencode[bot]@users.noreply.github.com>"
           commit-message: "opencode review for build ${{ github.run_number }}"
-          branch: ${{ inputs.Branch }}
+          branch: ${{ github.event.inputs.Branch }}
           title: "${{ github.event.inputs.Title }}"
-          body: "Prompt: `${{ inputs.Prompt }}`"
+          body: |
+            Prompt:
+            > ${{ inputs.Prompt }}
           add-paths: .
-          if-no-files-changed: ignore
