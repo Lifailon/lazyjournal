@@ -55,10 +55,10 @@ jobs:
 
       - name: Generate CHANGELOG using AI
         id: ai_query
-        uses: actions/ai-inference@v3
+        uses: actions/ai-inference@v2.1.1
         with:
           model: gpt-4.1
-          max-tokens: 2048
+          max-tokens: 8192
           system-prompt: |
             You are a technical writer.
             Analyze the Git commit log and create a summary of the changes.

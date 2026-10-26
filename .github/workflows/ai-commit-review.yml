@@ -48,14 +48,17 @@ jobs:
 
             💬 **Message**: ${{ github.event.head_commit.message }}
 
-      - name: Install GitHub Copilot CLI
-        run: npm install -g @github/copilot
+      # - name: Install GitHub Copilot CLI
+      #   run: npm install -g @github/copilot
 
       - name: Generate report using AI
         id: ai_query
-        uses: actions/ai-inference@v3
+        # uses: actions/ai-inference@v3
+        uses: actions/ai-inference@v2.1.1
         with:
-          model: gpt-4.1
+          model: gpt-4o-mini
+          max-tokens: 8192
+          token: ${{ secrets.GITHUB_TOKEN }}
           system-prompt: |
             You are a technical writer (commit reviewer) in Russian.
             Analyze the provided git diff of the latest commit.

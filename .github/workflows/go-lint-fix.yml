@@ -99,10 +99,10 @@ jobs:
 
       - name: Fix issue using AI
         id: ai_query
-        uses: actions/ai-inference@v3
+        uses: actions/ai-inference@v2.1.1
         with:
           model: gpt-4.1
-          max-tokens: 2048
+          max-tokens: 8192
           system-prompt: |
             You are a Go code refactoring expert. 
             Task: Fix golangci-lint issues in the provided code snippet.
