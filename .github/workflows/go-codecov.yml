@@ -1,0 +1,36 @@
+name: Go codecov
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v7
+
+      - name: Install Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: 1.25
+
+      - name: Run tests with coverage
+        run: go test ./... -coverprofile=coverage.out -json > test.json
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Publish unit test report using tparse to GitHub Summary
+        if: always()
+        run: |
+          go install github.com/mfridman/tparse@latest
+          tparse -all -format=markdown -file test.json >> $GITHUB_STEP_SUMMARY
