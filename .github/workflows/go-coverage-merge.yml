@@ -5,18 +5,22 @@ on:
     inputs:
       Debug:
         description: 'Advanced summary report from tests'
-        default: false
+        default: true
         type: boolean
       Linter:
         description: 'Check linters for final report'
         default: false
         type: boolean
-      Coverage:
-        description: 'Update html and svg reports on Wiki'
+      Shield:
+        description: 'Update HTML and coverage history reports to Wiki'
         default: false
         type: boolean
-      Markdown:
-        description: 'Update markdown report on Wiki'
+      Wiki:
+        description: 'Update Markdown report to Wiki'
+        default: false
+        type: boolean
+      Codecov:
+        description: 'Upload coverage to Codecov'
         default: false
         type: boolean
 
@@ -419,13 +423,13 @@ jobs:
           name: merge-coverage
           path: merge-coverage.out
 
-      - name: Update html and svg reports on Wiki
-        if: ${{ github.event.inputs.Coverage == 'true' }}
-        uses: ncruces/go-coverage-report@v0
+      - name: Update HTML and coverage history reports to Wiki
+        if: ${{ github.event.inputs.Shield == 'true' }}
+        uses: ncruces/go-coverage-report@v0.3.3
         with:
           coverage-file: merge-coverage.out
-          report: true
-          chart: true
+          report: true # HTML coverage report
+          chart: true  # SVG coverage history report
           amend: true
         continue-on-error: true
 
@@ -488,11 +492,11 @@ jobs:
           path: all-report.md
 
       - name: Checkout Wiki repository
-        if: ${{ github.event.inputs.Markdown == 'true' }}
+        if: ${{ github.event.inputs.Wiki == 'true' }}
         run: git clone https://github.com/Lifailon/lazyjournal.wiki wiki
 
-      - name: Update markdown report on Wiki
-        if: ${{ github.event.inputs.Markdown == 'true' }}
+      - name: Update markdown report to Wiki
+        if: ${{ github.event.inputs.Wiki == 'true' }}
         run: |
           echo -e "# Report for $(go run main.go -v) release\n" > wiki/home.md
           echo -e 'The test coverage report in `html` format using [go-coverage-report](https://github.com/marketplace/actions/go-coverage-report) is available [here](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.html).\n' >> wiki/home.md
@@ -533,3 +537,25 @@ jobs:
             🍏 macOS: ${{ env.MAC_COVERAGE }}
             💻 Windows: ${{ env.WIN_COVERAGE }}
             📚 Total: ${{ env.TOTAL_COVERAGE }}
+
+  Codecov:
+    runs-on: ubuntu-latest
+
+    needs: [Merge]
+
+    if: ${{ github.event.inputs.Codecov == 'true' }}
+
+    steps:
+      - name: Download merge coverage report
+        uses: actions/download-artifact@v8
+        with:
+          name: merge-coverage
+          path: .
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: merge-coverage.out
+          fail_ci_if_error: false
+          verbose: true

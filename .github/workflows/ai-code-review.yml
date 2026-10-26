@@ -15,6 +15,10 @@ on:
         description: "Branch for current or new PR"
         required: true
         default: "ai/code-review"
+      Title:
+        description: "Title for PR"
+        required: true
+        default: "[AI] Code review"
 
 permissions:
   contents: write
@@ -44,24 +48,16 @@ jobs:
           git diff >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
-      - name: Create GitHub App token
-        if: ${{ github.event.inputs.PR == 'true' }}
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.OPENCODE_APP_ID }}
-          private-key: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
-
       - name: Create PR
         if: ${{ github.event.inputs.PR == 'true' }}
         uses: peter-evans/create-pull-request@v8
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           author: "opencode[bot] <opencode[bot]@users.noreply.github.com>"
           committer: "opencode[bot] <opencode[bot]@users.noreply.github.com>"
           commit-message: "opencode review for build ${{ github.run_number }}"
           branch: ${{ inputs.Branch }}
-          title: "[AI] Code review"
-          body: "Changes in code from OpenCode by prompt: ${{ inputs.Prompt }}"
+          title: "${{ github.event.inputs.Title }}"
+          body: "Prompt: `${{ inputs.Prompt }}`"
           add-paths: .
           if-no-files-changed: ignore
