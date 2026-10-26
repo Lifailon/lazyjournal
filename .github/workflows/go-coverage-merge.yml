@@ -372,12 +372,12 @@ jobs:
           echo "- 💻 **Windows**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
-      - name: Install go coverage merge
+      - name: Install gocovmerge and add go bin to PATH
+        env:
+          GOTOOLCHAIN: auto
         run: |
           go install github.com/wadey/gocovmerge@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
-          export PATH=$HOME/go/bin:$PATH
-          which gocovmerge
 
       - name: Merge coverage reports
         run: |
