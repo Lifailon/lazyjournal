@@ -37,7 +37,7 @@ run-debug: copy build-debug
 # Linters
 
 lint-install:
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
 lint-run: lint-install
 	golangci-lint run -v ./...

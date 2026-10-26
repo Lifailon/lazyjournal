@@ -67,7 +67,7 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
 
       - name: Install golangci
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
       - name: Getting linter check results in json format before fixing
         run: |

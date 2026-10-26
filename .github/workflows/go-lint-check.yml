@@ -121,7 +121,7 @@ jobs:
 
       - name: Install golangci
         if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
       - name: Golangci check config
         id: configCheck
@@ -152,7 +152,7 @@ jobs:
         continue-on-error: true
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.8.0
+          version: v2.15.0
           args: ./...
 
       - name: Get issues result from linters check to summary
@@ -174,7 +174,7 @@ jobs:
         continue-on-error: true
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.8.0
+          version: v2.15.0
           args: ./...
 
       - name: Get issues result from linters check to summary after fix
