@@ -33,6 +33,15 @@ jobs:
         with:
           ref: ${{ github.event.inputs.Branch }}
 
+      - name: Build parameters to github summary
+        shell: bash
+        run: |
+          echo "## Build parameters" >> $GITHUB_STEP_SUMMARY
+          echo "- **Prompt**: ${{ github.event.inputs.Prompt }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR**: ${{ github.event.inputs.PR == 'true' && '✅ true' || '❌ false' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.event.inputs.Branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Title**: ${{ github.event.inputs.Title }}" >> $GITHUB_STEP_SUMMARY
+
       - name: Install opencode
         run: curl -fsSL https://opencode.ai/v2/install | bash
 

@@ -544,6 +544,9 @@ jobs:
     if: ${{ github.event.inputs.Codecov == 'true' }}
 
     steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v7
+
       - name: Download merge coverage report
         uses: actions/download-artifact@v8
         with:
@@ -555,5 +558,5 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: merge-coverage.out
-          fail_ci_if_error: false
+          flags: merge
           verbose: true
