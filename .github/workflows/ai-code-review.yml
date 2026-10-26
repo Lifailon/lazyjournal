@@ -1,0 +1,67 @@
+name: "[AI] Code review"
+
+on:
+  workflow_dispatch:
+    inputs:
+      Prompt:
+        description: "Prompt"
+        required: true
+        default: ""
+      PR:
+        description: "Create PR"
+        default: false
+        type: boolean
+      Branch:
+        description: "Branch for current or new PR"
+        required: true
+        default: "ai/code-review"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  opencode-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v7
+
+      - name: Install opencode
+        run: curl -fsSL https://opencode.ai/v2/install | bash
+
+      - name: Add opencode to PATH
+        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+
+      - name: Run opencode in auto mode
+        run: opencode run "${{ github.event.inputs.Prompt }}" --auto
+
+      - name: Git diff to github summary
+        run: |
+          echo "## Git diff" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`diff" >> $GITHUB_STEP_SUMMARY
+          git diff >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create GitHub App token
+        if: ${{ github.event.inputs.PR == 'true' }}
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.OPENCODE_APP_ID }}
+          private-key: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
+
+      - name: Create PR
+        if: ${{ github.event.inputs.PR == 'true' }}
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          author: "opencode[bot] <opencode[bot]@users.noreply.github.com>"
+          committer: "opencode[bot] <opencode[bot]@users.noreply.github.com>"
+          commit-message: "opencode review for build ${{ github.run_number }}"
+          branch: ${{ inputs.Branch }}
+          title: "[AI] Code review"
+          body: "Changes in code from OpenCode by prompt: ${{ inputs.Prompt }}"
+          add-paths: .
+          if-no-files-changed: ignore
