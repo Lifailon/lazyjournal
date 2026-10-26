@@ -237,7 +237,7 @@ jobs:
         run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
       - name: Run opencode in auto mode
-        run: opencode run "Analyze the PR ${{ github.event.pull_request.number }} and review the changes made. Create a report in the form of a list detailing all changes, explaining the benefits they provide or the problems they resolve. Check the quality and security of the code. Prepare a detailed report in Markdown format and save it to a file named `PR_REVIEW.md` — I will then post its contents as a response to this PR." --auto
+        run: opencode run "You are acting as a Pull Request reviewer. Analyze PR ${{ github.event.pull_request.number }}. Create a list-based report detailing all code changes, explaining their benefits or the problems they address. Evaluate the code for quality and security, identify potential bugs, and suggest improvements. Prepare a report in Markdown format, keep it concise so that it is easy to read and the core points are clear. Save the report to a file named `PR_REVIEW.md` - I will then post its contents as a response to this PR." --auto
 
       - name: Check report file
         run: |
