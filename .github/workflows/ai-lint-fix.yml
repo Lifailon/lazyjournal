@@ -1,4 +1,4 @@
-name: Go linters check and fix using AI
+name: "[AI] Linters fix"
 
 on:
   workflow_dispatch:

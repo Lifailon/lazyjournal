@@ -1,4 +1,4 @@
-name: Go coverage merge and update Wiki
+name: "[GO] Coverage merge and update Wiki"
 
 on:
   workflow_dispatch:

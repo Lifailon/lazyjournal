@@ -1,4 +1,4 @@
-name: Go linters check and auto-fix
+name: "[GO] Linters check"
 
 on:
   workflow_dispatch:

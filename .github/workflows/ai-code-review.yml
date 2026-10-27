@@ -64,7 +64,7 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "opencode review for build ${{ github.run_number }}"
+          commit-message: "code review from build ${{ github.run_number }}"
           base: main
           branch: ${{ github.event.inputs.Branch }}
           title: "${{ github.event.inputs.Title }}"
