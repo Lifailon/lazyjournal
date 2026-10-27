@@ -1495,7 +1495,7 @@ func runGoCui(mock bool) {
 		} else {
 			// Пробуем прочитать имя первого элемента (проверить список файлов/директорий)
 			_, err = f.Readdirnames(1)
-			f.Close()
+			_ = f.Close()
 			if err != nil {
 				app.dockerStreamLogsStatus = app.dockerStreamMode
 			} else {
@@ -1818,7 +1818,7 @@ func runGoCui(mock bool) {
 		}
 		g.Update(func(g *gocui.Gui) error {
 			selectedVarLog.Clear()
-			fmt.Fprintln(selectedVarLog, "Searching log files...")
+			_, _ = fmt.Fprintln(selectedVarLog, "Searching log files...")
 			selectedVarLog.Highlight = false
 			return nil
 		})
@@ -1994,11 +1994,11 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.FgColor = app.selectedBackgroundColor
 		// Заполняем окно стрелками
 		_, viewHeight := v.Size()
-		fmt.Fprintln(v, "▲")
+		_, _ = fmt.Fprintln(v, "▲")
 		for i := 1; i < viewHeight-1; i++ {
-			fmt.Fprintln(v, " ")
+			_, _ = fmt.Fprintln(v, " ")
 		}
-		fmt.Fprintln(v, "▼")
+		_, _ = fmt.Fprintln(v, "▼")
 	}
 
 	// Окно для вывода записей выбранного журнала (maxX-2 для отступа скролла и 8 для продолжения углов)
@@ -2021,7 +2021,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		}
 		v.Frame = false // Отключаем рамку для статуса
 		v.FgColor = app.foregroundColor
-		fmt.Fprintf(v,
+		_, _ = fmt.Fprintf(v,
 			" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
 				"Update interval: \033[32m%d\033[0m sec | "+
 				"Color mode: \033[32m%s\033[0m | "+
@@ -2101,7 +2101,7 @@ func (app *App) loadServices(journalName string) {
 		app.journalListFrameColor = app.errorColor
 		vError.FrameColor = app.journalListFrameColor
 		vError.Highlight = false
-		fmt.Fprintln(vError, "\033[31msystemd-journald not supported\033[0m")
+		_, _ = fmt.Fprintln(vError, "\033[31msystemd-journald not supported\033[0m")
 		return
 	}
 	if err != nil && app.testMode {
@@ -2157,7 +2157,7 @@ func (app *App) loadServices(journalName string) {
 				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31mAccess denied in systemd via systemctl\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31mAccess denied in systemd via systemctl\033[0m")
 				return
 			}
 			v, _ := app.gui.View("services")
@@ -2329,7 +2329,7 @@ func (app *App) loadServices(journalName string) {
 				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31mError getting journals by "+app.journalField+" field from journald\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31mError getting journals by "+app.journalField+" field from journald\033[0m")
 				return
 			} else {
 				vError, _ := app.gui.View("services")
@@ -2385,7 +2385,7 @@ func (app *App) loadServices(journalName string) {
 				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31mError getting boot information from journald\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31mError getting boot information from journald\033[0m")
 				return
 			} else {
 				vError, _ := app.gui.View("services")
@@ -2500,7 +2500,7 @@ func (app *App) loadServices(journalName string) {
 				app.journalListFrameColor = app.errorColor
 				vError.FrameColor = app.journalListFrameColor
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31m"+errorText+"\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31m"+errorText+"\033[0m")
 				return
 			}
 			v, _ := app.gui.View("services")
@@ -2605,7 +2605,7 @@ func (app *App) updateServicesList() {
 	visibleEnd := min(app.startServices+app.maxVisibleServices, len(app.journals))
 	// Отображаем только элементы в пределах видимой области
 	for i := app.startServices; i < visibleEnd; i++ {
-		fmt.Fprintln(v, app.journals[i].name)
+		_, _ = fmt.Fprintln(v, app.journals[i].name)
 	}
 }
 
@@ -2807,7 +2807,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
 			v.Clear()
-			fmt.Fprintln(v, "\033[31mError getting auditd logs:", err, "\033[0m")
+			_, _ = fmt.Fprintln(v, "\033[31mError getting auditd logs:", err, "\033[0m")
 			return
 		}
 		if err != nil && app.testMode {
@@ -2848,7 +2848,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
 			v.Clear()
-			fmt.Fprintln(v, "\033[31mError getting kernal logs:", err, "\033[0m")
+			_, _ = fmt.Fprintln(v, "\033[31mError getting kernal logs:", err, "\033[0m")
 			return
 		}
 		if err != nil && app.testMode {
@@ -2917,7 +2917,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
 			v.Clear()
-			fmt.Fprintln(v, "\033[31mError getting journald logs:", err, "\033[0m")
+			_, _ = fmt.Fprintln(v, "\033[31mError getting journald logs:", err, "\033[0m")
 			return
 		}
 		if err != nil && app.testMode {
@@ -3135,7 +3135,7 @@ func (app *App) loadFiles(logPath string) {
 				vError.FrameColor = app.fileSystemFrameColor
 				// Отключаем курсор и выводим сообщение об ошибке
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31mPermission denied (files not found)\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31mPermission denied (files not found)\033[0m")
 				return
 			} else {
 				vError, _ := app.gui.View("varLogs")
@@ -3226,7 +3226,7 @@ func (app *App) loadFiles(logPath string) {
 				vError.FrameColor = app.fileSystemFrameColor
 				// Отключаем курсор и выводим сообщение об ошибке
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31mPermission denied (files not found)\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31mPermission denied (files not found)\033[0m")
 				return
 			} else {
 				vError, _ := app.gui.View("varLogs")
@@ -3313,7 +3313,7 @@ func (app *App) loadFiles(logPath string) {
 				vError.FrameColor = app.fileSystemFrameColor
 				// Отключаем курсор и выводим сообщение об ошибке
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[31mFiles not found\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31mFiles not found\033[0m")
 				return
 			} else {
 				vError, _ := app.gui.View("varLogs")
@@ -3365,7 +3365,7 @@ func (app *App) loadFiles(logPath string) {
 				vError, _ := app.gui.View("varLogs")
 				vError.Clear()
 				vError.Highlight = false
-				fmt.Fprintln(vError, "\033[32mFiles not found\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[32mFiles not found\033[0m")
 				return
 			} else {
 				vError, _ := app.gui.View("varLogs")
@@ -3626,7 +3626,7 @@ func (app *App) loadWinFiles(logPath string) {
 			app.fileSystemFrameColor = app.errorColor
 			vError.FrameColor = app.fileSystemFrameColor
 			vError.Highlight = false
-			fmt.Fprintln(vError, "\033[31mPermission denied (files not found)\033[0m")
+			_, _ = fmt.Fprintln(vError, "\033[31mPermission denied (files not found)\033[0m")
 			return
 		} else {
 			vError, _ := app.gui.View("varLogs")
@@ -3707,7 +3707,7 @@ func (app *App) updateLogsList() {
 	v.Clear()
 	visibleEnd := min(app.startFiles+app.maxVisibleFiles, len(app.logfiles))
 	for i := app.startFiles; i < visibleEnd; i++ {
-		fmt.Fprintln(v, app.logfiles[i].name)
+		_, _ = fmt.Fprintln(v, app.logfiles[i].name)
 	}
 }
 
@@ -3864,7 +3864,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 			if stringErrors != "nil" && !app.testMode {
 				v, _ := app.gui.View("logs")
 				v.Clear()
-				fmt.Fprintln(v, "\033[31mError", stringErrors, "\033[0m")
+				_, _ = fmt.Fprintln(v, "\033[31mError", stringErrors, "\033[0m")
 				return
 			}
 			if stringErrors != "nil" && app.testMode {
@@ -3894,7 +3894,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
 					v.Clear()
-					fmt.Fprintln(v, " \033[31mError reading log using syslog tool in ASL (Apple System Log) format.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(v, " \033[31mError reading log using syslog tool in ASL (Apple System Log) format.\n", err, "\033[0m")
 					return
 				}
 				if err != nil && app.testMode {
@@ -3920,7 +3920,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
 					v.Clear()
-					fmt.Fprintln(v, " \033[31mError reading log using tcpdump tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(v, " \033[31mError reading log using tcpdump tool.\n", err, "\033[0m")
 					return
 				}
 				if err != nil && app.testMode {
@@ -3946,7 +3946,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
 					v.Clear()
-					fmt.Fprintln(v, " \033[31mError reading log using tcpdump tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(v, " \033[31mError reading log using tcpdump tool.\n", err, "\033[0m")
 					return
 				}
 				app.currentLogLines = strings.Split(string(output), "\n")
@@ -3958,11 +3958,12 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError create temp file.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError create temp file.\n", err, "\033[0m")
 					return
 				}
 				// Удаляем временный файл после обработки
-				defer os.Remove(tmpFile.Name())
+				tmpName := tmpFile.Name()
+				defer func() { _ = os.Remove(tmpName) }()
 				var cmdUnzip *exec.Cmd
 				if app.sshMode {
 					cmdUnzip = exec.Command(
@@ -3978,20 +3979,20 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err := cmdUnzip.Start(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError starting", unpacker, "tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError starting", unpacker, "tool.\n", err, "\033[0m")
 					return
 				}
 				if err := cmdUnzip.Wait(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError decompressing file with", unpacker, "tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError decompressing file with", unpacker, "tool.\n", err, "\033[0m")
 					return
 				}
 				// Закрываем временный файл, чтобы tcpdump мог его открыть
 				if err := tmpFile.Close(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError closing temp file.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError closing temp file.\n", err, "\033[0m")
 					return
 				}
 				// Создаем команду для tcpdump
@@ -4013,14 +4014,14 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError creating stdout pipe for tcpdump.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError creating stdout pipe for tcpdump.\n", err, "\033[0m")
 					return
 				}
 				// Запускаем tcpdump
 				if err := cmdTcpdump.Start(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError starting tcpdump.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError starting tcpdump.\n", err, "\033[0m")
 					return
 				}
 				// Читаем вывод tcpdump построчно
@@ -4032,14 +4033,14 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err := scanner.Err(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError reading output from tcpdump.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError reading output from tcpdump.\n", err, "\033[0m")
 					return
 				}
 				// Ожидаем завершения tcpdump
 				if err := cmdTcpdump.Wait(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError finishing tcpdump.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError finishing tcpdump.\n", err, "\033[0m")
 					return
 				}
 				app.currentLogLines = lines
@@ -4080,7 +4081,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError creating pipe for", unpacker, "tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError creating pipe for", unpacker, "tool.\n", err, "\033[0m")
 					return
 				}
 				// Стандартный вывод программы передаем в stdin tail
@@ -4092,20 +4093,20 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError creating stdout pipe for tail.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError creating stdout pipe for tail.\n", err, "\033[0m")
 					return
 				}
 				// Запуск команд
 				if err := cmdUnzip.Start(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError starting", unpacker, "tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError starting", unpacker, "tool.\n", err, "\033[0m")
 					return
 				}
 				if err := cmdTail.Start(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError starting tail from", unpacker, "stdout.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError starting tail from", unpacker, "stdout.\n", err, "\033[0m")
 					return
 				}
 				// Чтение вывода
@@ -4113,20 +4114,20 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError reading output from tail.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError reading output from tail.\n", err, "\033[0m")
 					return
 				}
 				// Ожидание завершения команд
 				if err := cmdUnzip.Wait(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError reading archive log using", unpacker, "tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError reading archive log using", unpacker, "tool.\n", err, "\033[0m")
 					return
 				}
 				if err := cmdTail.Wait(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
 					vError.Clear()
-					fmt.Fprintln(vError, " \033[31mError reading log using tail tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(vError, " \033[31mError reading log using tail tool.\n", err, "\033[0m")
 					return
 				}
 				// Выводим содержимое
@@ -4150,7 +4151,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
 					v.Clear()
-					fmt.Fprintln(v, " \033[31mError reading log using last tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(v, " \033[31mError reading log using last tool.\n", err, "\033[0m")
 					return
 				}
 				// Разбиваем вывод на строки
@@ -4187,7 +4188,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
 					v.Clear()
-					fmt.Fprintln(v, " \033[31mError reading log using lastb tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(v, " \033[31mError reading log using lastb tool.\n", err, "\033[0m")
 					return
 				}
 				lines := strings.Split(string(output), "\n")
@@ -4221,7 +4222,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
 					v.Clear()
-					fmt.Fprintln(v, " \033[31mError reading log using lastlog tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(v, " \033[31mError reading log using lastlog tool.\n", err, "\033[0m")
 					return
 				}
 				app.currentLogLines = strings.Split(string(output), "\n")
@@ -4244,7 +4245,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("logs")
 					v.Clear()
-					fmt.Fprintln(v, " \033[31mError reading log using lastlogin tool.\n", err, "\033[0m")
+					_, _ = fmt.Fprintln(v, " \033[31mError reading log using lastlogin tool.\n", err, "\033[0m")
 					return
 				}
 				app.currentLogLines = strings.Split(string(output), "\n")
@@ -4261,7 +4262,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					if err != nil && !app.testMode {
 						v, _ := app.gui.View("logs")
 						v.Clear()
-						fmt.Fprintln(v, " \033[31mError reading log using tail tool.\n", err, "\033[0m")
+						_, _ = fmt.Fprintln(v, " \033[31mError reading log using tail tool.\n", err, "\033[0m")
 						return
 					}
 					app.currentLogLines = strings.Split(string(output), "\n")
@@ -4274,7 +4275,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					if err != nil && !app.testMode {
 						v, _ := app.gui.View("logs")
 						v.Clear()
-						fmt.Fprintln(v, " \033[31mError reading log file.\n", err, "\033[0m")
+						_, _ = fmt.Fprintln(v, " \033[31mError reading log file.\n", err, "\033[0m")
 						return
 					}
 					app.currentLogLines = strings.Split(string(output), "\n")
@@ -4300,7 +4301,7 @@ func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors str
 	if err != nil {
 		return nil, fmt.Sprintf("open file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	// Получаем информацию о файле
 	stat, err := file.Stat()
 	if err != nil {
@@ -4448,17 +4449,17 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 				}
 				output, err := cmd.CombinedOutput()
 				if err != nil {
-					fmt.Fprintln(vError, "\033[31mError connection to the Kubernetes cluster\033[0m")
+					_, _ = fmt.Fprintln(vError, "\033[31mError connection to the Kubernetes cluster\033[0m")
 					app.currentLogLines = []string{string(output)}
 					app.applyFilter(false)
 				}
 			} else {
-				fmt.Fprintln(vError, "\033[31m"+containerizationSystem+" not installed (environment not found)\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31m"+containerizationSystem+" not installed (environment not found)\033[0m")
 			}
 		case "compose":
-			fmt.Fprintln(vError, "\033[31m"+app.dockerCompose+" not installed (environment not found)\033[0m")
+			_, _ = fmt.Fprintln(vError, "\033[31m"+app.dockerCompose+" not installed (environment not found)\033[0m")
 		default:
-			fmt.Fprintln(vError, "\033[31m"+containerizationSystem+" not installed (environment not found)\033[0m")
+			_, _ = fmt.Fprintln(vError, "\033[31m"+containerizationSystem+" not installed (environment not found)\033[0m")
 		}
 		return
 	}
@@ -4598,9 +4599,9 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			vError.FrameColor = app.dockerFrameColor
 			vError.Highlight = false
 			if containerizationSystem == "kubectl" {
-				fmt.Fprintln(vError, "\033[31mUnable to access the Kubernetes cluster\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31mUnable to access the Kubernetes cluster\033[0m")
 			} else {
-				fmt.Fprintln(vError, "\033[31mAccess denied or "+containerizationSystem+" service stopped\033[0m")
+				_, _ = fmt.Fprintln(vError, "\033[31mAccess denied or "+containerizationSystem+" service stopped\033[0m")
 			}
 			return
 		} else {
@@ -4645,7 +4646,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			vError, _ := app.gui.View("docker")
 			vError.Clear()
 			vError.Highlight = false
-			fmt.Fprintln(vError, "\033[32mNo running containers\033[0m")
+			_, _ = fmt.Fprintln(vError, "\033[32mNo running containers\033[0m")
 			return
 		} else {
 			vError, _ := app.gui.View("docker")
@@ -4764,7 +4765,7 @@ func (app *App) updateDockerContainerList() {
 	v.Clear()
 	visibleEnd := min(app.startDockerContainers+app.maxVisibleDockerContainers, len(app.dockerContainers))
 	for i := app.startDockerContainers; i < visibleEnd; i++ {
-		fmt.Fprintln(v, app.dockerContainers[i].name)
+		_, _ = fmt.Fprintln(v, app.dockerContainers[i].name)
 	}
 }
 
@@ -4930,7 +4931,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		if err != nil && !app.testMode {
 			v, _ := app.gui.View("logs")
 			v.Clear()
-			fmt.Fprintln(v, "\033[31mError get log path via docker inspect:", err, "\033[0m")
+			_, _ = fmt.Fprintln(v, "\033[31mError get log path via docker inspect:", err, "\033[0m")
 			return
 		}
 		if err != nil && app.testMode {
@@ -5358,7 +5359,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		case app.dockerStreamMode == "stdout" || containerizationSystem == "compose" || containerizationSystem == "kubectl":
 			// Читаем стандартный вывод
 			stdoutPipe, _ := cmd.StdoutPipe()
-			cmd.Start()
+			_ = cmd.Start()
 			stdoutBytes, stdoutErr = io.ReadAll(stdoutPipe)
 			stdoutLines := strings.Split(string(stdoutBytes), "\n")
 			// Удаляем последнюю пустую строку
@@ -5471,7 +5472,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				if !app.testMode {
 					v, _ := app.gui.View("logs")
 					v.Clear()
-					fmt.Fprintln(v, "\033[31mError getting logs from", containerName, "(id:", containerId, ")", "container.\033[0m")
+					_, _ = fmt.Fprintln(v, "\033[31mError getting logs from", containerName, "(id:", containerId, ")", "container.\033[0m")
 					return
 				} else {
 					log.Print("Error: getting logs from ", containerName, " (id:", containerId, ")", " container.")
@@ -5672,9 +5673,9 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 			if len(buffer) > 0 && cursor > 0 {
 				position := strings.LastIndex(buffer[0:cursor], " ")
 				if position == -1 {
-					v.SetCursor(0, 0)
+					_ = v.SetCursor(0, 0)
 				} else {
-					v.SetCursor(position, 0)
+					_ = v.SetCursor(position, 0)
 				}
 			}
 			return
@@ -5685,9 +5686,9 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 			if len(buffer) > 0 && cursor < len(buffer) {
 				position := strings.Index(buffer[cursor:len(buffer)-1], " ")
 				if position == -1 {
-					v.SetCursor(len(buffer), 0)
+					_ = v.SetCursor(len(buffer), 0)
 				} else {
-					v.SetCursor(cursor+position+1, 0)
+					_ = v.SetCursor(cursor+position+1, 0)
 				}
 			}
 			return
@@ -5735,7 +5736,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				app.sinceDateFilterMode = false
 				v.FrameColor = app.errorColor
 				v.Clear()
-				fmt.Fprint(v, "⎯")
+				_, _ = fmt.Fprint(v, "⎯")
 				app.updateFilterStatus()
 				return
 			// Игнорируем другие символы
@@ -5750,7 +5751,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			app.sinceFilterDate = filterDate
 			app.sinceFilterText = filterText
 			v.Clear()
-			fmt.Fprint(v, app.sinceFilterText)
+			_, _ = fmt.Fprint(v, app.sinceFilterText)
 			app.sinceDateFilterMode = true
 			v.FrameColor = app.selectedFrameColor
 			app.updateFilterStatus()
@@ -5764,7 +5765,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				app.untilDateFilterMode = false
 				v.FrameColor = app.errorColor
 				v.Clear()
-				fmt.Fprint(v, "⎯")
+				_, _ = fmt.Fprint(v, "⎯")
 				app.updateFilterStatus()
 				return
 			default:
@@ -5777,7 +5778,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			app.untilFilterDate = filterDate
 			app.untilFilterText = filterText
 			v.Clear()
-			fmt.Fprint(v, app.untilFilterText)
+			_, _ = fmt.Fprint(v, app.untilFilterText)
 			app.untilDateFilterMode = true
 			v.FrameColor = app.selectedFrameColor
 			app.updateFilterStatus()
@@ -5819,7 +5820,7 @@ func (app *App) updateStatus() {
 		return
 	}
 	vStatus.Clear()
-	fmt.Fprintf(vStatus,
+	_, _ = fmt.Fprintf(vStatus,
 		" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
 			"Update interval: \033[32m%d\033[0m sec | "+
 			"Color mode: \033[32m%s\033[0m | "+
@@ -6236,7 +6237,7 @@ func readLastLines(path string, maxLines int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
 		return nil, err
@@ -6247,7 +6248,7 @@ func readLastLines(path string, maxLines int) ([]byte, error) {
 
 	const blockSize int64 = 1024 * 1024
 	reader := iouring.NewFileReaderAt(file)
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	chunks := make([][]byte, 0, 4)
 	totalSize := 0
 	newlineCount := 0
@@ -6300,7 +6301,7 @@ func commandLineWorkers() int {
 func readCommandLineBatches(ctx context.Context, jobs chan<- commandLineBatch) commandLineReadResult {
 	defer close(jobs)
 	reader := iouring.NewStdinReader()
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	readBuffer := make([]byte, commandReadSize)
 	pending := make([]byte, 0, commandReadSize)
@@ -7517,12 +7518,12 @@ func (app *App) updateLogsView(lowerDown bool) {
 		// Индекс начала печати не должен быть меньше 0
 		printStart := max(len(app.filteredLogLines)-viewLines-1, 0)
 		for i := printStart; i < endLine; i++ {
-			fmt.Fprintln(v, app.filteredLogLines[i])
+			_, _ = fmt.Fprintln(v, app.filteredLogLines[i])
 		}
 	} else {
 		// Проходим по отфильтрованным строкам и выводим их
 		for i := startLine; i < endLine; i++ {
-			fmt.Fprintln(v, app.filteredLogLines[i])
+			_, _ = fmt.Fprintln(v, app.filteredLogLines[i])
 		}
 	}
 	// Вычисляем процент прокрутки и обновляем заголовок
@@ -7556,15 +7557,15 @@ func (app *App) viewScrollLogs(percentage int) {
 	_, viewHeight := vScroll.Size()
 	// Заполняем скролл пробелами, если вывод пустой или не выходит за пределы окна
 	if percentage == 0 || percentage > 100 {
-		fmt.Fprintln(vScroll, "▲")
+		_, _ = fmt.Fprintln(vScroll, "▲")
 		for i := 1; i < viewHeight-1; i++ {
-			fmt.Fprintln(vScroll, " ")
+			_, _ = fmt.Fprintln(vScroll, " ")
 		}
-		fmt.Fprintln(vScroll, "▼")
+		_, _ = fmt.Fprintln(vScroll, "▼")
 	} else {
 		// Рассчитываем позицию курсора (корректируем процент на размер скролла и верхней стрелки)
 		scrollPosition := (viewHeight*percentage)/100 - 3 - 1
-		fmt.Fprintln(vScroll, "▲")
+		_, _ = fmt.Fprintln(vScroll, "▲")
 		// Выводим строки с пробелами и символом █
 	for_scroll:
 		for i := 1; i < viewHeight-3; i++ {
@@ -7572,21 +7573,21 @@ func (app *App) viewScrollLogs(percentage int) {
 			switch {
 			case i == scrollPosition:
 				// Выводим скролл
-				fmt.Fprintln(vScroll, "███")
+				_, _ = fmt.Fprintln(vScroll, "███")
 			case scrollPosition <= 0 || app.logScrollPos == 0:
 				// Если вышли за пределы окна или текст находится в самом начале, устанавливаем курсор в начало
-				fmt.Fprintln(vScroll, "███")
+				_, _ = fmt.Fprintln(vScroll, "███")
 				// Остальное заполняем пробелами с учетом стрелки и курсора (-4) до последней стрелки (-1)
 				for i := 4; i < viewHeight-1; i++ {
-					fmt.Fprintln(vScroll, " ")
+					_, _ = fmt.Fprintln(vScroll, " ")
 				}
 				break for_scroll
 			default:
 				// Пробелы на остальных строках
-				fmt.Fprintln(vScroll, " ")
+				_, _ = fmt.Fprintln(vScroll, " ")
 			}
 		}
-		fmt.Fprintln(vScroll, "▼")
+		_, _ = fmt.Fprintln(vScroll, "▼")
 	}
 }
 
@@ -8017,7 +8018,7 @@ func (app *App) setupKeybindings() error {
 			"kubernetesContextManager",
 			"kubernetesNamespaceManager",
 		}
-		app.gui.SetKeybinding("", customTab, altMode, func(g *gocui.Gui, v *gocui.View) error {
+		_ = app.gui.SetKeybinding("", customTab, altMode, func(g *gocui.Gui, v *gocui.View) error {
 			return app.nextViewManager(g, v, views)
 		})
 		customBackTab, altMode := getHotkey(config.Hotkeys.BackSwitchWindows, "shift+tab")
@@ -8027,7 +8028,7 @@ func (app *App) setupKeybindings() error {
 			"dockerContextManager",
 			"sshManager",
 		}
-		app.gui.SetKeybinding("", customBackTab, altMode, func(g *gocui.Gui, v *gocui.View) error {
+		_ = app.gui.SetKeybinding("", customBackTab, altMode, func(g *gocui.Gui, v *gocui.View) error {
 			return app.nextViewManager(g, v, backViews)
 		})
 		customEnter, altModeEnter := getHotkey(config.Hotkeys.LoadJournal, "enter")
@@ -9035,7 +9036,7 @@ func (app *App) setupKeybindings() error {
 			app.sinceDateFilterMode = false
 			v.FrameColor = app.errorColor
 			v.Clear()
-			fmt.Fprint(v, "⎯")
+			_, _ = fmt.Fprint(v, "⎯")
 			app.updateFilterStatus()
 			return nil
 		}
@@ -9049,7 +9050,7 @@ func (app *App) setupKeybindings() error {
 			app.untilDateFilterMode = false
 			v.FrameColor = app.errorColor
 			v.Clear()
-			fmt.Fprint(v, "⎯")
+			_, _ = fmt.Fprint(v, "⎯")
 			app.updateFilterStatus()
 			return nil
 		}
@@ -9199,42 +9200,42 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	helpView.FrameColor = app.selectedFrameColor
 	helpView.TitleColor = app.selectedTitleColor
 	helpView.Clear()
-	fmt.Fprintln(helpView, "\n                   \033[32m_                              \033[36m_                                    _ ")
-	fmt.Fprintln(helpView, "                  \033[32m| |                            \033[36m| |                                  | |")
-	fmt.Fprintln(helpView, "                  \033[32m| |      __ _  ____ _   _      \033[36m| |  ___   _   _  _ __  _ __    __ _ | |")
-	fmt.Fprintln(helpView, "                  \033[32m| |     / _` ||_  /| | | | \033[36m_   | | / _ \\ | | | || '__|| '_ \\  / _` || |")
-	fmt.Fprintln(helpView, "                  \033[32m| |____| (_| | / / | |_| |\033[36m| |__| || (_) || |_| || |   | | | || (_| || |")
-	fmt.Fprintln(helpView, "                  \033[32m|______|\\__,_|/___| \\__, | \033[36m\\____/  \\___/  \\__,_||_|   |_| |_| \\__,_||_|")
-	fmt.Fprintln(helpView, "                  \033[32m					 __/ |                                             ")
-	fmt.Fprintln(helpView, "                  \033[32m                    |___/\033[0m")
-	fmt.Fprintln(helpView, "\n    Version: "+app.wordColor(appVersion))
-	fmt.Fprintln(helpView, "\n    Hotkeys description (default values):")
-	fmt.Fprintln(helpView, "\n      \033[32mF2\033[0m - interface for ssh manager and contexts switching.")
-	fmt.Fprintln(helpView, "      \033[32mTab\033[0m - switch to next window.")
-	fmt.Fprintln(helpView, "      \033[32mShift\033[0m+\033[32mTab\033[0m - return to previous window.")
-	fmt.Fprintln(helpView, "      \033[32mUp\033[0m/\033[32mPgUp\033[0m/\033[32mk\033[0m and \033[32mDown\033[0m/\033[32mPgDown\033[0m/\033[32mj\033[0m - move up and down through all journal lists and log output,")
-	fmt.Fprintln(helpView, "      as well as changing the filtering mode in the filter window.")
-	fmt.Fprintln(helpView, "      \033[32mShift\033[0m/\033[32mAlt\033[0m+\033[32mUp\033[0m/\033[32mDown\033[0m - quickly move up and down through all journal lists and log output")
-	fmt.Fprintln(helpView, "      every 10 or 100 lines (500 for log output).")
-	fmt.Fprintln(helpView, "      \033[32mShift\033[0m/\033[32mCtrl\033[0m+\033[32mk\033[0m/\033[32mj\033[0m - quickly move up and down (like Vim and alternative for macOS from config).")
-	fmt.Fprintln(helpView, "      \033[32mLeft\033[0m/\033[32mh\033[0m and \033[32mRight\033[0m/\033[32ml\033[0m - switch between journal lists in the selected window and change the date")
-	fmt.Fprintln(helpView, "      in the filter window.")
-	fmt.Fprintln(helpView, "      \033[32mDel\033[0m/\033[32mBackspace\033[0m - disable filtering by date.")
-	fmt.Fprintln(helpView, "      \033[32mEnter\033[0m - load a log from the list window or return to the previous window from the filter window.")
-	fmt.Fprintln(helpView, "      \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
-	fmt.Fprintln(helpView, "      \033[32mEnd\033[0m/\033[32mCtrl\033[0m+\033[32mE\033[0m - go to the end of the log.")
-	fmt.Fprintln(helpView, "      \033[32mHome\033[0m/\033[32mCtrl\033[0m+\033[32mA\033[0m - go to the top of the log.")
-	fmt.Fprintln(helpView, "      \033[32m[\033[0m/\033[32m]\033[0m - change the number of log lines to output (range: 200-200000, default: 10K).")
-	fmt.Fprintln(helpView, "      \033[32m{\033[0m/\033[32m}\033[0m - change the update interval of the log output (range: 2-10, default: 5).")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mU\033[0m - disable streaming of new events (log is loaded once without update).")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mR\033[0m - update the current log output manually (relevant in disable streaming mode).")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mQ\033[0m - update all log lists.")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - switch color mode between default, tailspin, bat or disable.")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change read mode for docker logs (stream only or json from file system).")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp for Docker and Kubernetes logs.")
-	fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mC\033[0m - clear input text in the filter window or exit.")
-	fmt.Fprintln(helpView, "\n    Source code: "+app.wordColor("https://github.com/Lifailon/lazyjournal"))
+	_, _ = fmt.Fprintln(helpView, "\n                   \033[32m_                              \033[36m_                                    _ ")
+	_, _ = fmt.Fprintln(helpView, "                  \033[32m| |                            \033[36m| |                                  | |")
+	_, _ = fmt.Fprintln(helpView, "                  \033[32m| |      __ _  ____ _   _      \033[36m| |  ___   _   _  _ __  _ __    __ _ | |")
+	_, _ = fmt.Fprintln(helpView, "                  \033[32m| |     / _` ||_  /| | | | \033[36m_   | | / _ \\ | | | || '__|| '_ \\  / _` || |")
+	_, _ = fmt.Fprintln(helpView, "                  \033[32m| |____| (_| | / / | |_| |\033[36m| |__| || (_) || |_| || |   | | | || (_| || |")
+	_, _ = fmt.Fprintln(helpView, "                  \033[32m|______|\\__,_|/___| \\__, | \033[36m\\____/  \\___/  \\__,_||_|   |_| |_| \\__,_||_|")
+	_, _ = fmt.Fprintln(helpView, "                  \033[32m					 __/ |                                             ")
+	_, _ = fmt.Fprintln(helpView, "                  \033[32m                    |___/\033[0m")
+	_, _ = fmt.Fprintln(helpView, "\n    Version: "+app.wordColor(appVersion))
+	_, _ = fmt.Fprintln(helpView, "\n    Hotkeys description (default values):")
+	_, _ = fmt.Fprintln(helpView, "\n      \033[32mF2\033[0m - interface for ssh manager and contexts switching.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mTab\033[0m - switch to next window.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mShift\033[0m+\033[32mTab\033[0m - return to previous window.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mUp\033[0m/\033[32mPgUp\033[0m/\033[32mk\033[0m and \033[32mDown\033[0m/\033[32mPgDown\033[0m/\033[32mj\033[0m - move up and down through all journal lists and log output,")
+	_, _ = fmt.Fprintln(helpView, "      as well as changing the filtering mode in the filter window.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mShift\033[0m/\033[32mAlt\033[0m+\033[32mUp\033[0m/\033[32mDown\033[0m - quickly move up and down through all journal lists and log output")
+	_, _ = fmt.Fprintln(helpView, "      every 10 or 100 lines (500 for log output).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mShift\033[0m/\033[32mCtrl\033[0m+\033[32mk\033[0m/\033[32mj\033[0m - quickly move up and down (like Vim and alternative for macOS from config).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mLeft\033[0m/\033[32mh\033[0m and \033[32mRight\033[0m/\033[32ml\033[0m - switch between journal lists in the selected window and change the date")
+	_, _ = fmt.Fprintln(helpView, "      in the filter window.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mDel\033[0m/\033[32mBackspace\033[0m - disable filtering by date.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mEnter\033[0m - load a log from the list window or return to the previous window from the filter window.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32m/\033[0m - go to the filter window from the current list window or logs window.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mEnd\033[0m/\033[32mCtrl\033[0m+\033[32mE\033[0m - go to the end of the log.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mHome\033[0m/\033[32mCtrl\033[0m+\033[32mA\033[0m - go to the top of the log.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32m[\033[0m/\033[32m]\033[0m - change the number of log lines to output (range: 200-200000, default: 10K).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32m{\033[0m/\033[32m}\033[0m - change the update interval of the log output (range: 2-10, default: 5).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mU\033[0m - disable streaming of new events (log is loaded once without update).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mR\033[0m - update the current log output manually (relevant in disable streaming mode).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mQ\033[0m - update all log lists.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - switch color mode between default, tailspin, bat or disable.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change read mode for docker logs (stream only or json from file system).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp for Docker and Kubernetes logs.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mC\033[0m - clear input text in the filter window or exit.")
+	_, _ = fmt.Fprintln(helpView, "\n    Source code: "+app.wordColor("https://github.com/Lifailon/lazyjournal"))
 }
 
 func (app *App) closeHelp(g *gocui.Gui) {
@@ -9266,7 +9267,7 @@ func (app *App) showInterfaceInfo(g *gocui.Gui, errInfo bool, text string) {
 	}
 	helpView.Wrap = true
 	helpView.Clear()
-	fmt.Fprintln(helpView, text)
+	_, _ = fmt.Fprintln(helpView, text)
 }
 
 // Закрытие интерфейс ошибки
@@ -9311,7 +9312,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		sshHosts := []string{"localhost"}
 		sshHosts = append(sshHosts, config.Ssh.Hosts...)
 		for _, sshHost := range sshHosts {
-			fmt.Fprintln(v, sshHost)
+			_, _ = fmt.Fprintln(v, sshHost)
 		}
 	}
 
@@ -9330,7 +9331,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		v.Clear()
 		contexts := app.getDockerContext()
 		for _, ctx := range contexts {
-			fmt.Fprintln(v, ctx)
+			_, _ = fmt.Fprintln(v, ctx)
 		}
 	}
 
@@ -9349,7 +9350,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		v.Clear()
 		contexts := app.getKubernetesContext()
 		for _, ctx := range contexts {
-			fmt.Fprintln(v, ctx)
+			_, _ = fmt.Fprintln(v, ctx)
 		}
 	}
 
@@ -9367,7 +9368,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 		v.SelBgColor = app.selectedBackgroundColor
 		namespaces := app.getKubernetesNamespace()
 		for _, ns := range namespaces {
-			fmt.Fprintln(v, ns)
+			_, _ = fmt.Fprintln(v, ns)
 		}
 	}
 }
@@ -9750,7 +9751,7 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 				return nil
 			}
 			// Возобновляет текст из переменной
-			fmt.Fprint(v, app.sinceFilterText)
+			_, _ = fmt.Fprint(v, app.sinceFilterText)
 			// Корректируем позицию курсора
 			if err = v.SetCursor(len(app.sinceFilterText), 0); err != nil {
 				return nil
@@ -9761,7 +9762,7 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 			v2.Editable = true
 			v2.Wrap = true
 			v2.Editor = app.timestampFilterEditor("untilFilter")
-			fmt.Fprint(v2, app.untilFilterText)
+			_, _ = fmt.Fprint(v2, app.untilFilterText)
 			if err = v2.SetCursor(len(app.untilFilterText), 0); err != nil {
 				return nil
 			}
@@ -9813,7 +9814,7 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 			if _, err := g.SetCurrentView("sinceFilter"); err != nil {
 				return nil
 			}
-			fmt.Fprint(v, app.sinceFilterText)
+			_, _ = fmt.Fprint(v, app.sinceFilterText)
 			if err = v.SetCursor(len(app.sinceFilterText), 0); err != nil {
 				return nil
 			}
@@ -9823,7 +9824,7 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 			v2.Editable = true
 			v2.Wrap = true
 			v2.Editor = app.timestampFilterEditor("untilFilter")
-			fmt.Fprint(v2, app.untilFilterText)
+			_, _ = fmt.Fprint(v2, app.untilFilterText)
 			if err = v2.SetCursor(len(app.untilFilterText), 0); err != nil {
 				return nil
 			}
@@ -9931,7 +9932,7 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 	// Добавляем сообщение о загрузке журнала
 	g.Update(func(g *gocui.Gui) error {
 		selectedVarLog.Clear()
-		fmt.Fprintln(selectedVarLog, "Searching log files...")
+		_, _ = fmt.Fprintln(selectedVarLog, "Searching log files...")
 		selectedVarLog.Highlight = false
 		return nil
 	})
@@ -10017,7 +10018,7 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 	}
 	g.Update(func(g *gocui.Gui) error {
 		selectedVarLog.Clear()
-		fmt.Fprintln(selectedVarLog, "Searching log files...")
+		_, _ = fmt.Fprintln(selectedVarLog, "Searching log files...")
 		selectedVarLog.Highlight = false
 		return nil
 	})
