@@ -11,6 +11,10 @@ on:
         description: 'Golangci linters check'
         default: false
         type: boolean
+      Ver:
+        description: 'Golangci version'
+        required: true
+        default: '2.15.0'
       Gocrit:
         description: 'Go critical linters check'
         default: false
@@ -42,13 +46,12 @@ jobs:
       APP_VERSION: "latest"
 
     steps:
-      - name: Checkout repository (branch from param and last commits)
+      - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.Branch }}
-          fetch-depth: 1
 
-      - name: Install Go
+      - name: Install Go 1.26
         uses: actions/setup-go@v7
         with:
           go-version: 1.26
@@ -64,6 +67,7 @@ jobs:
           echo "## Parameters" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch for checkout**: ${{ github.event.inputs.Branch }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Golangci version**: ${{ github.event.inputs.Ver }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Go critical linters check**: ${{ github.event.inputs.Gocrit == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Go security linters check**: ${{ github.event.inputs.Gosec == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Golangci linters auto-fix**: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
@@ -74,9 +78,9 @@ jobs:
           APP_VERSION=$(go run main.go -v)
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
 
-      - name: Install golangci
+      - name: Install golangci ${{ github.event.inputs.Ver }}
         if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${{ github.event.inputs.Ver }}
 
       - name: Golangci check config
         id: configCheck
@@ -101,16 +105,16 @@ jobs:
           linters=$(cat linters.md | awk -F ":" '/:/ {print "- [" $1"](https://golangci-lint.run/docs/linters/configuration/#"$1") -" $2":"$3; next} {print $0}')
           echo "$linters" > linters.md
 
-      - name: Golangci linters check using Action
+      - name: Golangci linters check using Action for send results to Telegram
         id: golangci
         if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
         continue-on-error: true
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.15.0
+          version: v${{ github.event.inputs.Ver }}
           args: ./...
 
-      - name: Get issues result from linters check to summary
+      - name: Golangci linters check for get issue list and send to GitHub Summary
         if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
         continue-on-error: true
         run: |
@@ -119,17 +123,17 @@ jobs:
           sed -n '/issues:/,$p' -i results.md
           cat results.md >> $GITHUB_STEP_SUMMARY
 
-      - name: Golangci linters fix in sources
+      - name: Golangci linters auto-fix in sources
         if: ${{ github.event.inputs.Fix == 'true' }}
         continue-on-error: true
         run: golangci-lint run --fix ./...
 
-      - name: Golangci linters check after fix
+      - name: Golangci linters check after auto-fix
         if: ${{ github.event.inputs.Fix == 'true' }}
         continue-on-error: true
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.15.0
+          version: v${{ github.event.inputs.Ver }}
           args: ./...
 
       - name: Get issues result from linters check to summary after fix
@@ -156,7 +160,7 @@ jobs:
           title: "Fixing linters"
           body: "Automatically fixing linters with golangci from GitHub Actions."
           add-paths: |
-            main.go
+            *.go
             internal/**
 
       - name: Go critical linters check
@@ -191,6 +195,7 @@ jobs:
             Parameters:
             **Branch for checkout**: ${{ github.event.inputs.Branch }}
             **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}
+            **Golangci version**: ${{ github.event.inputs.Ver }}
             **Go critical linters check**: ${{ github.event.inputs.Gocrit == 'true' && '✅' || '❌' }}
             **Go security linters check**: ${{ github.event.inputs.Gosec == 'true' && '✅' || '❌' }}
             **Golangci linters auto-fix** `./...`: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}
