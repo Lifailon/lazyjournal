@@ -21,7 +21,7 @@ import (
 
 func TestCreatReport(t *testing.T) {
 	file, _ := os.Create("test-report.md")
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 }
 
 func TestWinFiles(t *testing.T) {
@@ -32,10 +32,10 @@ func TestWinFiles(t *testing.T) {
 
 	// Создаем файл отчета
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer file.Close()
-	file.WriteString("## Windows file logs\n")
-	file.WriteString("| Lines | Read | Color | Path |\n")
-	file.WriteString("|-------|------|-------|------|\n")
+	defer func() { _ = file.Close() }()
+	_, _ = file.WriteString("## Windows file logs\n")
+	_, _ = file.WriteString("| Lines | Read | Color | Path |\n")
+	_, _ = file.WriteString("|-------|------|-------|------|\n")
 
 	// Тестируемые параметры для функции
 	testCases := []struct {
@@ -110,8 +110,8 @@ func TestWinFiles(t *testing.T) {
 				startTime2 := time.Now()
 				app.applyFilter(true)
 				endTime2 := time.Since(startTime2)
-				// Записываем в отчет путь, количество строк в массиве прочитанных из файла, время чтения и фильтрации + покраски
-				fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, app.lastLogPath)
+				// Записываем в отчет путь, количество строк в массива вread из файла, время чтения и фильтрации + покраски
+				_, _ = fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, app.lastLogPath)
 			}
 		})
 	}
@@ -123,10 +123,10 @@ func TestWinEvents(t *testing.T) {
 	}
 
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer file.Close()
-	file.WriteString("## Windows Event Logs\n")
-	file.WriteString("| Lines | Read | Color | Event Name |\n")
-	file.WriteString("|-------|------|-------|------------|\n")
+	defer func() { _ = file.Close() }()
+	_, _ = file.WriteString("## Windows Event Logs\n")
+	_, _ = file.WriteString("| Lines | Read | Color | Event Name |\n")
+	_, _ = file.WriteString("|-------|------|-------|------------|\n")
 
 	app := &App{
 		testMode:           true,
@@ -164,7 +164,7 @@ func TestWinEvents(t *testing.T) {
 		app.applyFilter(true)
 		endTime2 := time.Since(startTime2)
 
-		fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, serviceName)
+		_, _ = fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, serviceName)
 	}
 }
 
@@ -174,10 +174,10 @@ func TestUnixFiles(t *testing.T) {
 	}
 
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer file.Close()
-	file.WriteString("## Unix file logs\n")
-	file.WriteString("| Lines | Read | Color | Path |\n")
-	file.WriteString("|-------|------|-------|------|\n")
+	defer func() { _ = file.Close() }()
+	_, _ = file.WriteString("## Unix file logs\n")
+	_, _ = file.WriteString("| Lines | Read | Color | Path |\n")
+	_, _ = file.WriteString("|-------|------|-------|------|\n")
 
 	testCases := []struct {
 		name       string
@@ -232,7 +232,7 @@ func TestUnixFiles(t *testing.T) {
 				app.applyFilter(true)
 				endTime2 := time.Since(startTime2)
 
-				fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, app.lastLogPath)
+				_, _ = fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, app.lastLogPath)
 			}
 		})
 	}
@@ -244,10 +244,10 @@ func TestLinuxJournal(t *testing.T) {
 	}
 
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer file.Close()
-	file.WriteString("## System logs\n")
-	file.WriteString("| Lines | Read | Color | Journal Name |\n")
-	file.WriteString("|-------|------|-------|--------------|\n")
+	defer func() { _ = file.Close() }()
+	_, _ = file.WriteString("## System logs\n")
+	_, _ = file.WriteString("| Lines | Read | Color | Journal Name |\n")
+	_, _ = file.WriteString("|-------|------|-------|--------------|\n")
 
 	testCases := []struct {
 		name        string
@@ -294,9 +294,9 @@ func TestLinuxJournal(t *testing.T) {
 			}
 
 			if tc.journalName == "auditd" {
-				file.WriteString("## Audit rules\n")
-				file.WriteString("| Lines | Read | Color | Rules keys   |\n")
-				file.WriteString("|-------|------|-------|--------------|\n")
+				_, _ = file.WriteString("## Audit rules\n")
+				_, _ = file.WriteString("| Lines | Read | Color | Rules keys   |\n")
+				_, _ = file.WriteString("|-------|------|-------|--------------|\n")
 			}
 
 			var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -310,7 +310,7 @@ func TestLinuxJournal(t *testing.T) {
 				app.applyFilter(true)
 				endTime2 := time.Since(startTime2)
 
-				fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, serviceName)
+				_, _ = fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, serviceName)
 			}
 		})
 	}
@@ -318,10 +318,10 @@ func TestLinuxJournal(t *testing.T) {
 
 func TestDockerContainer(t *testing.T) {
 	file, _ := os.OpenFile("test-report.md", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer file.Close()
-	file.WriteString("## Container logs\n")
-	file.WriteString("| Lines | Read | Color | Container Name |\n")
-	file.WriteString("|-------|------|-------|----------------|\n")
+	defer func() { _ = file.Close() }()
+	_, _ = file.WriteString("## Container logs\n")
+	_, _ = file.WriteString("| Lines | Read | Color | Container Name |\n")
+	_, _ = file.WriteString("|-------|------|-------|----------------|\n")
 
 	testCases := []struct {
 		name                         string
@@ -374,7 +374,7 @@ func TestDockerContainer(t *testing.T) {
 				app.applyFilter(true)
 				endTime2 := time.Since(startTime2)
 
-				fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, containerName)
+				_, _ = fmt.Fprintf(file, "| %d | %s | %s | %s |\n", len(app.currentLogLines), endTime, endTime2, containerName)
 			}
 		})
 	}
@@ -884,7 +884,7 @@ func TestMockInterface(t *testing.T) {
 		}
 		g.Update(func(g *gocui.Gui) error {
 			selectedVarLog.Clear()
-			fmt.Fprintln(selectedVarLog, "Searching log files...")
+			_, _ = fmt.Fprintln(selectedVarLog, "Searching log files...")
 			selectedVarLog.Highlight = false
 			return nil
 		})
@@ -972,7 +972,7 @@ func TestMockInterface(t *testing.T) {
 
 	// Проверяем фильтрацию текста для списков
 	app.filterListText = "a"
-	app.createFilterEditor("lists")
+	_ = app.createFilterEditor("lists")
 	time.Sleep(1 * time.Second)
 	// app.filterListText = ""
 	app.applyFilterList()
@@ -993,8 +993,8 @@ func TestMockInterface(t *testing.T) {
 	}
 
 	// Проверяем фильтрацию по timestamp
-	app.timestampFilterEditor("sinceFilter")
-	app.timestampFilterEditor("untilFilter")
+	_ = app.timestampFilterEditor("sinceFilter")
+	_ = app.timestampFilterEditor("untilFilter")
 	time.Sleep(1 * time.Second)
 	if debug {
 		textLog := "test filter timestamp"
@@ -1008,7 +1008,7 @@ func TestMockInterface(t *testing.T) {
 		t.Log(debugLog + textLog)
 		slog.Debug(textLog)
 	}
-	app.nextView(g, nil)
+	_ = app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 
 	// Journals (services)
@@ -1120,7 +1120,7 @@ func TestMockInterface(t *testing.T) {
 		t.Log(debugLog + textLog)
 		slog.Debug(textLog)
 	}
-	app.nextView(g, nil)
+	_ = app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 
 	// File System (varLogs)
@@ -1217,19 +1217,19 @@ func TestMockInterface(t *testing.T) {
 		t.Log(debugLog + textLog)
 		slog.Debug(textLog)
 	}
-	app.nextView(g, nil)
+	_ = app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 
 	// Containerization System (docker)
 	if v, err := g.View("docker"); err == nil {
 		// Перемещаемся по списку вниз
-		app.nextDockerContainer(v, 100)
+		_ = app.nextDockerContainer(v, 100)
 		time.Sleep(1 * time.Second)
 		// Загружаем журнал (ВРЕМЕННО ОТКЛЮЧЕНО)
-		app.selectDocker(g, v)
+		_ = app.selectDocker(g, v)
 		time.Sleep(3 * time.Second)
 		// Перемещаемся по списку вверх
-		app.prevDockerContainer(v, 100)
+		_ = app.prevDockerContainer(v, 100)
 		time.Sleep(1 * time.Second)
 		if runtime.GOOS != "windows" {
 			// Вправо
@@ -1238,28 +1238,28 @@ func TestMockInterface(t *testing.T) {
 				t.Log(debugLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setContainersListRight(g, v)
+			_ = app.setContainersListRight(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Compose"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setContainersListRight(g, v)
+			_ = app.setContainersListRight(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Podman"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setContainersListRight(g, v)
+			_ = app.setContainersListRight(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Kubernetes"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setContainersListRight(g, v)
+			_ = app.setContainersListRight(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Docker"
@@ -1272,28 +1272,28 @@ func TestMockInterface(t *testing.T) {
 				t.Log(debugLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setContainersListLeft(g, v)
+			_ = app.setContainersListLeft(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Kubernetes"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setContainersListLeft(g, v)
+			_ = app.setContainersListLeft(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Podman"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setContainersListLeft(g, v)
+			_ = app.setContainersListLeft(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Compose"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setContainersListLeft(g, v)
+			_ = app.setContainersListLeft(g, v)
 			time.Sleep(2 * time.Second)
 			if debug {
 				textLog := "Docker"
@@ -1314,7 +1314,7 @@ func TestMockInterface(t *testing.T) {
 		t.Log(debugLog + textLog)
 		slog.Debug(textLog)
 	}
-	app.nextView(g, nil)
+	_ = app.nextView(g, nil)
 
 	// Проверяем фильтрацию текста для вывода журнала
 	app.filterText = "a"
@@ -1338,28 +1338,28 @@ func TestMockInterface(t *testing.T) {
 			t.Log(debugLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setFilterModeRight(g, v)
+		_ = app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter fuzzy"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setFilterModeRight(g, v)
+		_ = app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter regex"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setFilterModeRight(g, v)
+		_ = app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter timestamp"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setFilterModeRight(g, v)
+		_ = app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter default"
@@ -1372,28 +1372,28 @@ func TestMockInterface(t *testing.T) {
 			t.Log(debugLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setFilterModeLeft(g, v)
+		_ = app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter timestamp"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setFilterModeLeft(g, v)
+		_ = app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter regex"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setFilterModeLeft(g, v)
+		_ = app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter fuzzy"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setFilterModeLeft(g, v)
+		_ = app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter default"
@@ -1413,7 +1413,7 @@ func TestMockInterface(t *testing.T) {
 		t.Log(debugLog + textLog)
 		slog.Debug(textLog)
 	}
-	app.nextView(g, nil)
+	_ = app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 	if v, err := g.View("logs"); err == nil {
 		// Up tail
@@ -1422,51 +1422,51 @@ func TestMockInterface(t *testing.T) {
 			t.Log(debugLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 20K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 30K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 40K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 50K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 100K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 150K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 200K"
@@ -1479,79 +1479,79 @@ func TestMockInterface(t *testing.T) {
 			t.Log(debugLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 150K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 100K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 50K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 40K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 30K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 20K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 10K (default)"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 5K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 1K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 500"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
-		app.setCountLogViewDown(g, v)
+		_ = app.setCountLogViewDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 200"
@@ -1565,28 +1565,28 @@ func TestMockInterface(t *testing.T) {
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 500"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 1K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 5K"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.setCountLogViewUp(g, v)
+		_ = app.setCountLogViewUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Tail 10K"
@@ -1599,7 +1599,7 @@ func TestMockInterface(t *testing.T) {
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.scrollUpLogs(1)
+		_ = app.scrollUpLogs(1)
 		time.Sleep(1 * time.Second)
 		// Up logs output on 10
 		if debug {
@@ -1607,7 +1607,7 @@ func TestMockInterface(t *testing.T) {
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.scrollUpLogs(10)
+		_ = app.scrollUpLogs(10)
 		time.Sleep(1 * time.Second)
 		// Up logs output on 500
 		if debug {
@@ -1615,9 +1615,9 @@ func TestMockInterface(t *testing.T) {
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.scrollUpLogs(500)
+		_ = app.scrollUpLogs(500)
 		time.Sleep(1 * time.Second)
-		app.scrollUpLogs(500)
+		_ = app.scrollUpLogs(500)
 		time.Sleep(1 * time.Second)
 		// Down logs output on 1
 		if debug {
@@ -1625,7 +1625,7 @@ func TestMockInterface(t *testing.T) {
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.scrollDownLogs(1)
+		_ = app.scrollDownLogs(1)
 		time.Sleep(1 * time.Second)
 		// Down logs output on 10
 		if debug {
@@ -1633,7 +1633,7 @@ func TestMockInterface(t *testing.T) {
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.scrollDownLogs(10)
+		_ = app.scrollDownLogs(10)
 		time.Sleep(1 * time.Second)
 		// Down logs output on 500
 		if debug {
@@ -1641,7 +1641,7 @@ func TestMockInterface(t *testing.T) {
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		app.scrollDownLogs(500)
+		_ = app.scrollDownLogs(500)
 		time.Sleep(1 * time.Second)
 		// Move log output to top
 		if debug {
@@ -1667,23 +1667,23 @@ func TestMockInterface(t *testing.T) {
 	}
 
 	// TAB filter lists
-	app.nextView(g, nil)
+	_ = app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 
 	// Back Tab
-	app.backView(g, nil)
+	_ = app.backView(g, nil)
 	time.Sleep(1 * time.Second)
-	app.backView(g, nil)
+	_ = app.backView(g, nil)
 	time.Sleep(1 * time.Second)
-	app.backView(g, nil)
+	_ = app.backView(g, nil)
 	time.Sleep(1 * time.Second)
-	app.backView(g, nil)
+	_ = app.backView(g, nil)
 	time.Sleep(1 * time.Second)
-	app.backView(g, nil)
+	_ = app.backView(g, nil)
 	time.Sleep(1 * time.Second)
-	app.backView(g, nil)
+	_ = app.backView(g, nil)
 	time.Sleep(1 * time.Second)
-	app.backView(g, nil)
+	_ = app.backView(g, nil)
 	time.Sleep(1 * time.Second)
 	if debug {
 		textLog := "test back tab (Shift+Tab)"
@@ -1692,17 +1692,17 @@ func TestMockInterface(t *testing.T) {
 	}
 
 	// Проверяем переключение окон с помощью мыши
-	app.setSelectView(g, "filterList")
+	_ = app.setSelectView(g, "filterList")
 	time.Sleep(1 * time.Second)
-	app.setSelectView(g, "services")
+	_ = app.setSelectView(g, "services")
 	time.Sleep(1 * time.Second)
-	app.setSelectView(g, "varLogs")
+	_ = app.setSelectView(g, "varLogs")
 	time.Sleep(1 * time.Second)
-	app.setSelectView(g, "docker")
+	_ = app.setSelectView(g, "docker")
 	time.Sleep(1 * time.Second)
-	app.setSelectView(g, "filter")
+	_ = app.setSelectView(g, "filter")
 	time.Sleep(1 * time.Second)
-	app.setSelectView(g, "logs")
+	_ = app.setSelectView(g, "logs")
 	time.Sleep(1 * time.Second)
 	if debug {
 		textLog := "test mouse"
@@ -1711,31 +1711,31 @@ func TestMockInterface(t *testing.T) {
 	}
 
 	// Переключаем режим фильтрации на timestamp
-	g.SetCurrentView("filter")
+	_, _ = g.SetCurrentView("filter")
 	if v, err := g.View("filter"); err == nil {
-		app.setFilterModeRight(g, v)
+		_ = app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
-		app.setFilterModeRight(g, v)
+		_ = app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
-		app.setFilterModeRight(g, v)
+		_ = app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 	}
 
 	// Проверяем переключение окон в режиме timestamp
-	app.nextView(g, nil)
+	_ = app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
-	app.nextView(g, nil)
+	_ = app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
-	app.setSelectView(g, "logs")
+	_ = app.setSelectView(g, "logs")
 	time.Sleep(1 * time.Second)
-	app.setSelectView(g, "logs")
+	_ = app.setSelectView(g, "logs")
 	time.Sleep(1 * time.Second)
-	app.setSelectView(g, "logs")
+	_ = app.setSelectView(g, "logs")
 	time.Sleep(1 * time.Second)
-	app.nextView(g, nil)
+	_ = app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 
-	quit(g, nil)
+	_ = quit(g, nil)
 }
 
 // TestSSHManagerNavigation проверяет фокус после смены SSH-хоста.
@@ -1800,7 +1800,7 @@ func TestSSHManagerNavigation(t *testing.T) {
 		t.Fatal(err)
 	}
 	view.Clear()
-	fmt.Fprintln(view, "user@host-a")
+	_, _ = fmt.Fprintln(view, "user@host-a")
 	if err := app.getSelectedLine(g, view); err != nil {
 		t.Fatal(err)
 	}
