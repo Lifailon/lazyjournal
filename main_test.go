@@ -569,7 +569,7 @@ func TestFlags(t *testing.T) {
 	app.loggingPath = "lazyjournal.log"
 	app.loggingType = "text"
 	app.setupLogging()
-	defer app.loggingFile.Close()
+	defer func() { _ = app.loggingFile.Close() }()
 	showHelp()
 	showConfig()
 	app.showAudit()
@@ -619,7 +619,7 @@ func TestCommandColor(t *testing.T) {
 	// Записываем данные в "pipe" (это имитирует передачу данных в stdin)
 	go func() {
 		_, _ = pw.Write(data)
-		pw.Close()
+		_ = pw.Close()
 	}()
 
 	// Текущее имя хоста
@@ -696,7 +696,7 @@ func TestCommandFuzzyFilter(t *testing.T) {
 	os.Stdin = pr
 	go func() {
 		_, _ = pw.Write(data)
-		pw.Close()
+		_ = pw.Close()
 	}()
 
 	var filter = "success"
@@ -742,7 +742,7 @@ func TestCommandRegexFilter(t *testing.T) {
 	os.Stdin = pr
 	go func() {
 		_, _ = pw.Write(data)
-		pw.Close()
+		_ = pw.Close()
 	}()
 
 	var filter = "http|127"
@@ -794,7 +794,7 @@ func TestMockInterface(t *testing.T) {
 	app.loggingPath = "lazyjournal.log"
 	app.loggingType = "text"
 	app.setupLogging()
-	defer app.loggingFile.Close()
+	defer func() { _ = app.loggingFile.Close() }()
 	passLog := "\033[32mPASS\033[0m: "
 	debugLog := "\033[33mDEBUG\033[0m: "
 
@@ -917,7 +917,7 @@ func TestMockInterface(t *testing.T) {
 	}()
 
 	// Отображение GUI в режиме OutputNormal
-	go g.MainLoop()
+	go func() { _ = g.MainLoop() }()
 
 	time.Sleep(3 * time.Second)
 
@@ -1014,13 +1014,13 @@ func TestMockInterface(t *testing.T) {
 	// Journals (services)
 	if v, err := g.View("services"); err == nil {
 		// Перемещаемся по списку вниз
-		app.nextService(v, 100)
+		_ = app.nextService(v, 100)
 		time.Sleep(1 * time.Second)
 		// Загружаем журнал
-		app.selectService(g, v)
+		_ = app.selectService(g, v)
 		time.Sleep(3 * time.Second)
 		// Перемещаемся по списку вверх
-		app.prevService(v, 100)
+		_ = app.prevService(v, 100)
 		time.Sleep(1 * time.Second)
 		// Переключаем списки (только для Linux)
 		if runtime.GOOS != "windows" {
@@ -1030,35 +1030,35 @@ func TestMockInterface(t *testing.T) {
 				t.Log(debugLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListRight(g, v)
+			_ = app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "User units (UNIT)"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListRight(g, v)
+			_ = app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "System journals (USER_UNIT)"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListRight(g, v)
+			_ = app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "Kernel boot"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListRight(g, v)
+			_ = app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "Audit rules keys (auditd)"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListRight(g, v)
+			_ = app.setUnitListRight(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "System units (services)"
@@ -1071,35 +1071,35 @@ func TestMockInterface(t *testing.T) {
 				t.Log(debugLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListLeft(g, v)
+			_ = app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "Audit rules keys (auditd)"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListLeft(g, v)
+			_ = app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "Kernel boot"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListLeft(g, v)
+			_ = app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "System journals (USER_UNIT)"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListLeft(g, v)
+			_ = app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "User units (UNIT)"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setUnitListLeft(g, v)
+			_ = app.setUnitListLeft(g, v)
 			time.Sleep(3 * time.Second)
 			if debug {
 				textLog := "System units (services)"
@@ -1126,13 +1126,13 @@ func TestMockInterface(t *testing.T) {
 	// File System (varLogs)
 	if v, err := g.View("varLogs"); err == nil {
 		// Перемещаемся по списку вниз
-		app.nextFileName(v, 100)
+		_ = app.nextFileName(v, 100)
 		time.Sleep(1 * time.Second)
 		// Загружаем журнал
-		app.selectFile(g, v)
+		_ = app.selectFile(g, v)
 		time.Sleep(3 * time.Second)
 		// Перемещаемся по списку вверх
-		app.prevFileName(v, 100)
+		_ = app.prevFileName(v, 100)
 		time.Sleep(1 * time.Second)
 		if runtime.GOOS != "windows" {
 			// Вправо
@@ -1141,28 +1141,28 @@ func TestMockInterface(t *testing.T) {
 				t.Log(debugLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setLogFilesListRight(g, v)
+			_ = app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Optional package logs and custom path"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setLogFilesListRight(g, v)
+			_ = app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Users home logs"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setLogFilesListRight(g, v)
+			_ = app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Process descriptor logs"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setLogFilesListRight(g, v)
+			_ = app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "System var logs"
@@ -1175,28 +1175,28 @@ func TestMockInterface(t *testing.T) {
 				t.Log(debugLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setLogFilesListLeft(g, v)
+			_ = app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Process descriptor logs"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setLogFilesListLeft(g, v)
+			_ = app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Users home logs"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setLogFilesListLeft(g, v)
+			_ = app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "Optional package logs and custom path"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
-			app.setLogFilesListLeft(g, v)
+			_ = app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
 				textLog := "System var logs"
@@ -1557,7 +1557,6 @@ func TestMockInterface(t *testing.T) {
 			textLog := "Tail 200"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
-
 		}
 		// Up tail (return)
 		if debug {
