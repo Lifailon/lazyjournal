@@ -7,28 +7,8 @@ on:
         description: 'Branch for checkout'
         required: true
         default: 'main'
-      Update:
-        description: 'Update go version'
-        default: false
-        type: boolean
-      Version:
-        description: 'Version for Go'
-        required: false
-        default: '1.25'
-      Modules:
-        description: 'Update dependencies in modules'
-        default: false
-        type: boolean
       Golangci:
         description: 'Golangci linters check'
-        default: false
-        type: boolean
-      Fix:
-        description: 'Golangci linters auto-fix'
-        default: false
-        type: boolean
-      PR:
-        description: 'Create Pull Request'
         default: false
         type: boolean
       Gocrit:
@@ -39,6 +19,14 @@ on:
         description: 'Go security linters check'
         default: false
         type: boolean
+      Fix:
+        description: 'Golangci linters auto-fix'
+        default: false
+        type: boolean
+      PR:
+        description: 'Create Pull Request'
+        default: false
+        type: boolean
 
 jobs:
   lint:
@@ -47,7 +35,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      models: read
 
     runs-on: ubuntu-latest
 
@@ -66,63 +53,26 @@ jobs:
         with:
           go-version: 1.26
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Get build parameters to summary
         shell: bash
         run: |
-          echo "### Parameters" >> $GITHUB_STEP_SUMMARY
+          echo "## Parameters" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch for checkout**: ${{ github.event.inputs.Branch }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Update go version**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Update dependencies in** `go.mod`: ${{ github.event.inputs.Modules == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Golangci linters auto-fix in** `./...`: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Create Pull Request**: ${{ github.event.inputs.PR == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Go critical linters check**: ${{ github.event.inputs.Gocrit == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Go security linters check**: ${{ github.event.inputs.Gosec == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Golangci linters auto-fix**: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Create Pull Request**: ${{ github.event.inputs.PR == 'true' && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Get app version in env
         run: |
           APP_VERSION=$(go run main.go -v)
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
-
-      - name: Update Go version
-        if: ${{ github.event.inputs.Update == 'true' && github.event.inputs.Version != '' }}
-        run: |
-          go mod edit -go=${{ github.event.inputs.Version }}
-          # go mod edit -toolchain=go${{ github.event.inputs.Version }}
-          go mod tidy
-
-      - name: Reinstall Go on new version
-        if: ${{ github.event.inputs.Update == 'true' && github.event.inputs.Version != '' }}
-        uses: actions/setup-go@v7
-        with:
-          go-version: ${{ github.event.inputs.Version }}
-          cache: true
-
-      - name: Update dependencies in modules
-        if: ${{ github.event.inputs.Modules == 'true' }}
-        run: go get -u ./...
-
-      - name: Create Pull Request for update go version amd dependencies
-        if: ${{ github.event.inputs.Modules == 'true' && github.event.inputs.PR == 'true' }}
-        uses: peter-evans/create-pull-request@v8
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "update go version and package dependencies"
-          branch: "fix/${{ env.APP_VERSION }}-update"
-          title: "Updated dependencies"
-          body: "Updated go version and modules in `go.mod` and `go.sum` files."
-          add-paths: |
-            go.mod
-            go.sum
 
       - name: Install golangci
         if: ${{ github.event.inputs.golangci == 'true' || github.event.inputs.Fix == 'true' }}
@@ -239,13 +189,12 @@ jobs:
             👤 **User**: ${{ github.actor }}
             
             Parameters:
-            **Update go version**: ${{ github.event.inputs.Update == 'true' && '✅' || '❌' }}
-            **Update dependencies in** `go.mod`: ${{ github.event.inputs.Modules == 'true' && '✅' || '❌' }}
+            **Branch for checkout**: ${{ github.event.inputs.Branch }}
             **Golangci linters check**: ${{ github.event.inputs.Golangci == 'true' && '✅' || '❌' }}
-            **Golangci linters fix in** `./...`: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}
-            **Create Pull Request**: ${{ github.event.inputs.PR == 'true' && '✅' || '❌' }}
             **Go critical linters check**: ${{ github.event.inputs.Gocrit == 'true' && '✅' || '❌' }}
             **Go security linters check**: ${{ github.event.inputs.Gosec == 'true' && '✅' || '❌' }}
+            **Golangci linters auto-fix** `./...`: ${{ github.event.inputs.Fix == 'true' && '✅' || '❌' }}
+            **Create Pull Request**: ${{ github.event.inputs.PR == 'true' && '✅' || '❌' }}
 
             Results:
             ${{ steps.golangci.outcome == 'failure' && '❌' || '✅' }} **Golangci linters check**: ${{ steps.golangci.outcome }}

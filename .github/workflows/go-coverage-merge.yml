@@ -40,14 +40,10 @@ jobs:
         with:
           go-version: 1.25
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Start docker containers using compose
         run: |
@@ -141,14 +137,10 @@ jobs:
         with:
           go-version: 1.25
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Start docker containers using compose
         run: |
@@ -186,14 +178,10 @@ jobs:
         with:
           go-version: 1.25
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Run unit test in macOS
         run: sudo go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" -cover -coverprofile macos-coverage.out
@@ -231,14 +219,10 @@ jobs:
         with:
           go-version: 1.25
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Create log file for Windows
         run: |
@@ -296,14 +280,10 @@ jobs:
         with:
           go-version: 1.26
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Download coverage report for Linux (with root)
         uses: actions/download-artifact@v8
