@@ -1,0 +1,85 @@
+name: "[GO] Go version and modules update"
+
+on:
+  workflow_dispatch:
+    inputs:
+      Version:
+        description: 'Version for Go'
+        required: true
+        default: '1.26'
+      Modules:
+        description: 'Update dependencies in modules'
+        default: false
+        type: boolean
+      PR:
+        description: 'Create Pull Request'
+        default: false
+        type: boolean
+
+jobs:
+  lint:
+    name: Linters check
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (main branch and last commits)
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Install Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: 1.25
+
+      - name: Code verify and check build before updates
+        run: |
+          go vet ./...
+          go build -v -o /dev/null ./...
+
+      - name: Get app version in env
+        run: |
+          APP_VERSION=$(go run main.go -v)
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+
+      - name: Update Go version
+        if: ${{ github.event.inputs.Version != '' }}
+        run: |
+          go mod edit -go=${{ github.event.inputs.Version }}
+          # go mod edit -toolchain=go${{ github.event.inputs.Version }}
+          go mod tidy
+
+      - name: Reinstall Go on new version
+        if: ${{ github.event.inputs.Version != '' }}
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ github.event.inputs.Version }}
+          cache: true
+
+      - name: Update dependencies in modules
+        if: ${{ github.event.inputs.Modules == 'true' }}
+        run: go get -u ./...
+
+      - name: Code verify and check build after updates
+        run: |
+          go vet ./...
+          go build -v -o /dev/null ./...
+
+      - name: Create Pull Request for update go version and modules
+        if: ${{ github.event.inputs.Modules == 'true' && github.event.inputs.PR == 'true' }}
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "update go version and modules"
+          branch: "ops/go-${{ github.event.inputs.Version }}"
+          title: "Updated Go version and modules"
+          body: "Updated Go version to **${{ github.event.inputs.Version }}** as well as the module dependencies in `go.mod` and `go.sum`."
+          add-paths: |
+            go.mod
+            go.sum

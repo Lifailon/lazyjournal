@@ -1,4 +1,4 @@
-name: Go codecov
+name: "[GO] Codecov"
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: Go coverage merge and update Wiki
+name: "[GO] Coverage merge and update Wiki"
 
 on:
   workflow_dispatch:
@@ -40,14 +40,10 @@ jobs:
         with:
           go-version: 1.25
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Start docker containers using compose
         run: |
@@ -141,14 +137,10 @@ jobs:
         with:
           go-version: 1.25
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Start docker containers using compose
         run: |
@@ -186,14 +178,10 @@ jobs:
         with:
           go-version: 1.25
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Run unit test in macOS
         run: sudo go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" -cover -coverprofile macos-coverage.out
@@ -231,14 +219,10 @@ jobs:
         with:
           go-version: 1.25
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Create log file for Windows
         run: |
@@ -294,16 +278,12 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v7
         with:
-          go-version: 1.25
+          go-version: 1.26
 
-      - name: Install dependencies
+      - name: Code verify and check build
         run: |
-          go fmt ./...
           go vet ./...
-          go get ./...
-          go mod tidy
-          go mod verify
-          go build -v ./...
+          go build -v -o /dev/null ./...
 
       - name: Download coverage report for Linux (with root)
         uses: actions/download-artifact@v8
@@ -372,12 +352,10 @@ jobs:
           echo "- 💻 **Windows**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
-      - name: Install go coverage merge
+      - name: Install gocovmerge and add go bin to PATH
         run: |
           go install github.com/wadey/gocovmerge@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
-          export PATH=$HOME/go/bin:$PATH
-          which gocovmerge
 
       - name: Merge coverage reports
         run: |
@@ -546,6 +524,9 @@ jobs:
     if: ${{ github.event.inputs.Codecov == 'true' }}
 
     steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v7
+
       - name: Download merge coverage report
         uses: actions/download-artifact@v8
         with:
@@ -557,5 +538,5 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: merge-coverage.out
-          fail_ci_if_error: false
+          flags: merge
           verbose: true
