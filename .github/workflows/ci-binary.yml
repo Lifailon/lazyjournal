@@ -61,7 +61,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v7
         with:
-          go-version: 1.25
+          go-version: 1.27.0
 
       - name: Code verify and check build
         run: |
@@ -378,7 +378,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v7
         with:
-          go-version: 1.25
+          go-version: 1.27.0
 
       - name: Code verify and check build
         run: |

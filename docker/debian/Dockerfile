@@ -1,5 +1,5 @@
 # build-app lazyjournal and download dependency packages
-FROM golang:1.25-alpine3.23 AS build-app
+FROM golang:1.27.0-alpine3.24 AS build-app
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -23,7 +23,7 @@ RUN apk add -U -q --progress --no-cache curl jq ca-certificates && \
     curl -fSL https://dl.k8s.io/release/${latest}/bin/linux/${TARGETARCH}/kubectl -o /bin/kubectl
 
 # build-docker-cli
-FROM golang:1.24-alpine3.23 AS build-docker-cli
+FROM golang:1.27.0-alpine3.24 AS build-docker-cli
 RUN apk add -U -q --progress --no-cache git bash coreutils gcc musl-dev
 WORKDIR /go/src/github.com/docker/cli
 RUN git clone --branch v27.0.3 --single-branch --depth 1 https://github.com/docker/cli .
