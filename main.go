@@ -36,7 +36,7 @@ import (
 	"github.com/Lifailon/lazyjournal/internal/iouring"
 )
 
-var appVersion string = "0.8.6"
+var appVersion string = "0.8.7"
 
 // Структура конфигурации
 type Config struct {
@@ -955,10 +955,10 @@ var (
 
 // Ошибки
 var (
-	ErrConfigNotFound      = errors.New("configuration file not found")
-	ErrYamlSyntax          = errors.New("error yaml syntax in config file")
-	ErrInvalidStat         = errors.New("invalid stat output")
-	ErrBinaryFileNotFound  = errors.New("binary file not found in environment")
+	ErrConfigNotFound     = errors.New("configuration file not found")
+	ErrYamlSyntax         = errors.New("error yaml syntax in config file")
+	ErrInvalidStat        = errors.New("invalid stat output")
+	ErrBinaryFileNotFound = errors.New("binary file not found in environment")
 )
 
 // Статический массив ANSI цветов для покраски названий стеков в docker compose

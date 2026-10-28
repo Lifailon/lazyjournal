@@ -56,59 +56,59 @@ jobs:
             📊 **Stats**: ${{ env.DIFF_STAT }}
             💬 **Message**: ${{ github.event.head_commit.message }}
 
-  ai_review:
-    name: AI review
+  # ai_review:
+  #   name: AI review
 
-    needs: [tg_notify]
+  #   needs: [tg_notify]
 
-    runs-on: ubuntu-latest
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository (main branch and last commits)
-        uses: actions/checkout@v7
-        with:
-          ref: main
-          fetch-depth: 1
+  #   steps:
+  #     - name: Checkout repository (main branch and last commits)
+  #       uses: actions/checkout@v7
+  #       with:
+  #         ref: main
+  #         fetch-depth: 1
 
-      - name: Install opencode
-        run: curl -fsSL https://opencode.ai/v2/install | bash
+  #     - name: Install opencode
+  #       run: curl -fsSL https://opencode.ai/v2/install | bash
 
-      - name: Add opencode to PATH
-        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+  #     - name: Add opencode to PATH
+  #       run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
-      - name: Run opencode in auto mode
-        run: opencode run "Проанализируй изменения последнего коммита и сформируй краткий отчет - что было добавлено в формате списка, есть ли явные ошибки, проблемы или замечания и возможные рекомендации по улучшению. Отчет должен быть в формате Markdown и ограничен числом 4096 валидных символов для отправки в Telegram (учитывай допустимые и запрещенные символы). Запиши отчет в файл `COMMIT_REVIEW.md`, который я сам отправлю." --auto
+  #     - name: Run opencode in auto mode
+  #       run: opencode run "Проанализируй изменения последнего коммита и сформируй краткий отчет - что было добавлено в формате списка, есть ли явные ошибки, проблемы или замечания и возможные рекомендации по улучшению. Отчет должен быть в формате Markdown и ограничен числом 4096 валидных символов для отправки в Telegram (учитывай допустимые и запрещенные символы). Запиши отчет в файл `COMMIT_REVIEW.md`, который я сам отправлю." --auto
 
-      - name: Verify report exists and is not empty
-        run: |
-          if [ ! -f "COMMIT_REVIEW.md" ]; then
-            echo "::error::Файл COMMIT_REVIEW.md не найден"
-            exit 1
-          fi
-          if [ ! -s "COMMIT_REVIEW.md" ]; then
-            echo "::error::Файл COMMIT_REVIEW.md пустой"
-            exit 1
-          fi
-          BYTES=$(wc -c < COMMIT_REVIEW.md)
-          LINES=$(wc -l < COMMIT_REVIEW.md)
-          echo "Размер файла COMMIT_REVIEW.md: $BYTES байт"
-          echo "Строк в файле COMMIT_REVIEW.md: $LINES"
+  #     - name: Verify report exists and is not empty
+  #       run: |
+  #         if [ ! -f "COMMIT_REVIEW.md" ]; then
+  #           echo "::error::Файл COMMIT_REVIEW.md не найден"
+  #           exit 1
+  #         fi
+  #         if [ ! -s "COMMIT_REVIEW.md" ]; then
+  #           echo "::error::Файл COMMIT_REVIEW.md пустой"
+  #           exit 1
+  #         fi
+  #         BYTES=$(wc -c < COMMIT_REVIEW.md)
+  #         LINES=$(wc -l < COMMIT_REVIEW.md)
+  #         echo "Размер файла COMMIT_REVIEW.md: $BYTES байт"
+  #         echo "Строк в файле COMMIT_REVIEW.md: $LINES"
 
-      - name: Publish report to GitHub Summary
-        if: always()
-        run: |
-          echo "COMMIT_REVIEW.md" >> $GITHUB_STEP_SUMMARY
+  #     - name: Publish report to GitHub Summary
+  #       if: always()
+  #       run: |
+  #         echo "COMMIT_REVIEW.md" >> $GITHUB_STEP_SUMMARY
 
-      - name: Publish report to Telegram
-        if: always()
-        run: |
-          echo "COMMIT_REVIEW.md" >> $GITHUB_STEP_SUMMARY
+  #     - name: Publish report to Telegram
+  #       if: always()
+  #       run: |
+  #         echo "COMMIT_REVIEW.md" >> $GITHUB_STEP_SUMMARY
 
-      - name: Publish report to Telegram
-        uses: appleboy/telegram-action@master
-        with:
-          token: ${{ secrets.TELEGRAM_API_TOKEN }}
-          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
-          debug: true
-          format: markdown
-          message_file: COMMIT_REVIEW.md
+  #     - name: Publish report to Telegram
+  #       uses: appleboy/telegram-action@master
+  #       with:
+  #         token: ${{ secrets.TELEGRAM_API_TOKEN }}
+  #         to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+  #         debug: true
+  #         format: markdown
+  #         message_file: COMMIT_REVIEW.md

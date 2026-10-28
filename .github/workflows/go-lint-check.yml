@@ -202,6 +202,6 @@ jobs:
             **Create Pull Request**: ${{ github.event.inputs.PR == 'true' && '✅' || '❌' }}
 
             Results:
-            ${{ steps.golangci.outcome == 'failure' && '❌' || '✅' }} **Golangci linters check**: ${{ steps.golangci.outcome }}
-            ${{ steps.gocrit.outcome == 'failure' && '❌' || '✅' }} **Go critical linters check**: ${{ steps.gocrit.outcome }}
-            ${{ steps.gosec.outcome == 'failure' && '❌' || '✅' }} **Go security linters check**: ${{ steps.gosec.outcome }}
+            ${{ steps.golangci.outcome == 'success' && '✅' || (steps.golangci.outcome == 'skipped' && '➖' || '❌') }} **Golangci linters check**: ${{ steps.golangci.outcome }}
+            ${{ steps.gocrit.outcome == 'success' && '✅' || (steps.gocrit.outcome == 'skipped' && '➖' || '❌') }} **Go critical linters check**: ${{ steps.gocrit.outcome }}
+            ${{ steps.gosec.outcome == 'success' && '✅' || (steps.gosec.outcome == 'skipped' && '➖' || '❌') }} **Go security linters check**: ${{ steps.gosec.outcome }}

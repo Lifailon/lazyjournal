@@ -407,7 +407,7 @@ jobs:
           # echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           # gosec -severity=high ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
           # echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          # cat "$GITHUB_STEP_SUMMARY" >> all-report.md
+          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Upload merge coverage report
         uses: actions/upload-artifact@v7

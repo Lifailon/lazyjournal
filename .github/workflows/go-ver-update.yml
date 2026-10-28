@@ -17,8 +17,8 @@ on:
         type: boolean
 
 jobs:
-  lint:
-    name: Linters check
+  updates:
+    name: Go version and modules update
 
     permissions:
       contents: write
@@ -71,7 +71,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "update go version and modules"
           branch: "ops/go-${{ github.event.inputs.Version }}"
-          title: "Updated Go version and modules"
+          title: "Update the Go version and modules"
           body: "Updated Go version to **${{ github.event.inputs.Version }}** as well as the module dependencies in `go.mod` and `go.sum`."
           add-paths: |
             go.mod
