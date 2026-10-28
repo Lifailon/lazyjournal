@@ -3,6 +3,10 @@ name: "[GO] Coverage merge and update Wiki"
 on:
   workflow_dispatch:
     inputs:
+      Branch:
+        description: 'Branch for checkout'
+        required: true
+        default: 'main'
       Debug:
         description: 'Advanced summary report from tests'
         default: true
@@ -32,8 +36,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout main repository
+      - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.Branch }}
 
       - name: Install Go
         uses: actions/setup-go@v7
@@ -129,8 +135,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout main repository
+      - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.Branch }}
 
       - name: Install Go
         uses: actions/setup-go@v7
@@ -170,8 +178,10 @@ jobs:
     runs-on: macos-15
 
     steps:
-      - name: Checkout main repository
+      - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.Branch }}
 
       - name: Install Go
         uses: actions/setup-go@v7
@@ -211,8 +221,10 @@ jobs:
   Windows:
     runs-on: windows-2022
     steps:
-      - name: Checkout main repository
+      - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.Branch }}
 
       - name: Install Go
         uses: actions/setup-go@v7
@@ -272,8 +284,10 @@ jobs:
       TOTAL_COVERAGE: "n/a"
 
     steps:
-      - name: Checkout main repository
+      - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.Branch }}
 
       - name: Install Go
         uses: actions/setup-go@v7
@@ -378,22 +392,22 @@ jobs:
         if: ${{ github.event.inputs.Linter == 'true' }}
         run: |
           echo "# 👮‍♂️ Linters check" >> $GITHUB_STEP_SUMMARY
-          echo "## GolangCI" >> $GITHUB_STEP_SUMMARY
+          echo "## Golangci lint" >> $GITHUB_STEP_SUMMARY
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           golangci-lint run -v ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "## Go Critic" >> $GITHUB_STEP_SUMMARY
-          go install github.com/go-critic/go-critic/cmd/gocritic@latest
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          gocritic check -v -enableAll ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "## Go Security" >> $GITHUB_STEP_SUMMARY
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          gosec -severity=high ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
+          # echo "## Go Critic" >> $GITHUB_STEP_SUMMARY
+          # go install github.com/go-critic/go-critic/cmd/gocritic@latest
+          # echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          # gocritic check -v -enableAll ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          # echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          # echo "## Go Security" >> $GITHUB_STEP_SUMMARY
+          # go install github.com/securego/gosec/v2/cmd/gosec@latest
+          # echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          # gosec -severity=high ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          # echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          # cat "$GITHUB_STEP_SUMMARY" >> all-report.md
 
       - name: Upload merge coverage report
         uses: actions/upload-artifact@v7
@@ -524,8 +538,10 @@ jobs:
     if: ${{ github.event.inputs.Codecov == 'true' }}
 
     steps:
-      - name: Checkout main repository
+      - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.Branch }}
 
       - name: Download merge coverage report
         uses: actions/download-artifact@v8

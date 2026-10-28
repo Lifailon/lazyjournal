@@ -33,20 +33,15 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Install Go
+      - name: Install Go ${{ github.event.inputs.Version }}
         uses: actions/setup-go@v7
         with:
-          go-version: 1.25
+          go-version: ${{ github.event.inputs.Version }}
 
       - name: Code verify and check build before updates
         run: |
           go vet ./...
           go build -v -o /dev/null ./...
-
-      - name: Get app version in env
-        run: |
-          APP_VERSION=$(go run main.go -v)
-          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
 
       - name: Update Go version
         if: ${{ github.event.inputs.Version != '' }}
@@ -55,16 +50,14 @@ jobs:
           # go mod edit -toolchain=go${{ github.event.inputs.Version }}
           go mod tidy
 
-      - name: Reinstall Go on new version
-        if: ${{ github.event.inputs.Version != '' }}
-        uses: actions/setup-go@v7
-        with:
-          go-version: ${{ github.event.inputs.Version }}
-          cache: true
+      - name: Get module list for update
+        run: go list -m -u all
 
       - name: Update dependencies in modules
         if: ${{ github.event.inputs.Modules == 'true' }}
-        run: go get -u ./...
+        run: |
+          go get -u ./...
+          go mod tidy
 
       - name: Code verify and check build after updates
         run: |
