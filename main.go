@@ -955,9 +955,10 @@ var (
 
 // Ошибки
 var (
-	ErrConfigNotFound = errors.New("configuration file not found")
-	ErrYamlSyntax     = errors.New("error yaml syntax in config file")
-	ErrInvalidStat    = errors.New("invalid stat output")
+	ErrConfigNotFound      = errors.New("configuration file not found")
+	ErrYamlSyntax          = errors.New("error yaml syntax in config file")
+	ErrInvalidStat         = errors.New("invalid stat output")
+	ErrBinaryFileNotFound  = errors.New("binary file not found in environment")
 )
 
 // Статический массив ANSI цветов для покраски названий стеков в docker compose
@@ -1023,7 +1024,7 @@ func (app *App) journalCheck(mode string) ([]string, error) {
 	}
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("%s", string(output))
+		return nil, fmt.Errorf("%s: %w", string(output), err)
 	} else {
 		return strings.Split(strings.TrimSpace(string(output)), "\n"), nil
 	}
@@ -1042,7 +1043,7 @@ func remoteGetOS(sshOptions []string) (string, error) {
 	// Извлекаем комбинированный вывод (захватываем stdout и stderr) для вывода ошибки подключения
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("%s", strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("%s: %w", strings.TrimSpace(string(output)), err)
 	} else {
 		return strings.ToLower(string(output)), nil
 	}
@@ -1223,7 +1224,6 @@ func runGoCui(mock bool) {
 	// Включаем логирование
 	if *loggingFlag {
 		app.setupLogging()
-		defer app.loggingFile.Close()
 	}
 
 	// -d/tail-mode-disable
@@ -1251,6 +1251,9 @@ func runGoCui(mock bool) {
 		if *tailFlag != config.Settings.TailModeLines {
 			// Если ошибка в флаге, возвращяем ошибку
 			fmt.Println("Available values for tail mode: 200, 500, 1000, 5000, 10000, 20000, 30000, 40000, 50000, 100000, 150000 or 200000 (default: 10K lines)")
+			if app.loggingFile != nil {
+				_ = app.loggingFile.Close()
+			}
 			os.Exit(1)
 		} else {
 			// Если ошибка в конфигурации (или значение не задано), задаем значение по умолчанию
@@ -1273,6 +1276,9 @@ func runGoCui(mock bool) {
 		updateIntervalInt, err := strconv.Atoi(config.Settings.UpdateInterval)
 		if err == nil && *updateFlag != updateIntervalInt {
 			fmt.Println("Valid range: 2-10 (default: 5 seconds)")
+			if app.loggingFile != nil {
+				_ = app.loggingFile.Close()
+			}
 			os.Exit(1)
 		} else {
 			app.logUpdateSeconds = 5
@@ -1294,6 +1300,9 @@ func runGoCui(mock bool) {
 		minSymbolFilterInt, err := strconv.Atoi(config.Settings.MinSymbolFilter)
 		if err == nil && *minSymbolFilterFlag != minSymbolFilterInt {
 			fmt.Println("Valid range: 1-10 (default: 3 symbols)")
+			if app.loggingFile != nil {
+				_ = app.loggingFile.Close()
+			}
 			os.Exit(1)
 		} else {
 			app.minSymbolFilter = 3
@@ -1346,6 +1355,9 @@ func runGoCui(mock bool) {
 	default:
 		if *colorModeFlag != config.Settings.ColorMode {
 			fmt.Println("Available values for color mode: default, tailspin, bat or disable")
+			if app.loggingFile != nil {
+				_ = app.loggingFile.Close()
+			}
 			os.Exit(1)
 		} else {
 			app.colorMode = "default"
@@ -5940,7 +5952,7 @@ func (app *App) checkBin(commands []string) (string, error) {
 				app.closeInfo(g)
 			}()
 		}
-		return "", errors.New("binary file not found in environment")
+		return "", ErrBinaryFileNotFound
 	}
 }
 
