@@ -11,6 +11,10 @@ on:
         description: 'Update dependencies in modules'
         default: false
         type: boolean
+      Workflows:
+        description: 'Update go version in workflows'
+        default: false
+        type: boolean
       PR:
         description: 'Create Pull Request'
         default: false
@@ -44,7 +48,6 @@ jobs:
           go build -v -o /dev/null ./...
 
       - name: Update Go version
-        if: ${{ github.event.inputs.Version != '' }}
         run: |
           go mod edit -go=${{ github.event.inputs.Version }}
           # go mod edit -toolchain=go${{ github.event.inputs.Version }}
@@ -64,6 +67,11 @@ jobs:
           go vet ./...
           go build -v -o /dev/null ./...
 
+      - name: Update Go version in workflows
+        if: ${{ github.event.inputs.Workflows == 'true' }}
+        run: |
+          sed -i -E "s/go-version:\s*[0-9.]+/go-version: ${{ github.event.inputs.Version }}/" .github/workflows/*.yml
+
       - name: Create Pull Request for update go version and modules
         if: ${{ github.event.inputs.Modules == 'true' && github.event.inputs.PR == 'true' }}
         uses: peter-evans/create-pull-request@v8
@@ -76,3 +84,4 @@ jobs:
           add-paths: |
             go.mod
             go.sum
+            .github/workflows/*.yml

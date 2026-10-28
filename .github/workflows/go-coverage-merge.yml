@@ -393,7 +393,7 @@ jobs:
         run: |
           echo "# 👮‍♂️ Linters check" >> $GITHUB_STEP_SUMMARY
           echo "## Golangci lint" >> $GITHUB_STEP_SUMMARY
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           golangci-lint run -v ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
