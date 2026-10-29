@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -124,6 +125,7 @@ type Hotkeys struct {
 	SwitchDockerMode     string `yaml:"switchDockerMode"`
 	SwitchStreamMode     string `yaml:"switchStreamMode"`
 	TimestampShow        string `yaml:"timestampShow"`
+	CopyToClipboard      string `yaml:"copyToClipboard"`
 	Exit                 string `yaml:"exit"`
 }
 
@@ -259,11 +261,13 @@ type App struct {
 	windowHeight int
 
 	minSymbolFilter  int      // минимальное кол-во символов дли фильтрации вывода
-	filterText       string   // текст для фильтрации записей журнала
-	currentLogLines  []string // набор строк (срез) для хранения журнала без фильтрации
-	filteredLogLines []string // набор строк (срез) для хранения журнала после фильтра
+	filterText       string   // текст для фильтрации вывода логов
+	currentLogLines  []string // набор строк (срез) для хранения вывода логов без фильтрации
+	filteredLogLines []string // набор строк (срез) для хранения вывода логов после фильтрации и до покраски
+	coloredLogLines  []string // набор строк (срез) для хранения вывода логов после фильтрации и покраски
 	logScrollPos     int      // позиция прокрутки для отображаемых строк журнала
 	lastFilterText   string   // фиксируем содержимое последнего ввода текста для фильтрации
+	logsViewHeight   int      // количество видимых строк, которые умещается в окно отображения логов (для копирования в буфер обмена)
 
 	// Настройка логирования приложения
 	logging     bool
@@ -478,6 +482,7 @@ func showConfig() {
 	fmt.Printf("  switchDockerMode:         %s\n", config.Hotkeys.SwitchDockerMode)
 	fmt.Printf("  switchStreamMode:         %s\n", config.Hotkeys.SwitchStreamMode)
 	fmt.Printf("  timestampShow:            %s\n", config.Hotkeys.TimestampShow)
+	fmt.Printf("  copyToClipboard:          %s\n", config.Hotkeys.CopyToClipboard)
 	fmt.Printf("  exit:                     %s\n", config.Hotkeys.Exit)
 
 	if len(config.Ssh.Hosts) >= 1 {
@@ -6048,12 +6053,10 @@ func (app *App) applyFilter(color bool) {
 		// Фиксируем время начала покраски журнала
 		startTime := time.Now()
 		// Если текст фильтра пустой или равен любому символу для regex, возвращяем вывод без фильтрации
-		if filter == "" || (filter == "." && app.selectFilterMode == "regex") ||
-			// Если длинна текста меньше флага минального кол-ва символов фильтра, пропускаем фильтрацию
-			len(filter) < app.minSymbolFilter {
-			app.filteredLogLines = app.currentLogLines
+		// ИЛИ если длинна текста меньше флага минального кол-ва символов фильтра, пропускаем фильтрацию
+		if filter == "" || (filter == "." && app.selectFilterMode == "regex") || len(filter) < app.minSymbolFilter {
+			app.filteredLogLines = append([]string(nil), app.currentLogLines...)
 		} else {
-			app.filteredLogLines = make([]string, 0)
 			// Опускаем регистр ввода текста для фильтра
 			filter = strings.ToLower(filter)
 			// Проверка регулярного выражения
@@ -6088,16 +6091,19 @@ func (app *App) applyFilter(color bool) {
 		} else {
 			app.filteredLogLines = append(app.filteredLogLines, "")
 		}
+		// Копируем данные после фильтрации в слайс для покраски
+		app.coloredLogLines = make([]string, len(app.filteredLogLines))
+		copy(app.coloredLogLines, app.filteredLogLines)
 		// Определяем режим покраски или пропускаем
 		switch app.colorMode {
 		case "default":
-			app.filteredLogLines = app.mainColor(app.filteredLogLines)
+			app.coloredLogLines = app.mainColor(app.coloredLogLines)
 		case "tailspin":
 			// Проверяем, что tailspin или tspin установлен в системе
 			binName, err := app.checkBin([]string{"tailspin", "tspin"})
 			if err == nil {
 				cmd := exec.Command(binName)
-				logLines := strings.Join(app.filteredLogLines, "\n")
+				logLines := strings.Join(app.coloredLogLines, "\n")
 				// Создаем пайп для передачи данных
 				cmd.Stdin = bytes.NewBufferString(logLines)
 				var out bytes.Buffer
@@ -6105,7 +6111,7 @@ func (app *App) applyFilter(color bool) {
 				// Если ошибка, пропускаем покраску
 				if err := cmd.Run(); err == nil {
 					colorLogLines := strings.Split(out.String(), "\n")
-					app.filteredLogLines = colorLogLines
+					app.coloredLogLines = colorLogLines
 				}
 			}
 		case "bat":
@@ -6120,7 +6126,7 @@ func (app *App) applyFilter(color bool) {
 					"--decorations=always",
 					"--theme=ansi",
 				)
-				logLines := strings.Join(app.filteredLogLines, "\n")
+				logLines := strings.Join(app.coloredLogLines, "\n")
 				// Создаем пайп для передачи данных
 				cmd.Stdin = bytes.NewBufferString(logLines)
 				var out bytes.Buffer
@@ -6128,7 +6134,7 @@ func (app *App) applyFilter(color bool) {
 				// Если ошибка, пропускаем покраску
 				if err := cmd.Run(); err == nil {
 					colorLogLines := strings.Split(out.String(), "\n")
-					app.filteredLogLines = colorLogLines
+					app.coloredLogLines = colorLogLines
 				}
 			}
 		}
@@ -6137,8 +6143,8 @@ func (app *App) applyFilter(color bool) {
 		app.debugColorTime = endTime.Truncate(time.Millisecond).String()
 	}
 	// Debug: корректируем текущую позицию скролла, если размер массива стал меньше
-	if size > len(app.filteredLogLines) {
-		newScrollPos := len(app.filteredLogLines) - viewHeight
+	if size > len(app.coloredLogLines) {
+		newScrollPos := len(app.coloredLogLines) - viewHeight
 		app.logScrollPos = max(newScrollPos, 0)
 	}
 	// Обновляем автоскролл (всегда опускаем вывод в самый низ) для отображения отфильтрованных записей
@@ -6525,7 +6531,7 @@ func (app *App) commandLineColor(fromFilter bool) {
 		return
 	}
 	output := bufio.NewWriterSize(os.Stdout, 1024*1024)
-	for _, line := range app.mainColor(app.filteredLogLines) {
+	for _, line := range app.mainColor(app.coloredLogLines) {
 		_, _ = output.WriteString(line)
 		_ = output.WriteByte('\n')
 	}
@@ -7483,11 +7489,13 @@ func (app *App) updateLogsView(lowerDown bool) {
 	v.Clear()
 	// Получаем ширину и высоту окна
 	viewWidth, viewHeight := v.Size()
+	// Фиксируем высоту окна для копирования видимой части текста
+	app.logsViewHeight = viewHeight
 	// Опускаем в самый низ, только если это не ручной скролл (отключается параметром)
 	if lowerDown {
 		// Если количество строк больше высоты окна, опускаем в самый низ
-		if len(app.filteredLogLines) > viewHeight-1 {
-			app.logScrollPos = len(app.filteredLogLines) - viewHeight - 1
+		if len(app.coloredLogLines) > viewHeight-1 {
+			app.logScrollPos = len(app.coloredLogLines) - viewHeight - 1
 		} else {
 			app.logScrollPos = 0
 		}
@@ -7498,20 +7506,20 @@ func (app *App) updateLogsView(lowerDown bool) {
 	}
 	// Определяем количество строк для отображения, начиная с позиции logScrollPos
 	startLine := app.logScrollPos
-	endLine := min(startLine+viewHeight, len(app.filteredLogLines))
+	endLine := min(startLine+viewHeight, len(app.coloredLogLines))
 	// Учитываем auto wrap (только в конце лога) и проверяем, что журнал не пустой
-	if app.logScrollPos == len(app.filteredLogLines)-viewHeight-1 && len(app.filteredLogLines) > 0 {
-		var viewLines = 0                             // количество строк для вывода
-		var viewCounter = 0                           // обратный счетчик видимых строк для остановки
-		var viewIndex = len(app.filteredLogLines) - 1 // начальный индекс для строк с конца
-		for viewIndex >= 0 && viewIndex < len(app.filteredLogLines) {
+	if app.logScrollPos == len(app.coloredLogLines)-viewHeight-1 && len(app.coloredLogLines) > 0 {
+		var viewLines = 0                            // количество строк для вывода
+		var viewCounter = 0                          // обратный счетчик видимых строк для остановки
+		var viewIndex = len(app.coloredLogLines) - 1 // начальный индекс для строк с конца
+		for viewIndex >= 0 && viewIndex < len(app.coloredLogLines) {
 			// #45 Проверка, что индекс не вышел за пределы массива (исправлено: проверка ДО использования индекса)
 
 			// Фиксируем текущую входную строку и счетчик
 			viewLines += 1
 			viewCounter += 1
 			// Получаем длинну видимых символов в строке с конца
-			lengthLine := len([]rune(ansiEscape.ReplaceAllString(app.filteredLogLines[viewIndex], "")))
+			lengthLine := len([]rune(ansiEscape.ReplaceAllString(app.coloredLogLines[viewIndex], "")))
 			// Если длинна строки больше ширины окна, получаем количество дополнительных строк
 			if lengthLine > viewWidth && viewWidth > 0 {
 				// Увеличивая счетчик и пропускаем строки
@@ -7528,31 +7536,31 @@ func (app *App) updateLogsView(lowerDown bool) {
 			viewIndex -= 1
 		}
 		// Индекс начала печати не должен быть меньше 0
-		printStart := max(len(app.filteredLogLines)-viewLines-1, 0)
+		printStart := max(len(app.coloredLogLines)-viewLines-1, 0)
 		for i := printStart; i < endLine; i++ {
-			_, _ = fmt.Fprintln(v, app.filteredLogLines[i])
+			_, _ = fmt.Fprintln(v, app.coloredLogLines[i])
 		}
 	} else {
 		// Проходим по отфильтрованным строкам и выводим их
 		for i := startLine; i < endLine; i++ {
-			_, _ = fmt.Fprintln(v, app.filteredLogLines[i])
+			_, _ = fmt.Fprintln(v, app.coloredLogLines[i])
 		}
 	}
 	// Вычисляем процент прокрутки и обновляем заголовок
 	var percentage = 0
-	if len(app.filteredLogLines) > 0 {
+	if len(app.coloredLogLines) > 0 {
 		// Стартовая позиция + размер текущего вывода логов и округляем в большую сторону (math)
-		percentage = int(math.Ceil(float64((startLine+viewHeight)*100) / float64(len(app.filteredLogLines))))
+		percentage = int(math.Ceil(float64((startLine+viewHeight)*100) / float64(len(app.coloredLogLines))))
 		if percentage > 100 {
 			v.Title = fmt.Sprintf(
 				"Logs: 100%% (%d) ["+app.debugLoadTime+"/"+app.debugColorTime+"]",
-				len(app.filteredLogLines),
+				len(app.coloredLogLines),
 			)
 		} else {
 			v.Title = fmt.Sprintf("Logs: %d%% (%d/%d) ["+app.debugLoadTime+"/"+app.debugColorTime+"]",
 				percentage,
 				startLine+1+viewHeight,
-				len(app.filteredLogLines),
+				len(app.coloredLogLines),
 			)
 		}
 	} else {
@@ -7612,12 +7620,12 @@ func (app *App) scrollDownLogs(step int) error {
 	// Получаем высоту окна, что бы не опускать лог с пустыми строками
 	_, viewHeight := v.Size()
 	// Проверяем, что размер журнала больше размера окна
-	if len(app.filteredLogLines) > viewHeight {
+	if len(app.coloredLogLines) > viewHeight {
 		// Увеличиваем позицию прокрутки
 		app.logScrollPos += step
 		// Если достигнут конец списка, останавливаем на максимальной длинне с учетом высоты окна
-		if app.logScrollPos > len(app.filteredLogLines)-1-viewHeight {
-			app.logScrollPos = len(app.filteredLogLines) - 1 - viewHeight
+		if app.logScrollPos > len(app.coloredLogLines)-1-viewHeight {
+			app.logScrollPos = len(app.coloredLogLines) - 1 - viewHeight
 			// Включаем автоскролл (если он не отключен)
 			if !app.disableAutoScroll {
 				app.autoScroll = true
@@ -8787,7 +8795,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// update interval "{" and "}"
+	// Update interval "{" and "}"
 	// Увеличение фоновго интервала обновления журнала
 	customUpdateIntervalMore, altMode := getHotkey(config.Hotkeys.UpdateIntervalMore, "}")
 	if err := app.gui.SetKeybinding("", customUpdateIntervalMore, altMode, func(g *gocui.Gui, v *gocui.View) error {
@@ -8812,7 +8820,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// auto update (Ctrl+U)
+	// Auto update (Ctrl+U)
 	// Включение или отключение автоматического скроллинга
 	customAutoUpdate, altMode := getHotkey(config.Hotkeys.AutoUpdateJournal, "ctrl+u")
 	if err := app.gui.SetKeybinding("", customAutoUpdate, altMode, func(g *gocui.Gui, v *gocui.View) error {
@@ -8830,7 +8838,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// update journal (Ctrl+R)
+	// Update journal (Ctrl+R)
 	// Ручное обновление текущего вывода журнала
 	// Актуально в режиме выключенного автоматического обновления
 	customUpdateJournal, altMode := getHotkey(config.Hotkeys.UpdateJournal, "ctrl+r")
@@ -8841,7 +8849,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// update lists (Ctrl+Q)
+	// Update lists (Ctrl+Q)
 	// Обновить все текущие списки журналов вручную
 	customUpdateLists, altMode := getHotkey(config.Hotkeys.UpdateLists, "ctrl+q")
 	if err := app.gui.SetKeybinding("", customUpdateLists, altMode, func(g *gocui.Gui, v *gocui.View) error {
@@ -8857,7 +8865,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// switch color mode - default (custom built-in), tailspin/tspin, bat/batcat or disable (Ctrl+W)
+	// Switch color mode - default (custom built-in), tailspin/tspin, bat/batcat or disable (Ctrl+W)
 	customColor, altMode := getHotkey(config.Hotkeys.SwitchColorMode, "ctrl+w")
 	if err := app.gui.SetKeybinding("", customColor, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		switch app.colorMode {
@@ -8881,7 +8889,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// switch priority for journald (Ctrl+P)
+	// Switch priority for journald (Ctrl+P)
 	customPriority, altMode := getHotkey(config.Hotkeys.SwitchPriority, "ctrl+p")
 	if err := app.gui.SetKeybinding("", customPriority, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		switch app.journalPriority {
@@ -8913,7 +8921,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// docker log load mode from stream or file system (Ctrl+D)
+	// Docker log load mode from stream or file system (Ctrl+D)
 	// Переключение режима чтения журналов Docker из потоков или файловой системы
 	customDockerMode, altMode := getHotkey(config.Hotkeys.SwitchDockerMode, "ctrl+d")
 	if err := app.gui.SetKeybinding("", customDockerMode, altMode, func(g *gocui.Gui, v *gocui.View) error {
@@ -8930,7 +8938,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// docker stream (Ctrl+S)
+	// Docker stream mode (Ctrl+S)
 	// Переключение режима вывода потоков журналов (фильтрация по потоку)
 	customStreamMode, altMode := getHotkey(config.Hotkeys.SwitchStreamMode, "ctrl+s")
 	if err := app.gui.SetKeybinding("", customStreamMode, altMode, func(g *gocui.Gui, v *gocui.View) error {
@@ -8949,7 +8957,7 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// docker timestamp (Ctrl+T)
+	// Docker timestamp (Ctrl+T)
 	// Переключение режима вывода timestamp и названия потока
 	customTimestamp, altMode := getHotkey(config.Hotkeys.TimestampShow, "ctrl+t")
 	if err := app.gui.SetKeybinding("", customTimestamp, altMode, func(g *gocui.Gui, v *gocui.View) error {
@@ -8964,7 +8972,13 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// Exit (ctrl+c)
+	// Copy current view from log window to clipboard (Shfit+C)
+	customCopy, altMode := getHotkey(config.Hotkeys.CopyToClipboard, "C")
+	if err := app.gui.SetKeybinding("", customCopy, altMode, app.copyToClipboard); err != nil {
+		return err
+	}
+
+	// Exit (Ctrl+C)
 	// Очистка поля ввода для фильтрации списков или выход
 	customExit, altMode := getHotkey(config.Hotkeys.Exit, "ctrl+c")
 	if err := app.gui.SetKeybinding("filterList", customExit, altMode, func(g *gocui.Gui, v *gocui.View) error {
@@ -10612,6 +10626,54 @@ func (app *App) setSelectView(g *gocui.Gui, viewName string) error {
 	// Устанавливаем фокус на активное окно
 	_, err := g.SetCurrentView(viewName)
 	return err
+}
+
+// Функция для копирования текста в буфер обмена с помощью ANSI-последовательности (#64)
+// \x1b]...\x07   - вызов OSC (Operating System Command), которую терминал перехватывает, вместо вывода на экран
+// 52             - номер команды, отвечающий за копирование в буфер обмена
+// c              - куда копированить (системный буфер обмена)
+// Текст кодируется в формат Base64, для безопасной передачи любых символы (переносы строк, UTF-8) через escape-последовательность
+func syscallClipboard(s string) {
+	if s == "" {
+		return
+	}
+	b64 := base64.StdEncoding.EncodeToString([]byte(s))
+	fmt.Fprintf(os.Stdout, "\x1b]52;c;%s\x07", b64)
+}
+
+// Функция для получения видимых строк в окне отображения логов после фильтрации и до покраски
+func (app *App) getVisibleLogs(g *gocui.Gui, v *gocui.View) string {
+	if len(app.filteredLogLines) == 0 {
+		return ""
+	}
+	// Вычисляем видимое число строк, если значение еще не определено
+	height := app.logsViewHeight
+	if height <= 0 {
+		_, Y := g.Size()
+		height = Y - 7
+	}
+	if height <= 0 {
+		return ""
+	}
+	// Определяем срез строк (позицию начала и конец) в массиве буфера лога
+	start := app.logScrollPos
+	end := start + height
+	if start < 0 {
+		start = 0
+	}
+	if end > len(app.filteredLogLines) {
+		end = len(app.filteredLogLines)
+	}
+	if start >= end {
+		return ""
+	}
+	return strings.Join(app.filteredLogLines[start:end], "\n")
+}
+
+func (app *App) copyToClipboard(g *gocui.Gui, v *gocui.View) error {
+	copyVisibleText := app.getVisibleLogs(g, v)
+	syscallClipboard(copyVisibleText)
+	return nil
 }
 
 // Функция для выхода

@@ -86,6 +86,7 @@ hotkeys:
   switchDockerMode: ctrl+d
   switchStreamMode: ctrl+s
   timestampShow: ctrl+t
+  copyToClipboard: shift+c
   exit: ctrl+c
 
 # List of ssh hosts with flags for connection from the interface
