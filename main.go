@@ -9209,8 +9209,8 @@ func (app *App) setupKeybindings() error {
 func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
-	// Размеры окна help
-	width, height := 108, 43
+	// Размеры окна help (ширина, высота)
+	width, height := 108, 44
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -9260,6 +9260,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change read mode for docker logs (stream only or json from file system).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp for Docker and Kubernetes logs.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mShift\033[0m+\033[32mC\033[0m - copy the visible text from the log window to the clipboard.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mC\033[0m - clear input text in the filter window or exit.")
 	_, _ = fmt.Fprintln(helpView, "\n    Source code: "+app.wordColor("https://github.com/Lifailon/lazyjournal"))
 }
@@ -10628,6 +10629,8 @@ func (app *App) setSelectView(g *gocui.Gui, viewName string) error {
 	return err
 }
 
+// ---------------------------------------- Clipboard ----------------------------------------
+
 // Функция для копирования текста в буфер обмена с помощью ANSI-последовательности (#64)
 // \x1b]...\x07   - вызов OSC (Operating System Command), которую терминал перехватывает, вместо вывода на экран
 // 52             - номер команды, отвечающий за копирование в буфер обмена
@@ -10672,9 +10675,42 @@ func (app *App) getVisibleLogs(g *gocui.Gui, v *gocui.View) string {
 
 func (app *App) copyToClipboard(g *gocui.Gui, v *gocui.View) error {
 	copyVisibleText := app.getVisibleLogs(g, v)
-	syscallClipboard(copyVisibleText)
+	clearCopyText := clearANSI(copyVisibleText)
+	syscallClipboard(clearCopyText)
 	return nil
 }
+
+// Функция для очистки ANSI-символов покраски (искомые слова после фильтрации)
+func clearANSI(text string) string {
+	var b strings.Builder
+	// Заранее выделяем память под размер исходной строки, избегая аллокаций
+	b.Grow(len(text))
+	// Включает режим пропуска байт внутри кода покраски
+	inSequence := false
+	// Побайтово сканируем весь текст и ищем начало и конец ANSI-последовательности
+	// for _, currentByte := range []byte(text) {
+	for i := 0; i < len(text); i++ {
+		currentByte := text[i]
+		// 0x1b - это ESC-символ (\x1b или \033)
+		if currentByte == 0x1b {
+			inSequence = true // включаем режим пропуска
+			continue          // переходим к следующему байту
+		}
+		// Пропускаем все символы, относящиеся к покраске
+		if inSequence {
+			// ANSI-последовательность всегда заканчивается латинской буквой (чаще всего 'm')
+			// Ищем букву и отключаем пропуск
+			if (currentByte >= 'a' && currentByte <= 'z') || (currentByte >= 'A' && currentByte <= 'Z') {
+				inSequence = false
+			}
+			continue
+		}
+		b.WriteByte(currentByte)
+	}
+	return b.String()
+}
+
+// ---------------------------------------- Exit ----------------------------------------
 
 // Функция для выхода
 func quit(g *gocui.Gui, v *gocui.View) error {
