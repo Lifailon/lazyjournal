@@ -876,42 +876,55 @@ func (app *App) showAudit() {
 	}
 }
 
-// Объявляем конфигурацию
+// Конфигурация приложения
 var config Config
 
-// Читаем конфигурацию
+// Читаем конфигурацию по приоритету
 func (config *Config) getConfig() (string, error) {
-	// Читаем файл конфигурации из текущего каталога
+	var configPath string
+	var configData []byte
+	// 1. Из текущего каталога
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
-	configPath := filepath.Join(currentDir, "config.yml")
-	configData, err := os.ReadFile(configPath)
-	if err != nil {
-		// Из каталога с исполняемым файлом
-		execDir, err := os.Executable()
-		if err != nil {
-			return "", err
-		}
-		configPath = filepath.Join(execDir, "config.yml")
-		configData, err = os.ReadFile(configPath)
-		if err != nil {
-			// Из каталога ~/.config/lazyjournal/
-			homePath, _ := os.UserHomeDir()
-			configPath = filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
-			configData, err = os.ReadFile(configPath)
-			if err != nil {
-				return configPath, ErrConfigNotFound
-			}
-		}
+	configPath = filepath.Join(currentDir, "config.yml")
+	if configData, err = os.ReadFile(configPath); err == nil {
+		return config.parseConfig(configData, configPath)
 	}
-	// Парсим yaml конфигурации
-	err = yaml.Unmarshal(configData, &config)
+	// 2. Из каталога с исполняемым файлом
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	configPath = filepath.Join(filepath.Dir(execPath), "config.yml")
+	configData, err = os.ReadFile(configPath)
+	if err == nil {
+		return config.parseConfig(configData, configPath)
+	}
+	// 3. Из каталога etc для RHEL/CentOS/Fedora (#71)
+	configPath = "/etc/lazyjournal/config.yml"
+	if configData, err = os.ReadFile(configPath); err == nil {
+		return config.parseConfig(configData, configPath)
+	}
+	// 4. Из домашнего каталога с конфигурациями текущего пользователя: ~/.config/lazyjournal/config.yml
+	homePath, _ := os.UserHomeDir()
+	configPath = filepath.Join(homePath, ".config", "lazyjournal", "config.yml")
+	configData, err = os.ReadFile(configPath)
+	if err == nil {
+		return config.parseConfig(configData, configPath)
+	}
+	// Default
+	return configPath, ErrConfigNotFound
+}
+
+// Парсинг конфигурации в формате YAML
+func (config *Config) parseConfig(configData []byte, configPath string) (string, error) {
+	err := yaml.Unmarshal(configData, config)
 	if err != nil {
 		return configPath, fmt.Errorf("%w: %w", ErrYamlSyntax, err)
 	}
-	return configPath, err
+	return configPath, nil
 }
 
 func (app *App) setupLogging() {
