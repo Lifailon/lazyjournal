@@ -58,6 +58,7 @@ signs:
   - id: source-sign
     artifacts: source
     cmd: gpg
+    signature: "${artifact}.asc"
     args:
       - "--batch"
       - "--local-user"
