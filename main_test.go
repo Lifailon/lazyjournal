@@ -1734,10 +1734,23 @@ func TestMockInterface(t *testing.T) {
 	_ = app.nextView(g, nil)
 	time.Sleep(1 * time.Second)
 
+	// Проверяем копирование в буфер обмена
+	_, _ = g.SetCurrentView("logs")
+	if v, err := g.View("logs"); err == nil {
+		_ = app.copyToClipboard(g, v)
+		time.Sleep(1 * time.Second)
+	}
+	if debug {
+		textLog := "test clipboard"
+		t.Log(passLog + textLog)
+		slog.Debug(textLog)
+	}
+
+	// Exit
 	_ = quit(g, nil)
 }
 
-// TestSSHManagerNavigation проверяет фокус после смены SSH-хоста.
+// Проверяет фокус после смены SSH-хоста (#80)
 func TestSSHManagerNavigation(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("SSH fixture requires a Unix shell")
