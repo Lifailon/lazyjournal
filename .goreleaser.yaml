@@ -49,3 +49,25 @@ nfpms:
     description: "TUI for viewing logs from journald, auditd, file system, Docker and Podman containers, Compose stacks and Kubernetes pods."
     formats:
       - deb
+
+source:
+  enabled: true
+  name_template: '{{ .ProjectName }}-{{ .Version }}'
+
+signs:
+  - id: source-sign
+    artifacts: source
+    cmd: gpg
+    args:
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--passphrase"
+      - "{{ .Env.GPG_PASSPHRASE }}"
+      - "--pinentry-mode"
+      - "loopback"
+      - "--detach-sign"
+      - "--armor"
+      - "--output"
+      - "${signature}"
+      - "${artifact}"

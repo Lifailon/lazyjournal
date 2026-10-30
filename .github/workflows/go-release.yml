@@ -52,7 +52,14 @@ jobs:
           git push origin "release/$VERSION" $VERSION
 
       - name: Install goreleaser
-        run: go install github.com/goreleaser/goreleaser/v2@latest
+        run: go install ://github.com
+
+      - name: Import GPG key
+        if: ${{ github.event_name == 'push' }}
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Go release check
         run: goreleaser --clean --skip=publish --skip=validate 2>&1 | tee goreleaser.log
