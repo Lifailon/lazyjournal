@@ -94,7 +94,7 @@ jobs:
       - name: Generate report using AI
         if: ${{ github.event_name == 'issues' && github.event.action == 'opened'}}
         id: ai_query
-        uses: actions/ai-inference@v2.1.1
+        uses: actions/ai-inference@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           endpoint: https://models.github.ai/inference
