@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
@@ -1770,7 +1771,6 @@ func TestSSHManagerNavigation(t *testing.T) {
 
 	app := &App{
 		testMode:                     true,
-		fastMode:                     false,
 		getOS:                        runtime.GOOS,
 		getArch:                      runtime.GOARCH,
 		selectUnits:                  "systemUnits",
@@ -1825,5 +1825,325 @@ func TestSSHManagerNavigation(t *testing.T) {
 	}
 	if fresh.FrameColor != app.selectedFrameColor || fresh.TitleColor != app.selectedTitleColor {
 		t.Fatal("rebuilt SSH manager does not have selected colors")
+	}
+}
+
+func TestRemoveANSI(t *testing.T) {
+	input := "\033[31merror\033[0m \033[1mbold\033[0m"
+	if got := removeANSI(input); got != "error bold" {
+		t.Fatalf("unexpected removeANSI result: %q", got)
+	}
+}
+
+func TestParseDateFromNameShort(t *testing.T) {
+	if got := parseDateFromName("short"); !got.IsZero() {
+		t.Fatalf("expected zero time for short name, got %v", got)
+	}
+	name := strings.Repeat("x", 22) + "01.02.2024 03:04:05"
+	want, err := time.Parse("02.01.2006 15:04:05", "01.02.2024 03:04:05")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parseDateFromName(name); !got.Equal(want) {
+		t.Fatalf("expected %v, got %v", want, got)
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	tests := map[string]string{
+		"":            "''",
+		"/var/log":    "'/var/log'",
+		"it's a path": "'it'\"'\"'s a path'",
+	}
+	for input, want := range tests {
+		if got := shellQuote(input); got != want {
+			t.Errorf("shellQuote(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestSSHBuildArgs(t *testing.T) {
+	options := []string{"-o", "BatchMode=yes", "root@example.com"}
+	optionsSnapshot := strings.Join(options, " ")
+	parts := []string{"tail", "-n", "10", "/var/log/my app's $HOME.log"}
+	got := sshBuildArgs(options, parts...)
+	want := []string{
+		"-o", "BatchMode=yes", "root@example.com",
+		"'tail' '-n' '10' '/var/log/my app'\"'\"'s $HOME.log'",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("sshBuildArgs() = %q, want %q", got, want)
+	}
+	if strings.Join(options, " ") != optionsSnapshot {
+		t.Fatalf("sshBuildArgs mutated options: %q", options)
+	}
+}
+
+func TestSSHCommandBuilders(t *testing.T) {
+	app := &App{sshOptions: []string{"-o", "BatchMode=yes", "root@example.com"}}
+	parts := []string{"find", "/var/log/my app", "-name", "*.log"}
+	want := append([]string{"ssh"}, sshBuildArgs(app.sshOptions, parts...)...)
+	wantLine := strings.Join(want, "\n")
+
+	cmd := app.sshCommand(parts...)
+	if got := strings.Join(cmd.Args, "\n"); got != wantLine {
+		t.Errorf("sshCommand args = %q, want %q", got, wantLine)
+	}
+
+	cmdCtx := app.sshCommandContext(context.Background(), parts...)
+	if got := strings.Join(cmdCtx.Args, "\n"); got != wantLine {
+		t.Errorf("sshCommandContext args = %q, want %q", got, wantLine)
+	}
+}
+
+func TestFindLogFilesArgs(t *testing.T) {
+	app := &App{}
+	cmd := app.findLogFiles([]string{"/var/log"}, []string{"*.log", "*.pcap.gz"})
+	want := []string{"find", "/var/log", "-type", "f", "(", "-name", "*.log", "-o", "-name", "*.pcap.gz", ")"}
+	if got := strings.Join(cmd.Args, " "); got != strings.Join(want, " ") {
+		t.Fatalf("unexpected local find args: %q", got)
+	}
+
+	app.sshMode = true
+	app.sshOptions = []string{"-o", "BatchMode=yes", "root@example.com"}
+	cmd = app.findLogFiles([]string{"/var/log"}, []string{"*.log", "*.pcap.gz"})
+	if cmd.Args[0] != "ssh" {
+		t.Fatalf("expected ssh command, got %q", cmd.Args[0])
+	}
+	remote := cmd.Args[len(cmd.Args)-1]
+	wantRemote := "'find' '/var/log' '-type' 'f' '(' '-name' '*.log' '-o' '-name' '*.pcap.gz' ')'"
+	if remote != wantRemote {
+		t.Fatalf("unexpected remote find command: %q", remote)
+	}
+}
+
+func TestHasLogSuffix(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{"file.log", true},
+		{"file.LOG", true},
+		{".log", true},
+		{"file.log.gz", false},
+		{"log", false},
+		{"", false},
+	}
+	for _, tc := range tests {
+		if got := hasLogSuffix(tc.name); got != tc.want {
+			t.Errorf("hasLogSuffix(%q) = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestCloneStringMap(t *testing.T) {
+	if got := cloneStringMap(nil); got != nil {
+		t.Fatalf("expected nil clone, got %v", got)
+	}
+	source := map[string]string{"a": "1"}
+	clone := cloneStringMap(source)
+	clone["a"] = "2"
+	if source["a"] != "1" {
+		t.Fatal("clone shares storage with source")
+	}
+}
+
+func TestTailBytes(t *testing.T) {
+	input := []byte("1\n2\n3\n4\n")
+	if got := string(tailBytes(input, 2)); got != "3\n4\n" {
+		t.Fatalf("unexpected tail with trailing newline: %q", got)
+	}
+	if got := string(tailBytes([]byte("1\n2\n3\n4"), 2)); got != "3\n4" {
+		t.Fatalf("unexpected tail without trailing newline: %q", got)
+	}
+	if got := tailBytes(input, 0); got != nil {
+		t.Fatalf("expected nil for zero limit, got %q", got)
+	}
+}
+
+func TestReadLastLinesExactCount(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tail.log")
+	var builder strings.Builder
+	for i := 1; i <= 1000; i++ {
+		_, _ = fmt.Fprintf(&builder, "%d\n", i)
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+	output, err := readLastLines(path, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+	if len(lines) != 10 || lines[0] != "991" || lines[9] != "1000" {
+		t.Fatalf("unexpected tail: %q", lines)
+	}
+}
+
+// Проверяем, что первая строка не обрезается на границе блока в 1 МБ
+func TestReadLastLinesLargeChunkBoundary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "large-tail.log")
+	prefix := "old line\nPARTIAL"
+	suffix := strings.Repeat("x", 1024*1024-len("\nA\n")) + "\nA\n"
+	if err := os.WriteFile(path, []byte(prefix+suffix), 0644); err != nil {
+		t.Fatal(err)
+	}
+	output, err := readLastLines(path, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "PARTIAL") || lines[1] != "A" {
+		t.Fatalf("unexpected tail at chunk boundary: %q", lines)
+	}
+}
+
+func TestLoadWinFileLogTail(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "win.log")
+	var builder strings.Builder
+	for i := 1; i <= 2500; i++ {
+		_, _ = fmt.Fprintf(&builder, "line %d\n", i)
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+	app := &App{logViewCount: "7", testMode: true}
+	output, stringErrors := app.loadWinFileLog(path)
+	if stringErrors != "nil" {
+		t.Fatalf("unexpected error: %s", stringErrors)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+	if len(lines) != 7 || lines[0] != "line 2494" || lines[6] != "line 2500" {
+		t.Fatalf("unexpected tail: %q", lines)
+	}
+}
+
+// Проверяем, что loadWinFileLog не обрезает первую строку на границе чанка
+func TestLoadWinFileLogLargeChunkBoundary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "large-win.log")
+	prefix := "old line\nPARTIAL"
+	suffix := strings.Repeat("x", 1024*1024-len("\nA\n")) + "\nA\n"
+	if err := os.WriteFile(path, []byte(prefix+suffix), 0644); err != nil {
+		t.Fatal(err)
+	}
+	app := &App{logViewCount: "2", testMode: true}
+	output, stringErrors := app.loadWinFileLog(path)
+	if stringErrors != "nil" {
+		t.Fatalf("unexpected error: %s", stringErrors)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "PARTIAL") || lines[1] != "A" {
+		t.Fatalf("unexpected tail at chunk boundary: %q", lines)
+	}
+}
+
+func BenchmarkTailBytes(b *testing.B) {
+	input := bytes.Repeat([]byte("2026-01-01 00:00:00 message\n"), 50000)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = tailBytes(input, 1000)
+	}
+}
+
+func BenchmarkReadLastLines(b *testing.B) {
+	path := filepath.Join(b.TempDir(), "tail.log")
+	var builder strings.Builder
+	for i := 1; i <= 100000; i++ {
+		_, _ = fmt.Fprintf(&builder, "%d\n", i)
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0644); err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := readLastLines(path, 1000); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkLoadWinFileLog(b *testing.B) {
+	path := filepath.Join(b.TempDir(), "win.log")
+	var builder strings.Builder
+	for i := 1; i <= 100000; i++ {
+		_, _ = fmt.Fprintf(&builder, "line %d\n", i)
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0644); err != nil {
+		b.Fatal(err)
+	}
+	app := &App{logViewCount: "1000", testMode: true}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := app.loadWinFileLog(path); err != "nil" {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestUpdateDelimiterHeadless(t *testing.T) {
+	app := &App{
+		testMode:        true,
+		headless:        true,
+		windowWidth:     80,
+		lastUpdateLine:  "line 2",
+		updateTime:      "12:00:00",
+		currentLogLines: []string{"line 1", "line 2", "line 3", "line 4"},
+	}
+	app.updateDelimiter(false)
+	if len(app.currentLogLines) != 5 {
+		t.Fatalf("expected delimiter insertion, got %d lines", len(app.currentLogLines))
+	}
+	if !strings.Contains(app.currentLogLines[2], "12:00:00") {
+		t.Fatalf("delimiter not inserted at expected position: %q", app.currentLogLines)
+	}
+	app.windowWidth = 10
+	app.currentLogLines = []string{"line 1", "line 2", "line 3", "line 4"}
+	app.updateDelimiter(false)
+	if len(app.currentLogLines) != 5 {
+		t.Fatalf("expected delimiter insertion for narrow view, got %d lines", len(app.currentLogLines))
+	}
+}
+
+// Проверяем, что ошибка headless-загрузки файла отменяет коммит результата
+func TestLoadFileLogsHeadlessError(t *testing.T) {
+	missingPath := filepath.Join(t.TempDir(), "missing.log")
+	app := &App{
+		testMode:     true,
+		headless:     true,
+		logViewCount: "10",
+		logfiles:     []Logfile{{name: "missing.log", path: missingPath}},
+	}
+	app.loadFileLogs("missing.log", true)
+	if !app.loadFailed {
+		t.Fatal("expected loadFailed after file stat error")
+	}
+}
+
+func TestApplyFilterHeadless(t *testing.T) {
+	app := &App{
+		testMode:         true,
+		headless:         true,
+		selectFilterMode: "fuzzy",
+		minSymbolFilter:  1,
+		filterText:       "error",
+		colorMode:        "disable",
+		currentLogLines:  []string{"info line", "error line", "warning line"},
+	}
+	app.applyFilter(false)
+	found := false
+	for _, line := range app.filteredLogLines {
+		if strings.Contains(removeANSI(line), "error line") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("headless filter did not return matching line: %q", app.filteredLogLines)
+	}
+	if app.filterDirty {
+		t.Fatal("filterDirty must be reset after successful headless filter")
 	}
 }

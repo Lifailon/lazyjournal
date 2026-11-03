@@ -26,7 +26,6 @@ settings:
   podmanContext: ""
   kubernetesContext: default
   kubernetesNamespace: all
-  disableFastMode: false
 
 # Default interface settings
 interface:
