@@ -55,7 +55,8 @@ jobs:
         run: GOTOOLCHAIN=auto go install github.com/goreleaser/goreleaser/v2@latest
 
       - name: Import GPG key
-        if: ${{ github.event_name == 'push' }}
+        id: import_gpg
+        if: ${{ github.event_name == 'push' || github.event.inputs.Tag == 'true' }}
         uses: crazy-max/ghaction-import-gpg@v7
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -68,10 +69,12 @@ jobs:
         run: cat dist/CHANGELOG.md >> $GITHUB_STEP_SUMMARY
 
       - name: Go release publish
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || github.event.inputs.Tag == 'true' }}
         uses: goreleaser/goreleaser-action@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         with:
           distribution: goreleaser
           args: release --clean
