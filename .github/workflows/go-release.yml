@@ -52,7 +52,7 @@ jobs:
           git push origin "release/$VERSION" $VERSION
 
       - name: Install goreleaser
-        run: go install github.com/goreleaser/goreleaser/v2@latest
+        run: GOTOOLCHAIN=auto go install github.com/goreleaser/goreleaser/v2@latest
 
       - name: Import GPG key
         if: ${{ github.event_name == 'push' }}
