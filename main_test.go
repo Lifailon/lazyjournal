@@ -2122,6 +2122,115 @@ func TestLoadFileLogsHeadlessError(t *testing.T) {
 	}
 }
 
+// Проверяем, что ошибка чтения json-файла Docker переключает загрузку на docker logs
+func TestLoadDockerLogsFallsBackToStream(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skip Unix shell script test")
+	}
+	binDir := t.TempDir()
+	dockerScript := filepath.Join(binDir, "docker")
+	script := `#!/bin/sh
+case "$1" in
+  inspect) echo /nonexistent/lazyjournal-test.log; exit 0;;
+  *) echo "2024-01-02T03:04:05.000000000Z test log line"; exit 0;;
+esac
+`
+	if err := os.WriteFile(dockerScript, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	app := &App{
+		testMode:                     true,
+		headless:                     true,
+		selectContainerizationSystem: "docker",
+		dockerContext:                "default",
+		dockerStreamLogs:             false,
+		dockerStreamLogsStatus:       "json-file",
+		dockerStreamMode:             "stdout",
+		logViewCount:                 "10",
+		filterText:                   "",
+		colorMode:                    "disable",
+		dockerContainers: []DockerContainers{{
+			name:    "test-container",
+			rawName: "test-container",
+			id:      "container-id",
+		}},
+	}
+
+	app.loadDockerLogs("test-container", true)
+
+	if app.loadFailed {
+		t.Fatalf("expected fallback to stream, got load error: %s", app.loadError)
+	}
+	if !app.dockerStreamLogs || app.dockerStreamLogsStatus != "stdout" {
+		t.Fatalf("expected stream fallback, got stream=%t status=%s", app.dockerStreamLogs, app.dockerStreamLogsStatus)
+	}
+	found := false
+	for _, line := range app.currentLogLines {
+		if strings.Contains(line, "test log line") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected docker logs output, got %q", app.currentLogLines)
+	}
+}
+
+// Проверяем, что ошибка загрузки списка служб сохраняется для headless-коммита
+func TestLoadServicesHeadlessError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skip Unix shell script test")
+	}
+	binDir := t.TempDir()
+	journalctlScript := filepath.Join(binDir, "journalctl")
+	script := "#!/bin/sh\necho 'journalctl: not found' >&2\nexit 1\n"
+	if err := os.WriteFile(journalctlScript, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	app := &App{testMode: true, headless: true}
+	app.loadServices("systemUnits")
+
+	if app.serviceListError == "" {
+		t.Fatal("expected service list error for headless commit")
+	}
+	if len(app.journals) != 0 {
+		t.Fatalf("expected empty service list, got %d entries", len(app.journals))
+	}
+}
+
+// Проверяем, что при ошибке версии Docker список не загружается вторым вызовом
+func TestLoadDockerContainerVersionErrorStops(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skip Unix shell script test")
+	}
+	binDir := t.TempDir()
+	dockerScript := filepath.Join(binDir, "docker")
+	script := `#!/bin/sh
+case "$1" in
+  version) echo "docker: not found" >&2; exit 1;;
+  *) echo "container-id test-container running"; exit 0;;
+esac
+`
+	if err := os.WriteFile(dockerScript, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	app := &App{testMode: true, headless: true, dockerContext: "default"}
+	app.loadDockerContainer("docker")
+
+	if app.dockerListError == "" {
+		t.Fatal("expected docker list error")
+	}
+	if len(app.dockerContainers) != 0 {
+		t.Fatalf("expected no containers after version error, got %d", len(app.dockerContainers))
+	}
+}
+
 func TestApplyFilterHeadless(t *testing.T) {
 	app := &App{
 		testMode:         true,

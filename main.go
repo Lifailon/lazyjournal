@@ -294,11 +294,18 @@ type App struct {
 	lastContainerId            string
 
 	// Фиксируем последнее время загрузки и покраски журнала
-	debugStartTime time.Time
-	debugLoadTime  string
-	debugColorTime string
-	loadFailed     bool // признак ошибки фоновой загрузки журнала
-	headless       bool // признак фоновой загрузки без прямого доступа к интерфейсу
+	debugStartTime     time.Time
+	debugLoadTime      string
+	debugColorTime     string
+	loadFailed         bool   // признак ошибки фоновой загрузки журнала
+	loadError          string // текст ошибки фоновой загрузки для отображения в интерфейсе
+	headless           bool   // признак фоновой загрузки без прямого доступа к интерфейсу
+	serviceListError   string // текст ошибки загрузки списка служб
+	serviceListMessage string // информационное сообщение загрузки списка служб
+	fileListError      string // текст ошибки загрузки списка файлов
+	fileListMessage    string // информационное сообщение загрузки списка файлов
+	dockerListError    string // текст ошибки загрузки списка контейнеров
+	dockerListMessage  string // информационное сообщение загрузки списка контейнеров
 
 	// Отключение привязки горячих клавиш на время загрузки списка
 	keybindingsEnabled bool
@@ -980,7 +987,12 @@ var (
 var wordRegexCache sync.Map
 
 // Поколение запросов загрузки для отбрасывания устаревших результатов
-var loadGeneration atomic.Uint64
+var (
+	loadGeneration        atomic.Uint64
+	serviceListGeneration atomic.Uint64
+	fileListGeneration    atomic.Uint64
+	dockerListGeneration  atomic.Uint64
+)
 
 // Ошибки
 var (
@@ -1792,19 +1804,6 @@ func runGoCui(mock bool) {
 		app.sshStatus = "false"
 	}
 
-	var composeVer *exec.Cmd
-	// This probe is only needed by the TUI. Keeping it out of command-line mode
-	// avoids starting Docker while processing piped input.
-	if app.sshMode {
-		composeVer = app.sshCommand("docker", "compose", "version")
-	} else {
-		composeVer = exec.Command("docker", "compose", "version")
-	}
-	_, composeErr := composeVer.Output()
-	if composeErr != nil {
-		app.dockerCompose = "docker-compose"
-	}
-
 	// Создаем GUI
 	var err error
 	if mock {
@@ -1856,7 +1855,7 @@ func runGoCui(mock bool) {
 			app.loadWinEvents()
 		}()
 	} else {
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	}
 
 	// Filesystem
@@ -1884,7 +1883,7 @@ func runGoCui(mock bool) {
 			app.loadWinFiles(app.selectPath)
 		}()
 	} else {
-		app.loadFiles(app.selectPath)
+		go app.loadFilesAsync(app.listSnapshot(), app.selectPath)
 	}
 
 	// Docker
@@ -1892,7 +1891,7 @@ func runGoCui(mock bool) {
 		_, viewHeight := v.Size()
 		app.maxVisibleDockerContainers = viewHeight
 	}
-	app.loadDockerContainer(app.selectContainerizationSystem)
+	go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 
 	// Устанавливаем фокус на окно с журналами по умолчанию
 	if _, err := g.SetCurrentView("filterList"); err != nil {
@@ -1914,6 +1913,120 @@ func runGoCui(mock bool) {
 	if err := g.MainLoop(); err != nil && !errors.Is(err, gocui.ErrQuit) {
 		log.Panicln(err)
 	}
+}
+
+// Снимок состояния для начальной загрузки списков без доступа к интерфейсу
+func (app *App) listSnapshot() *App {
+	snapshot := *app
+	snapshot.gui = nil
+	snapshot.testMode = true
+	snapshot.headless = true
+	snapshot.loadFailed = false
+	snapshot.loadError = ""
+	snapshot.serviceListError = ""
+	snapshot.serviceListMessage = ""
+	snapshot.fileListError = ""
+	snapshot.fileListMessage = ""
+	snapshot.dockerListError = ""
+	snapshot.dockerListMessage = ""
+	return &snapshot
+}
+
+// Асинхронная загрузка списка служб при старте интерфейса
+func (app *App) loadServicesAsync(snapshot *App, units string) {
+	generation := serviceListGeneration.Add(1)
+	snapshot.loadServices(units)
+	app.gui.Update(func(_ *gocui.Gui) error {
+		if serviceListGeneration.Load() != generation || app.selectUnits != units {
+			return nil
+		}
+		app.journalsNotFilter = snapshot.journals
+		app.serviceListError = snapshot.serviceListError
+		app.serviceListMessage = snapshot.serviceListMessage
+		if snapshot.serviceListError != "" {
+			app.journalListFrameColor = app.errorColor
+		} else {
+			app.journalListFrameColor = app.frameColor
+		}
+		if v, err := app.gui.View("services"); err == nil {
+			v.FrameColor = app.journalListFrameColor
+			v.Highlight = snapshot.serviceListError == ""
+		}
+		app.applyFilterList()
+		return nil
+	})
+}
+
+// Асинхронная загрузка списка файлов при старте интерфейса
+func (app *App) loadFilesAsync(snapshot *App, logPath string) {
+	generation := fileListGeneration.Add(1)
+	snapshot.loadFiles(logPath)
+	app.gui.Update(func(_ *gocui.Gui) error {
+		if fileListGeneration.Load() != generation || app.selectPath != logPath {
+			return nil
+		}
+		app.logfilesNotFilter = snapshot.logfiles
+		app.fileListError = snapshot.fileListError
+		app.fileListMessage = snapshot.fileListMessage
+		if snapshot.fileListError != "" {
+			app.fileSystemFrameColor = app.errorColor
+		} else {
+			app.fileSystemFrameColor = app.frameColor
+		}
+		app.applyFilterList()
+		if v, err := app.gui.View("varLogs"); err == nil {
+			v.FrameColor = app.fileSystemFrameColor
+			v.Highlight = snapshot.fileListError == ""
+			v.Subtitle = "[ " + time.Now().Format("02.01.2006 15:04:05") + " ]"
+		}
+		return nil
+	})
+}
+
+// Асинхронная загрузка списка контейнеров при старте интерфейса
+func (app *App) loadDockerContainersAsync(snapshot *App, containerizationSystem string) {
+	generation := dockerListGeneration.Add(1)
+	if containerizationSystem == "compose" {
+		snapshot.dockerCompose = snapshot.detectDockerCompose()
+	}
+	snapshot.loadDockerContainer(containerizationSystem)
+	app.gui.Update(func(_ *gocui.Gui) error {
+		if dockerListGeneration.Load() != generation || app.selectContainerizationSystem != containerizationSystem {
+			return nil
+		}
+		app.dockerContainersNotFilter = snapshot.dockerContainers
+		app.dockerListError = snapshot.dockerListError
+		app.dockerListMessage = snapshot.dockerListMessage
+		app.dockerCompose = snapshot.dockerCompose
+		if snapshot.dockerListError != "" {
+			app.dockerFrameColor = app.errorColor
+		} else {
+			app.dockerFrameColor = app.frameColor
+		}
+		if v, err := app.gui.View("docker"); err == nil {
+			v.FrameColor = app.dockerFrameColor
+			v.Highlight = snapshot.dockerListError == ""
+		}
+		app.applyFilterList()
+		return nil
+	})
+}
+
+// Проверка доступности docker compose без блокировки запуска интерфейса
+func (app *App) detectDockerCompose() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var cmd *exec.Cmd
+	if app.sshMode {
+		cmd = app.sshCommandContext(ctx, "docker", "compose", "version")
+	} else {
+		cmd = exec.CommandContext(ctx, "docker", "compose", "version")
+	}
+	cmd.WaitDelay = 2 * time.Second
+	if _, err := cmd.Output(); err != nil {
+		return "docker-compose"
+	}
+	return "docker compose"
 }
 
 func main() {
@@ -2075,6 +2188,7 @@ func (app *App) layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Frame = false // Отключаем рамку для статуса
+		v.Wrap = false  // Не переносим длинную строку статуса на соседние строки
 		v.FgColor = app.foregroundColor
 		_, _ = fmt.Fprintf(v,
 			" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
@@ -2137,6 +2251,8 @@ func parseDateFromName(name string) time.Time {
 // Функция для загрузки списка журналов служб или загрузок системы из journald с помощью journalctl
 func (app *App) loadServices(journalName string) {
 	app.journals = nil
+	app.serviceListError = ""
+	app.serviceListMessage = ""
 	// Проверка, что в системе установлена и поддерживается утилита journalctl
 	var checkJournald *exec.Cmd
 	if app.sshMode {
@@ -2161,7 +2277,9 @@ func (app *App) loadServices(journalName string) {
 		return
 	}
 	if err != nil && app.testMode {
-		log.Print("Error: systemd-journald not supported")
+		app.serviceListError = "systemd-journald not supported"
+		log.Print("Error: " + app.serviceListError)
+		return
 	}
 	switch journalName {
 	// Unit list from systemd
@@ -2222,7 +2340,9 @@ func (app *App) loadServices(journalName string) {
 			v.Highlight = true
 		}
 		if err != nil && app.testMode {
-			log.Print("Error: access denied in systemd via systemctl")
+			app.serviceListError = "Access denied in systemd via systemctl"
+			log.Print("Error: " + app.serviceListError)
+			return
 		}
 		// Чтение данных в формате JSON
 		var units []map[string]any
@@ -2420,7 +2540,9 @@ func (app *App) loadServices(journalName string) {
 			}
 		}
 		if err != nil && app.testMode {
-			log.Print("Error: getting journals by " + app.journalField + " field from journald")
+			app.serviceListError = "Error getting journals by " + app.journalField + " field from journald"
+			log.Print("Error: " + app.serviceListError)
+			return
 		}
 		// Создаем массив (хеш-таблица с доступом по ключу) для уникальных имен
 		journalMap := make(map[string]bool)
@@ -2475,7 +2597,9 @@ func (app *App) loadServices(journalName string) {
 			}
 		}
 		if err != nil && app.testMode {
-			log.Print("Error: getting boot information from journald")
+			app.serviceListError = "Error getting boot information from journald"
+			log.Print("Error: " + app.serviceListError)
+			return
 		}
 		// Структура для парсинга JSON
 		type BootInfo struct {
@@ -2589,10 +2713,12 @@ func (app *App) loadServices(journalName string) {
 		}
 		if err != nil && app.testMode {
 			if strings.Contains(err.Error(), "root to run") {
-				log.Print("Access denied in auditd via auditctl (root only)")
+				app.serviceListError = "Access denied in auditd via auditctl (root only)"
 			} else {
-				log.Print("Auditd not installed")
+				app.serviceListError = "Auditd not installed"
 			}
+			log.Print("Error: " + app.serviceListError)
+			return
 		}
 		// Заполняем список всех уникальный ключей
 		keysMap := make(map[string]bool)
@@ -2682,6 +2808,16 @@ func (app *App) updateServicesList() {
 	}
 	// Очищаем окно
 	v.Clear()
+	if len(app.journals) == 0 {
+		if app.serviceListError != "" {
+			_, _ = fmt.Fprintln(v, "\033[31m"+app.serviceListError+"\033[0m")
+			return
+		}
+		if app.serviceListMessage != "" {
+			_, _ = fmt.Fprintln(v, "\033[32m"+app.serviceListMessage+"\033[0m")
+			return
+		}
+	}
 	// Вычисляем конечную позицию видимой области (стартовая позиция + максимальное количество видимых строк)
 	visibleEnd := min(app.startServices+app.maxVisibleServices, len(app.journals))
 	// Отображаем только элементы в пределах видимой области
@@ -2856,8 +2992,9 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			return
 		}
 		if len(output) == 0 && app.testMode {
-			// Отмечаем ошибку для отбрасывания результата фоновой загрузки
-			app.loadFailed = true
+			// Пустой вывод события — это успешная загрузка без новых записей
+			app.loadFailed = false
+			app.loadError = ""
 			app.currentLogLines = []string{}
 			return
 		}
@@ -2889,9 +3026,10 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			return
 		}
 		if err != nil && app.testMode {
-			log.Print("Error: getting auditd logs. ", err)
-			// Отмечаем ошибку для отбрасывания результата фоновой загрузки
 			app.loadFailed = true
+			app.loadError = "Error getting auditd logs: " + err.Error()
+			log.Print(app.loadError)
+			return
 		}
 	// Читаем лог ядра загрузки системы
 	case selectUnits == "kernelBoot":
@@ -2931,9 +3069,10 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			return
 		}
 		if err != nil && app.testMode {
-			log.Print("Error: getting kernal logs. ", err)
-			// Отмечаем ошибку для отбрасывания результата фоновой загрузки
 			app.loadFailed = true
+			app.loadError = "Error getting kernel logs: " + err.Error()
+			log.Print(app.loadError)
+			return
 		}
 	// Загрузка журналов для юнитов systemd (--unit=UNIT) и системных журналов с фильтрацией (--field=FIELD)
 	default:
@@ -2997,9 +3136,10 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			return
 		}
 		if err != nil && app.testMode {
-			log.Print("Error: getting journald logs.", err)
-			// Отмечаем ошибку для отбрасывания результата фоновой загрузки
 			app.loadFailed = true
+			app.loadError = "Error getting journald logs: " + err.Error()
+			log.Print(app.loadError)
+			return
 		}
 	}
 	// Сохраняем строки журнала в массив
@@ -3212,6 +3352,8 @@ func (app *App) findLogFiles(roots, patterns []string) *exec.Cmd {
 
 func (app *App) loadFiles(logPath string) {
 	app.logfiles = nil // сбрасываем (очищаем) массив перед загрузкой новых журналов
+	app.fileListError = ""
+	app.fileListMessage = ""
 	var output []byte
 	switch logPath {
 	case "descriptor":
@@ -3253,7 +3395,9 @@ func (app *App) loadFiles(logPath string) {
 			}
 		} else {
 			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
-				log.Print("Error: permission denied (files not found from descriptor)")
+				app.fileListError = "Permission denied (files not found from descriptor)"
+				log.Print("Error: " + app.fileListError)
+				return
 			}
 		}
 		// Очищаем массив перед добавлением отфильтрованных файлов
@@ -3328,7 +3472,9 @@ func (app *App) loadFiles(logPath string) {
 			}
 		} else {
 			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+				app.fileListError = "Permission denied (files not found)"
 				log.Print("Error: files not found in /var/log")
+				return
 			}
 		}
 		// Добавляем пути по умолчанию для /var/log
@@ -3399,7 +3545,9 @@ func (app *App) loadFiles(logPath string) {
 			}
 		} else {
 			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+				app.fileListError = "Files not found in " + logPath
 				log.Print("Error: files not found in ", logPath)
+				return
 			}
 		}
 	default:
@@ -3443,7 +3591,9 @@ func (app *App) loadFiles(logPath string) {
 			}
 		} else {
 			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+				app.fileListMessage = "Files not found"
 				log.Print("Error: files not found in home directories")
+				return
 			}
 		}
 		// Получаем содержимое файлов из домашнего каталога пользователя root
@@ -3482,9 +3632,7 @@ func (app *App) loadFiles(logPath string) {
 		var statErr error
 		statFiles, statErr = app.statFiles(logFullPaths)
 		if statErr != nil {
-			if app.failHeadlessLoad(statErr) {
-				return
-			}
+			// statFiles возвращает частичный результат, поэтому не прерываем загрузку
 			log.Print("Error: getting file stats via ssh: ", statErr)
 		}
 	}
@@ -3594,7 +3742,7 @@ func (app *App) loadFiles(logPath string) {
 	dates := buildLogfileDateMap(app.logfiles)
 	sort.Slice(app.logfiles, func(i, j int) bool {
 		// Сортировка в обратном порядке по предвычисленным датам
-		return dates[app.logfiles[i].name].After(dates[app.logfiles[j].name])
+		return dates[logfileDateKey(app.logfiles[i])].After(dates[logfileDateKey(app.logfiles[j])])
 	})
 	if !app.testMode {
 		app.logfilesNotFilter = app.logfiles
@@ -3710,7 +3858,9 @@ func (app *App) loadWinFiles(logPath string) {
 		}
 	} else {
 		if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+			app.fileListError = "Permission denied (files not found)"
 			log.Print("Error: files not found in ", logPath)
+			return
 		}
 	}
 	serviceMap := make(map[string]bool)
@@ -3750,7 +3900,7 @@ func (app *App) loadWinFiles(logPath string) {
 	dates := buildLogfileDateMap(app.logfiles)
 	sort.Slice(app.logfiles, func(i, j int) bool {
 		// Сортировка в обратном порядке по предвычисленным датам
-		return dates[app.logfiles[i].name].After(dates[app.logfiles[j].name])
+		return dates[logfileDateKey(app.logfiles[i])].After(dates[logfileDateKey(app.logfiles[j])])
 	})
 	if !app.testMode {
 		app.logfilesNotFilter = app.logfiles
@@ -3773,13 +3923,21 @@ func extractDate(name string) string {
 	return extractDateRegex.FindString(name)
 }
 
+// Ключ для сортировки файлов: путь уникален, даже если имена совпадают
+func logfileDateKey(logfile Logfile) string {
+	if logfile.path != "" {
+		return logfile.path
+	}
+	return logfile.name
+}
+
 // Функция для предвычисления дат сортировки списка файлов
 func buildLogfileDateMap(logfiles []Logfile) map[string]time.Time {
 	layout := "02.01.2006 15:04"
 	dates := make(map[string]time.Time, len(logfiles))
 	for _, logfile := range logfiles {
 		date, _ := time.Parse(layout, extractDate(logfile.name))
-		dates[logfile.name] = date
+		dates[logfileDateKey(logfile)] = date
 	}
 	return dates
 }
@@ -3790,6 +3948,16 @@ func (app *App) updateLogsList() {
 		return
 	}
 	v.Clear()
+	if len(app.logfiles) == 0 {
+		if app.fileListError != "" {
+			_, _ = fmt.Fprintln(v, "\033[31m"+app.fileListError+"\033[0m")
+			return
+		}
+		if app.fileListMessage != "" {
+			_, _ = fmt.Fprintln(v, "\033[32m"+app.fileListMessage+"\033[0m")
+			return
+		}
+	}
 	visibleEnd := min(app.startFiles+app.maxVisibleFiles, len(app.logfiles))
 	for i := app.startFiles; i < visibleEnd; i++ {
 		_, _ = fmt.Fprintln(v, app.logfiles[i].name)
@@ -3887,7 +4055,8 @@ func (app *App) failHeadlessLoad(err error) bool {
 		return false
 	}
 	app.loadFailed = true
-	log.Print("Error: loading log: ", err)
+	app.loadError = fmt.Sprintf("Error loading log: %v", err)
+	log.Print(app.loadError)
 	return true
 }
 
@@ -3955,16 +4124,14 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 		// Читаем логи в системе Windows
 		if app.getOS == "windows" {
 			decodedOutput, stringErrors := app.loadWinFileLog(logFullPath)
-			if stringErrors != "nil" && !app.testMode {
+			if stringErrors != "nil" {
+				if app.failHeadlessLoad(errors.New(stringErrors)) {
+					return
+				}
 				v, _ := app.gui.View("logs")
 				v.Clear()
 				_, _ = fmt.Fprintln(v, "\033[31mError", stringErrors, "\033[0m")
 				return
-			}
-			if stringErrors != "nil" && app.testMode {
-				log.Print("Error: ", stringErrors)
-				// Отмечаем ошибку для отбрасывания результата фоновой загрузки
-				app.loadFailed = true
 			}
 			app.currentLogLines = strings.Split(string(decodedOutput), "\n")
 		} else {
@@ -3986,16 +4153,14 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					slog.Info(cmd.String(), "action", "Reading logs in asl format")
 				}
 				output, err := cmd.Output()
-				if err != nil && !app.testMode {
+				if err != nil {
+					if app.failHeadlessLoad(err) {
+						return
+					}
 					v, _ := app.gui.View("logs")
 					v.Clear()
 					_, _ = fmt.Fprintln(v, " \033[31mError reading log using syslog tool in ASL (Apple System Log) format.\n", err, "\033[0m")
 					return
-				}
-				if err != nil && app.testMode {
-					log.Print("Error: reading log using syslog tool in ASL (Apple System Log) format. ", err)
-					// Отмечаем ошибку для отбрасывания результата фоновой загрузки
-					app.loadFailed = true
 				}
 				app.currentLogLines = strings.Split(string(output), "\n")
 			// Читаем журналы Packet Capture в формате pcap/pcapng
@@ -4013,16 +4178,14 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					slog.Info(cmd.String(), "action", "Reading logs in pcap format")
 				}
 				output, err := cmd.Output()
-				if err != nil && !app.testMode {
+				if err != nil {
+					if app.failHeadlessLoad(err) {
+						return
+					}
 					v, _ := app.gui.View("logs")
 					v.Clear()
 					_, _ = fmt.Fprintln(v, " \033[31mError reading log using tcpdump tool.\n", err, "\033[0m")
 					return
-				}
-				if err != nil && app.testMode {
-					log.Print("Error: reading log using tcpdump tool. ", err)
-					// Отмечаем ошибку для отбрасывания результата фоновой загрузки
-					app.loadFailed = true
 				}
 				app.currentLogLines = strings.Split(string(output), "\n")
 			// Packet Filter (PF) Firewall (OpenBSD)
@@ -4369,11 +4532,9 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 			// Выводим содержимое из команды lastlog
 			case strings.HasSuffix(logFullPath, "lastlog"):
 				if app.sshMode {
-					cmd = app.sshCommand("lastlog", "-f", logFullPath)
+					cmd = app.sshCommand("lastlog")
 				} else {
-					cmd = exec.Command(
-						"lastlog", "-f", logFullPath,
-					)
+					cmd = exec.Command("lastlog")
 				}
 				if app.logging {
 					slog.Info(cmd.String(), "action", "Reading logs in lastlog format")
@@ -4569,6 +4730,8 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		containerizationSystem = "kubectl"
 	}
 	app.dockerContainers = nil
+	app.dockerListError = ""
+	app.dockerListMessage = ""
 	// Создаем контекст выполнения удаленных команд по ssh (timeout 5s)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -4639,12 +4802,14 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	if err != nil && app.testMode {
 		switch containerizationSystem {
 		case "kubectl":
-			log.Print("Error:", containerizationSystem+" not installed or no connection to the Kubernetes cluster")
+			app.dockerListError = containerizationSystem + " not installed or no connection to the Kubernetes cluster"
 		case "compose":
-			log.Print("Error:", app.dockerCompose+" not installed (environment not found)")
+			app.dockerListError = app.dockerCompose + " not installed (environment not found)"
 		default:
-			log.Print("Error:", containerizationSystem+" not installed (environment not found)")
+			app.dockerListError = containerizationSystem + " not installed (environment not found)"
 		}
+		log.Print("Error:", app.dockerListError)
+		return
 	}
 	switch containerizationSystem {
 	case "kubectl":
@@ -4781,10 +4946,12 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	}
 	if err != nil && app.testMode {
 		if containerizationSystem == "kubectl" {
-			log.Print("Error: unable to access the Kubernetes cluster")
+			app.dockerListError = "Unable to access the Kubernetes cluster"
 		} else {
-			log.Print("Error: access denied or " + containerizationSystem + " service stopped")
+			app.dockerListError = "Access denied or " + containerizationSystem + " service stopped"
 		}
+		log.Print("Error:", app.dockerListError)
+		return
 	}
 	var containers []string
 	var stringOutput string
@@ -4822,6 +4989,8 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			}
 			vError.Highlight = true
 		}
+	} else if err == nil && (len(containers) == 0 || (len(containers) == 1 && containers[0] == "")) {
+		app.dockerListMessage = "No running containers"
 	}
 	// Заполняем структуру dockerContainers (название и статус)
 	serviceMap := make(map[string]bool)
@@ -4908,9 +5077,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			}
 			// Фиксируем название namespace для k8s
 			var namespace string
-			if containerizationSystem != "kubectl" || parts[3] == "" {
-				namespace = ""
-			} else {
+			if containerizationSystem == "kubectl" && len(parts) >= 4 && parts[3] != "" {
 				namespace = parts[3]
 			}
 			app.dockerContainers = append(app.dockerContainers, DockerContainers{
@@ -4936,6 +5103,16 @@ func (app *App) updateDockerContainerList() {
 		return
 	}
 	v.Clear()
+	if len(app.dockerContainers) == 0 {
+		if app.dockerListError != "" {
+			_, _ = fmt.Fprintln(v, "\033[31m"+app.dockerListError+"\033[0m")
+			return
+		}
+		if app.dockerListMessage != "" {
+			_, _ = fmt.Fprintln(v, "\033[32m"+app.dockerListMessage+"\033[0m")
+			return
+		}
+	}
 	visibleEnd := min(app.startDockerContainers+app.maxVisibleDockerContainers, len(app.dockerContainers))
 	for i := app.startDockerContainers; i < visibleEnd; i++ {
 		_, _ = fmt.Fprintln(v, app.dockerContainers[i].name)
@@ -5028,14 +5205,15 @@ func (app *App) selectDocker(g *gocui.Gui, v *gocui.View) error {
 
 // Функция для обработки ошибки запуска потока логов контейнера без интерфейса
 func (app *App) dockerStreamError(containerName, containerId string, err error) {
+	app.loadFailed = true
+	app.loadError = fmt.Sprintf("Error getting logs from %s (id: %s) container: %v", containerName, containerId, err)
+	log.Print(app.loadError)
 	if app.testMode {
-		app.loadFailed = true
-		log.Print("Error: getting logs from ", containerName, " (id:", containerId, ") container. ", err)
 		return
 	}
 	v, _ := app.gui.View("logs")
 	v.Clear()
-	_, _ = fmt.Fprintln(v, "\033[31mError getting logs from", containerName, "(id:", containerId, ")", "container.\033[0m ", err)
+	_, _ = fmt.Fprintln(v, "\033[31m"+app.loadError+"\033[0m")
 }
 
 func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
@@ -5109,91 +5287,86 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
 		}
 		logFilePathBytes, err := cmd.Output()
-		if err != nil && !app.testMode {
-			v, _ := app.gui.View("logs")
-			v.Clear()
-			_, _ = fmt.Fprintln(v, "\033[31mError get log path via docker inspect:", err, "\033[0m")
-			return
-		}
-		if err != nil && app.testMode {
-			log.Print("Error: get log path via docker inspect. ", err)
-			// Отмечаем ошибку для отбрасывания результата фоновой загрузки
-			app.loadFailed = true
-		}
 		logFilePath := strings.TrimSpace(string(logFilePathBytes))
-		// Читаем файл с конца. Для локального файла используем io_uring,
-		// а для удаленного хоста оставляем tail на той стороне SSH.
 		var output []byte
-		if app.sshMode {
-			cmd = app.sshCommandContext(
-				ctx,
-				"tail", "-n", app.logViewCount, logFilePath,
-			)
-			if app.logging {
-				slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
+		if err != nil {
+			if !app.testMode {
+				v, _ := app.gui.View("logs")
+				v.Clear()
+				_, _ = fmt.Fprintln(v, "\033[31mError get log path via docker inspect:", err, "\033[0m")
 			}
-			output, err = cmd.Output()
-		} else {
-			if app.logging {
-				slog.Info(logFilePath, "action", "Reading "+containerName+" container logs with io_uring")
-			}
-			maxLines, _ := strconv.Atoi(app.logViewCount)
-			output, err = readLastLines(logFilePath, maxLines)
-		}
-		// Если ошибка чтения, значит нет доступа и переходим к чтению из потока
-		if err != nil && app.dockerStreamLogsStatus == "json-file" {
-			readFileContainer = false
+			log.Print("Error: get log path via docker inspect. ", err)
+			app.loadError = fmt.Sprintf("Error getting log path via docker inspect: %v", err)
+			// Переходим к чтению через docker logs вместо отбрасывания результата
 			app.dockerStreamLogsStatus = app.dockerStreamMode
 			app.dockerStreamLogs = true
-			// Сбрасываем ошибку чтения файла, если резервное чтение через stream прошло успешно
 			app.loadFailed = false
-			if !app.testMode {
-				go func() {
-					text := "Access denied to json logs (use root)"
-					app.showInterfaceInfo(g, true, text)
-					time.Sleep(3 * time.Second)
-					app.closeInfo(g)
-				}()
-			}
-		} else {
-			if app.failHeadlessLoad(err) {
-				return
-			}
-			readFileContainer = true
-			app.dockerStreamLogsStatus = "json-file"
-		}
-		if readFileContainer {
-			// Проверяем, что есть изменения в файле при повторном считывание
-			if newUpdate {
-				// Фиксируем новую дату изменения и размер для выбранного файла
-				fileInfo, err := app.statFile(logFilePath)
-				if err != nil {
-					app.failHeadlessLoad(err)
-					return
+		} else if logFilePath != "" {
+			// Читаем файл с конца. Для локального файла используем io_uring,
+			// а для удаленного хоста оставляем tail на той стороне SSH.
+			if app.sshMode {
+				cmd = app.sshCommandContext(
+					ctx,
+					"tail", "-n", app.logViewCount, logFilePath,
+				)
+				if app.logging {
+					slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
 				}
-				fileModTime := fileInfo.ModTime()
-				fileSize := fileInfo.Size()
-				app.lastDateUpdateFile = fileModTime
-				app.lastSizeFile = fileSize
-				app.updateFile = true
+				output, err = cmd.Output()
 			} else {
-				// Проверяем дату изменения
-				fileInfo, err := app.statFile(logFilePath)
-				if err != nil {
-					app.failHeadlessLoad(err)
-					return
+				if app.logging {
+					slog.Info(logFilePath, "action", "Reading "+containerName+" container logs with io_uring")
 				}
-				fileModTime := fileInfo.ModTime()
-				fileSize := fileInfo.Size()
-				// Обновлять файл, только если есть изменения (проверяем дату модификации и размер)
-				if fileModTime != app.lastDateUpdateFile || fileSize != app.lastSizeFile {
-					app.lastDateUpdateFile = fileModTime
-					app.lastSizeFile = fileSize
+				maxLines, _ := strconv.Atoi(app.logViewCount)
+				output, err = readLastLines(logFilePath, maxLines)
+			}
+			// Любая ошибка чтения файла переводит загрузку на docker logs
+			if err != nil {
+				wasJsonFile := app.dockerStreamLogsStatus == "json-file"
+				readFileContainer = false
+				app.dockerStreamLogsStatus = app.dockerStreamMode
+				app.dockerStreamLogs = true
+				app.loadFailed = false
+				app.loadError = ""
+				if wasJsonFile && !app.testMode {
+					go func() {
+						text := "Access denied to json logs (use root)"
+						app.showInterfaceInfo(g, true, text)
+						time.Sleep(3 * time.Second)
+						app.closeInfo(g)
+					}()
+				}
+			} else {
+				readFileContainer = true
+				app.dockerStreamLogsStatus = "json-file"
+				app.loadFailed = false
+				app.loadError = ""
+			}
+			if readFileContainer {
+				fileInfo, statErr := app.statFile(logFilePath)
+				if statErr != nil {
+					// Если не удалось проверить файл, переходим к docker logs
+					readFileContainer = false
+					app.dockerStreamLogsStatus = app.dockerStreamMode
+					app.dockerStreamLogs = true
+					app.loadFailed = false
+					app.loadError = ""
+				} else if newUpdate {
+					// Фиксируем новую дату изменения и размер для выбранного файла
+					app.lastDateUpdateFile = fileInfo.ModTime()
+					app.lastSizeFile = fileInfo.Size()
+					app.updateFile = true
+				} else if fileInfo.ModTime() != app.lastDateUpdateFile || fileInfo.Size() != app.lastSizeFile {
+					// Обновлять файл, только если есть изменения (проверяем дату модификации и размер)
+					app.lastDateUpdateFile = fileInfo.ModTime()
+					app.lastSizeFile = fileInfo.Size()
 					app.updateFile = true
 				} else {
 					app.updateFile = false
 				}
 			}
+		}
+		if readFileContainer {
 			// Читаем файл, толькое если были изменения
 			if app.updateFile {
 				// Разбиваем строки на массив
@@ -5466,17 +5639,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 			// Добавляем ssh параметры
 			if app.sshMode {
-				cmdOptions = append([]string{containerizationSystem}, cmdOptions...)
-				cmdOptions = append(app.sshOptions, cmdOptions...)
-				// ssh sshOptions containerizationSystem cmdOptions containerId
-				cmd = exec.CommandContext(
-					ctx,
-					"ssh",
-					append(
-						cmdOptions,
-						containerId,
-					)...,
-				)
+				remoteArgs := append([]string{containerizationSystem}, cmdOptions...)
+				remoteArgs = append(remoteArgs, containerId)
+				cmd = app.sshCommandContext(ctx, remoteArgs...)
 			} else {
 				// containerizationSystem cmdOptions containerId
 				cmd = exec.CommandContext(
@@ -5514,8 +5679,12 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 			stdoutBytes, stdoutErr = io.ReadAll(stdoutPipe)
 			// Ожидаем завершения процесса, чтобы сработал WaitDelay
-			_ = cmd.Wait()
-			if app.failHeadlessLoad(stdoutErr) {
+			waitErr := cmd.Wait()
+			if stdoutErr == nil {
+				stdoutErr = waitErr
+			}
+			if stdoutErr != nil {
+				app.dockerStreamError(containerName, containerId, stdoutErr)
 				return
 			}
 			stdoutLines := strings.Split(string(stdoutBytes), "\n")
@@ -5612,8 +5781,12 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 			stderrBytes, stderrErr = io.ReadAll(stderrPipe)
 			// Ожидаем завершения процесса, чтобы сработал WaitDelay
-			_ = cmd.Wait()
-			if app.failHeadlessLoad(stderrErr) {
+			waitErr := cmd.Wait()
+			if stderrErr == nil {
+				stderrErr = waitErr
+			}
+			if stderrErr != nil {
+				app.dockerStreamError(containerName, containerId, stderrErr)
 				return
 			}
 			stderrLines := strings.Split(string(stderrBytes), "\n")
@@ -5662,19 +5835,18 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				stderrBytes, stderrErr = io.ReadAll(stderrPipe)
 			}()
 			wg.Wait()
-			_ = cmd.Wait()
+			waitErr := cmd.Wait()
 			// Обработка ошибок чтения
-			if stdoutErr != nil || stderrErr != nil {
-				if !app.testMode {
-					v, _ := app.gui.View("logs")
-					v.Clear()
-					_, _ = fmt.Fprintln(v, "\033[31mError getting logs from", containerName, "(id:", containerId, ")", "container.\033[0m")
-					return
-				} else {
-					log.Print("Error: getting logs from ", containerName, " (id:", containerId, ")", " container.")
-					// Отмечаем ошибку для отбрасывания результата фоновой загрузки
-					app.loadFailed = true
+			if stdoutErr != nil || stderrErr != nil || waitErr != nil {
+				streamErr := stdoutErr
+				if streamErr == nil {
+					streamErr = stderrErr
 				}
+				if streamErr == nil {
+					streamErr = waitErr
+				}
+				app.dockerStreamError(containerName, containerId, streamErr)
+				return
 			}
 			// Получаем 2 массива вывода
 			stdoutLines := strings.Split(string(stdoutBytes), "\n")
@@ -7912,6 +8084,7 @@ func (app *App) startLogLoad(kind, selected string, newUpdate bool) {
 	snapshot.testMode = true
 	snapshot.headless = true
 	snapshot.loadFailed = false
+	snapshot.loadError = ""
 	// Копируем списки, которые могут измениться во время фоновой загрузки
 	snapshot.journals = append([]Journal(nil), app.journals...)
 	snapshot.logfiles = append([]Logfile(nil), app.logfiles...)
@@ -7934,6 +8107,20 @@ func (app *App) startLogLoad(kind, selected string, newUpdate bool) {
 func (app *App) commitLogLoad(snapshot *App) {
 	// Не применяем результат, если загрузка завершилась ошибкой
 	if snapshot.loadFailed {
+		// Показываем явную ошибку вместо устаревшего вывода
+		if snapshot.loadError != "" {
+			app.currentLogLines = []string{snapshot.loadError}
+			app.filteredLogLines = app.currentLogLines
+			app.coloredLogLines = []string{"\033[31m" + snapshot.loadError + "\033[0m"}
+		} else {
+			// Ошибка без текста не должна оставлять в интерфейсе старый вывод
+			log.Print("Background log load failed without error text")
+			app.currentLogLines = []string{}
+			app.filteredLogLines = nil
+			app.coloredLogLines = nil
+		}
+		app.updateStatus()
+		app.updateLogsView(true)
 		return
 	}
 	app.currentLogLines = snapshot.currentLogLines
@@ -9111,12 +9298,12 @@ func (app *App) setupKeybindings() error {
 	customUpdateLists, altMode := getHotkey(config.Hotkeys.UpdateLists, "ctrl+q")
 	if err := app.gui.SetKeybinding("", customUpdateLists, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.getOS != "windows" {
-			app.loadServices(app.selectUnits)
-			app.loadFiles(app.selectPath)
+			go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
+			go app.loadFilesAsync(app.listSnapshot(), app.selectPath)
 		} else {
 			app.loadWinFiles(app.selectPath)
 		}
-		app.loadDockerContainer(app.selectContainerizationSystem)
+		go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 		return nil
 	}); err != nil {
 		return err
@@ -9771,8 +9958,8 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 		}
 		// Обновляем списки сервисов и файлов
 		if app.getOS != "windows" {
-			app.loadServices(app.selectUnits)
-			app.loadFiles(app.selectPath)
+			go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
+			go app.loadFilesAsync(app.listSnapshot(), app.selectPath)
 		} else {
 			v, err := g.View("services")
 			if err != nil {
@@ -9811,7 +9998,7 @@ func (app *App) getSelectedLine(g *gocui.Gui, v *gocui.View) error {
 		}
 	}
 	// Обновляем список контейнеров
-	app.loadDockerContainer(app.selectContainerizationSystem)
+	go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 	// Обновляем статус
 	app.updateStatus()
 	return nil
@@ -10143,23 +10330,23 @@ func (app *App) setUnitListRight(g *gocui.Gui, v *gocui.View) error {
 	case "systemUnits":
 		app.selectUnits = "userUnits"
 		selectedServices.Title = " < User units (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	case "userUnits":
 		app.selectUnits = "systemJournals"
 		selectedServices.Title = " < System journals (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	case "systemJournals":
 		app.selectUnits = "kernelBoot"
 		selectedServices.Title = " < Kernel boot (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	case "kernelBoot":
 		app.selectUnits = "auditd"
 		selectedServices.Title = " < Audit rules keys (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	case "auditd":
 		app.selectUnits = "systemUnits"
 		selectedServices.Title = " < System units (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	}
 	return nil
 }
@@ -10176,23 +10363,23 @@ func (app *App) setUnitListLeft(g *gocui.Gui, v *gocui.View) error {
 	case "systemUnits":
 		app.selectUnits = "auditd"
 		selectedServices.Title = " < Audit rules keys (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	case "auditd":
 		app.selectUnits = "kernelBoot"
 		selectedServices.Title = " < Kernel boot (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	case "kernelBoot":
 		app.selectUnits = "systemJournals"
 		selectedServices.Title = " < System journals (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	case "systemJournals":
 		app.selectUnits = "userUnits"
 		selectedServices.Title = " < User units (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	case "userUnits":
 		app.selectUnits = "systemUnits"
 		selectedServices.Title = " < System units (0) > "
-		app.loadServices(app.selectUnits)
+		go app.loadServicesAsync(app.listSnapshot(), app.selectUnits)
 	}
 	return nil
 }
@@ -10256,25 +10443,27 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 			}
 		}()
 	} else {
+		nextPath := app.selectPath
+		nextTitle := selectedVarLog.Title
+		switch nextPath {
+		case "varlog":
+			nextPath = "customPath"
+			nextTitle = " < Custom path - " + app.customPath + " (0) > "
+		case "customPath":
+			nextPath = "home"
+			nextTitle = " < Users home logs (0) > "
+		case "home":
+			nextPath = "descriptor"
+			nextTitle = " < Process descriptor logs (0) > "
+		case "descriptor":
+			nextPath = "varlog"
+			nextTitle = " < System var logs (0) > "
+		}
+		app.selectPath = nextPath
+		selectedVarLog.Title = nextTitle
+		snapshot := app.listSnapshot()
 		go func() {
-			switch app.selectPath {
-			case "varlog":
-				app.selectPath = "customPath"
-				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
-				app.loadFiles(app.selectPath)
-			case "customPath":
-				app.selectPath = "home"
-				selectedVarLog.Title = " < Users home logs (0) > "
-				app.loadFiles(app.selectPath)
-			case "home":
-				app.selectPath = "descriptor"
-				selectedVarLog.Title = " < Process descriptor logs (0) > "
-				app.loadFiles(app.selectPath)
-			case "descriptor":
-				app.selectPath = "varlog"
-				selectedVarLog.Title = " < System var logs (0) > "
-				app.loadFiles(app.selectPath)
-			}
+			app.loadFilesAsync(snapshot, nextPath)
 			// Включаем переключение списков
 			app.keybindingsEnabled = true
 			if err := app.setupKeybindings(); err != nil {
@@ -10338,25 +10527,27 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 			}
 		}()
 	} else {
+		nextPath := app.selectPath
+		nextTitle := selectedVarLog.Title
+		switch nextPath {
+		case "varlog":
+			nextPath = "descriptor"
+			nextTitle = " < Process descriptor logs (0) > "
+		case "descriptor":
+			nextPath = "home"
+			nextTitle = " < Users home logs (0) > "
+		case "home":
+			nextPath = "customPath"
+			nextTitle = " < Custom path - " + app.customPath + " (0) > "
+		case "customPath":
+			nextPath = "varlog"
+			nextTitle = " < System var logs (0) > "
+		}
+		app.selectPath = nextPath
+		selectedVarLog.Title = nextTitle
+		snapshot := app.listSnapshot()
 		go func() {
-			switch app.selectPath {
-			case "varlog":
-				app.selectPath = "descriptor"
-				selectedVarLog.Title = " < Process descriptor logs (0) > "
-				app.loadFiles(app.selectPath)
-			case "descriptor":
-				app.selectPath = "home"
-				selectedVarLog.Title = " < Users home logs (0) > "
-				app.loadFiles(app.selectPath)
-			case "home":
-				app.selectPath = "customPath"
-				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
-				app.loadFiles(app.selectPath)
-			case "customPath":
-				app.selectPath = "varlog"
-				selectedVarLog.Title = " < System var logs (0) > "
-				app.loadFiles(app.selectPath)
-			}
+			app.loadFilesAsync(snapshot, nextPath)
 			app.keybindingsEnabled = true
 			if err := app.setupKeybindings(); err != nil {
 				log.Panicln("Error key bindings", err)
@@ -10379,19 +10570,19 @@ func (app *App) setContainersListRight(g *gocui.Gui, v *gocui.View) error {
 	case "docker":
 		app.selectContainerizationSystem = "compose"
 		selectedDocker.Title = " < Compose stacks (0) > "
-		app.loadDockerContainer(app.selectContainerizationSystem)
+		go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 	case "compose":
 		app.selectContainerizationSystem = "podman"
 		selectedDocker.Title = " < Podman containers (0) > "
-		app.loadDockerContainer(app.selectContainerizationSystem)
+		go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 	case "podman":
 		app.selectContainerizationSystem = "kubernetes"
 		selectedDocker.Title = " < Kubernetes pods (0) > "
-		app.loadDockerContainer(app.selectContainerizationSystem)
+		go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 	case "kubernetes":
 		app.selectContainerizationSystem = "docker"
 		selectedDocker.Title = " < Docker containers (0) > "
-		app.loadDockerContainer(app.selectContainerizationSystem)
+		go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 	}
 	return nil
 }
@@ -10408,19 +10599,19 @@ func (app *App) setContainersListLeft(g *gocui.Gui, v *gocui.View) error {
 	case "docker":
 		app.selectContainerizationSystem = "kubernetes"
 		selectedDocker.Title = " < Kubernetes pods (0) > "
-		app.loadDockerContainer(app.selectContainerizationSystem)
+		go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 	case "kubernetes":
 		app.selectContainerizationSystem = "podman"
 		selectedDocker.Title = " < Podman containers (0) > "
-		app.loadDockerContainer(app.selectContainerizationSystem)
+		go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 	case "podman":
 		app.selectContainerizationSystem = "compose"
 		selectedDocker.Title = " < Compose stacks (0) > "
-		app.loadDockerContainer(app.selectContainerizationSystem)
+		go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 	case "compose":
 		app.selectContainerizationSystem = "docker"
 		selectedDocker.Title = " < Docker containers (0) > "
-		app.loadDockerContainer(app.selectContainerizationSystem)
+		go app.loadDockerContainersAsync(app.listSnapshot(), app.selectContainerizationSystem)
 	}
 	return nil
 }
