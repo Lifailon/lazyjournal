@@ -199,60 +199,60 @@ jobs:
           EOF
           gh pr comment "$PR_NUMBER" --body-file comment_body.md
 
-  pr_ai_review:
-    name: AI review
+  # pr_ai_review:
+  #   name: AI review
 
-    needs: [pr_unit_test]
+  #   needs: [pr_unit_test]
 
-    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && contains(fromJSON('["opened", "synchronize"]'), github.event.action) }}
+  #   if: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && contains(fromJSON('["opened", "synchronize"]'), github.event.action) }}
 
-    permissions:
-      contents: read
-      pull-requests: write
+  #   permissions:
+  #     contents: read
+  #     pull-requests: write
 
-    runs-on: ubuntu-latest
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository from PR merge commit
-        if: ${{ github.event_name != 'workflow_dispatch' }}
-        uses: actions/checkout@v7
-        with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
-          fetch-depth: 1
+  #   steps:
+  #     - name: Checkout repository from PR merge commit
+  #       if: ${{ github.event_name != 'workflow_dispatch' }}
+  #       uses: actions/checkout@v7
+  #       with:
+  #         ref: refs/pull/${{ github.event.pull_request.number }}/merge
+  #         fetch-depth: 1
 
-      - name: Checkout repository from current branch
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 1
+  #     - name: Checkout repository from current branch
+  #       if: ${{ github.event_name == 'workflow_dispatch' }}
+  #       uses: actions/checkout@v7
+  #       with:
+  #         fetch-depth: 1
 
-      - name: Install opencode
-        run: curl -fsSL https://opencode.ai/v2/install | bash
+  #     - name: Install opencode
+  #       run: curl -fsSL https://opencode.ai/v2/install | bash
 
-      - name: Add opencode to PATH
-        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+  #     - name: Add opencode to PATH
+  #       run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
-      - name: Run opencode in auto mode
-        run: opencode run "You are acting as a Pull Request reviewer. Analyze PR ${{ github.event.pull_request.number }}. Create a list-based report detailing all code changes, explaining their benefits or the problems they address. Evaluate the code for quality and security, identify potential bugs, and suggest improvements. Prepare a report in Markdown format, keep it concise so that it is easy to read and the core points are clear. Save the report to a file named `PR_REVIEW.md` - I will then post its contents as a response to this PR." --auto
+  #     - name: Run opencode in auto mode
+  #       run: opencode run "You are acting as a Pull Request reviewer. Analyze PR ${{ github.event.pull_request.number }}. Create a list-based report detailing all code changes, explaining their benefits or the problems they address. Evaluate the code for quality and security, identify potential bugs, and suggest improvements. Prepare a report in Markdown format, keep it concise so that it is easy to read and the core points are clear. Save the report to a file named `PR_REVIEW.md` - I will then post its contents as a response to this PR." --auto
 
-      - name: Verify report exists and is not empty
-        run: |
-          if [ ! -f "PR_REVIEW.md" ]; then
-            echo "::error::Файл PR_REVIEW.md не найден"
-            exit 1
-          fi
-          if [ ! -s "PR_REVIEW.md" ]; then
-            echo "::error::Файл PR_REVIEW.md пустой"
-            exit 1
-          fi
-          BYTES=$(wc -c < PR_REVIEW.md)
-          LINES=$(wc -l < PR_REVIEW.md)
-          echo "Размер файла PR_REVIEW.md: $BYTES байт"
-          echo "Строк в файле PR_REVIEW.md: $LINES"
+  #     - name: Verify report exists and is not empty
+  #       run: |
+  #         if [ ! -f "PR_REVIEW.md" ]; then
+  #           echo "::error::Файл PR_REVIEW.md не найден"
+  #           exit 1
+  #         fi
+  #         if [ ! -s "PR_REVIEW.md" ]; then
+  #           echo "::error::Файл PR_REVIEW.md пустой"
+  #           exit 1
+  #         fi
+  #         BYTES=$(wc -c < PR_REVIEW.md)
+  #         LINES=$(wc -l < PR_REVIEW.md)
+  #         echo "Размер файла PR_REVIEW.md: $BYTES байт"
+  #         echo "Строк в файле PR_REVIEW.md: $LINES"
 
-      - name: Post comment to PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          gh pr comment $PR_NUMBER --body-file PR_REVIEW.md
+  #     - name: Post comment to PR
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #         PR_NUMBER: ${{ github.event.pull_request.number }}
+  #       run: |
+  #         gh pr comment $PR_NUMBER --body-file PR_REVIEW.md
