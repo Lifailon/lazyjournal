@@ -3,21 +3,21 @@
 </p>
 
 <p align="center">
-    <a href="https://github.com/Lifailon/lazyjournal/releases"><img title="GitHub Download" src="https://img.shields.io/github/downloads/lifailon/lazyjournal/total?logo=github&color=green&label=Downloads"></a>
-    <a href="https://launchpad.net/~lifailon/+archive/ubuntu/lazyjournal"><img title="Ubuntu Launchpad PPA" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.launchpad.net%2F1.0%2F~lifailon%2F%2Barchive%2Fubuntu%2Flazyjournal%3Fws.op%3DgetPublishedSources%26distro_series%3Dhttps%3A%2F%2Fapi.launchpad.net%2F1.0%2Fubuntu%2Fjammy%26status%3DPublished&query=entries[0].source_package_version&label=Ubuntu+PPA&logo=ubuntu&color=orange"></a>
+    <a href="https://github.com/Lifailon/lazyjournal"><img title="Go version"src="https://img.shields.io/github/go-mod/go-version/lifailon/lazyjournal?logo=go"></a>
+    <!--
+    <a href="https://github.com/Lifailon/lazyjournal/wiki"><img title="Go coverage"src="https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg"></a>
+    -->
+    <a href="https://codecov.io/gh/Lifailon/lazyjournal"><img title="Codecov"src="https://img.shields.io/codecov/c/github/Lifailon/lazyjournal?label=Coverage&logo=codecov"></a>
+<br>
+    <a href="https://formulae.brew. sh/formula/lazyjournal"><img title="Homebrew" src="https://img.shields.io/debian/v/lazyjournal/testing?logo=Debian&color=gray&label=Debian"></a>
+    <!--
+    <a href="https://launchpad.net/~lifailon/+archive/ubuntu/lazyjournal"><img title="Ubuntu Launchpad PPA" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.launchpad.net%2F1.0%2F~lifailon%2F%2Barchive%2Fubuntu%2Flazyjournal%3Fws.op%3DgetPublishedSources%26distro_series%3Dhttps%3A%2F%2Fapi.launchpad.net%2F1.0%2Fubuntu%2Fjammy%26status%3DPublished&query=entries[0].source_package_version&label=PPA&logo=ubuntu&color=orange"></a>
+    -->
     <a href="https://formulae.brew.sh/formula/lazyjournal"><img title="Homebrew" src="https://img.shields.io/homebrew/v/lazyjournal?logo=homebrew&color=yellow&label=Homebrew"></a>
+<br>
     <a href="https://anaconda.org/conda-forge/lazyjournal"><img title="Conda Forge" src="https://img.shields.io/conda/vn/conda-forge/lazyjournal?logo=anaconda&color=green&label=Conda"></a>
     <a href="https://aur.archlinux.org/packages/lazyjournal"><img title="Arch Linux" src="https://img.shields.io/aur/version/lazyjournal?logo=arch-linux&color=blue&label=AUR"></a>
-    <a href="https://hub.docker.com/r/lifailon/lazyjournal"><img title="Docker Hub" src="https://img.shields.io/docker/image-size/lifailon/lazyjournal/latest?logo=docker&color=blue&label=Docker+Hub"></a>
-<br>
-    <a href="https://github.com/Lifailon/lazyjournal/actions/workflows/ci-binary.yml"><img title="Actions Build"src="https://github.com/Lifailon/lazyjournal/actions/workflows/ci-binary.yml/badge.svg"></a>
-    <a href="https://github.com/Lifailon/lazyjournal/wiki"><img title="Go coverage report"src="https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg"></a>
-    <a href="https://goreportcard.com/report/github.com/Lifailon/lazyjournal"><img src="https://goreportcard.com/badge/github.com/Lifailon/lazyjournal" alt="Go Report"></a>
-    <a href="https://app.fossa.com/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal?ref=badge_shield&issueType=security" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FLifailon%2Flazyjournal.svg?type=shield&issueType=security"/></a>
-<br>
-    <a href="https://github.com/avelino/awesome-go?tab=readme-ov-file#logging"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a>
-    <a href="https://pkg.go.dev/github.com/Lifailon/lazyjournal"><img src="https://pkg.go.dev/badge/github.com/Lifailon/lazyjournal.svg" alt="Go Reference"></a>
-    <a href="https://deepwiki.com/Lifailon/lazyjournal"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+    <a href="https://hub.docker.com/r/lifailon/lazyjournal"><img title="Docker Hub" src="https://img.shields.io/docker/v/lifailon/lazyjournal/latest?logo=docker&color=blue&label=Docker+Hub"></a>
 </p>
 
 Terminal user interface for viewing logs from `journald`, `auditd`, file system, Docker and Podman containers, Compose stacks and Kubernetes pods with support for log highlighting and several filtering modes. Written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
@@ -83,7 +83,7 @@ The built-in highlighting by default supports several color groups:
 
 A full list of all keywords can be found in the [color.log](/color.log) file (used for testing only).
 
-> [!IMPORTANT]
+> [!NOTE]
 > If you have suggestions for improving log highlighting (e.g. adding new keywords), you can open an [issue](https://github.com/Lifailon/lazyjournal/issues) for a new feature.
 
 ## Install
@@ -111,6 +111,7 @@ lazyjournal -h # View help
 lazyjournal # Execute LazyJournal
 ```
 
+<!-- 
 To install and remove packages on an Ubuntu system, you can use the `apt` package manager from the [PPA](https://launchpad.net/~lifailon/+archive/ubuntu/lazyjournal) repository:
 
 ```bash
@@ -118,11 +119,12 @@ sudo add-apt-repository -y ppa:lifailon/lazyjournal
 sudo apt update
 sudo apt install -y lazyjournal
 ```
+-->
 
 Or download the `deb` package from the GitHub releases page for installation on any Debian-based system, while LazyJournal gradually makes its way into the distribution repositories.
 
 ```bash
-curl -sSL https://github.com/Lifailon/lazyjournal/releases/download/0.8.6/lazyjournal-0.8.6-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
+curl -sSL https://github.com/Lifailon/lazyjournal/releases/download/0.8.7/lazyjournal-0.8.7-$(dpkg --print-architecture).deb -o /tmp/lazyjournal.deb
 sudo apt install -y /tmp/lazyjournal.deb && rm /tmp/lazyjournal.deb
 ```
 
@@ -172,9 +174,9 @@ The image comes pre-installed with the packages required for the application to 
 
 To access Kubernetes logs, you need to forward the configuration to the container. If you're using a local cluster (e.g. k3s), change the cluster server address in the configuration to the host address on the local network.
 
-### Web mode
+### Web mode (ttyd)
 
-The container comes pre-configured with a [ttyd](https://github.com/tsl0922/ttyd). To manage the interface via a web browser, edit the following variables:
+The container image comes with [ttyd](https://github.com/tsl0922/ttyd) pre-configured. To manage the interface via a web browser, edit the following variables:
 
 ```env
 # Enable Web mode
@@ -231,7 +233,7 @@ Hotkeys, interface settings and application flag values can be overridden using 
 
 Mouse control is supported (but can also be disabled with the `-m` flag or configuration) for selecting window and the log from list, as well as lists and logs scrolling. To copy text, use the `Alt+Shift` key combination while selecting.
 
-### Remote mode
+### Remote mode (ssh)
 
 Supports access to logs on a remote system using standard `ssh` arguments to configure the connection (passed as a single quoted parameter).
 
@@ -286,29 +288,14 @@ cat /var/log/syslog | lj -r "error|fatal|fail|crash"
 cat /var/log/syslog | lj -r "error|fatal|fail|crash" -c
 ```
 
-### Build
+## Build
 
-Clone the repository and use Make to build the binary:
+Clone the repository and use Go to build the binary file:
 
 ```bash
 git clone https://github.com/Lifailon/lazyjournal
 cd lazyjournal
-make build
-```
-
-> [!NOTE]
-> The repository uses AI-powered release analysis in the [changelog](/CHANGELOG.md) file, as well as review commits, PR and issues in [Actions](https://github.com/Lifailon/lazyjournal/actions).
-
-### Testing
-
-Unit tests cover all main functions and interface operation.
-
-```bash
-# Get a list of all tests
-make test-list
-# Run selected or all tests
-make test-run case=TestMockInterface
-make test-all
+go build .
 ```
 
 > [!NOTE]
@@ -316,15 +303,15 @@ make test-all
 
 ## Contributing
 
-Since this is my first Go project, there may be some bad practices, BUT I want to make `lazyjournal` better. Any contribution will be appreciated! If you want to implement any new feature or fix something, please [open an issue](https://github.com/Lifailon/lazyjournal/issues) first.
+Since this is my first Go project, there may be some bad practices, BUT I want to make `lazyjournal` better. Any contribution will be appreciated!
+
+If you would like to add a new feature, please first [open an issue](https://github.com/Lifailon/lazyjournal/issues) to discuss it. If you have found a problem and are able to fix it yourself, please submit a [Pull Request](https://github.com/Lifailon/lazyjournal/pulls).
 
 Thanks to all participants for their contributions:
 
 - [Matteo Giordano](https://github.com/malteo) for upload and update the package in `AUR`.
 - [Ueno M.](https://github.com/eunos-1128) for upload and update the package in `Homebrew` and `Conda`.
 - [Fierro Viejo](https://github.com/fierroviejo) for upload and update the package in `Debian`.
-
-You can also upload the package yourself to any package manager you use and make [Pull Requests](https://github.com/Lifailon/lazyjournal/pulls).
 
 ## Alternatives
 
