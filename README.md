@@ -22,7 +22,7 @@
 
 Terminal user interface for viewing logs from `journald`, `auditd`, file system, Docker and Podman containers, Compose stacks and Kubernetes pods with support for log highlighting and several filtering modes. Written in Go with the [awesome-gocui](https://github.com/awesome-gocui/gocui) (fork [gocui](https://github.com/jroimartin/gocui)) library.
 
-This tool is inspired by and made with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit). It is also included in [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging), [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development) and [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui), check out other useful projects on the repository pages.
+This tool is inspired by and made with love for [LazyDocker](https://github.com/jesseduffield/lazydocker) and [LazyGit](https://github.com/jesseduffield/lazygit) ❤️
 
 > [!NOTE]
 > You can try it out on the [Killercoda](https://killercoda.com/lazyjournal/scenario/playground) playground.
@@ -312,6 +312,28 @@ Thanks to all participants for their contributions:
 - [Matteo Giordano](https://github.com/malteo) for upload and update the package in `AUR`.
 - [Ueno M.](https://github.com/eunos-1128) for upload and update the package in `Homebrew` and `Conda`.
 - [Fierro Viejo](https://github.com/fierroviejo) for upload and update the package in `Debian`.
+- [Leah Amelia Chen](https://github.com/pluiedev) maintainer of the package for `NixOS`.
+
+## Mentions
+
+Spreading the word about a project is the best way to contribute to its development, as it can attract users with new ideas as well as other developers. If you have shared the project on social media, you can mention this in an [issue](https://github.com/Lifailon/lazyjournal/issues) or add a link to the post via a [PR](https://github.com/Lifailon/lazyjournal/pulls).
+
+Mentions of the project on social media:
+
+- [Habr](https://habr.com/ru/articles/899750)
+- [The Terminal Index](https://cli.masoko.net/tools/lazyjournal)
+- [Linux News](https://linuxnews.de/lazyjournal-vereinfacht-den-zugriff-auf-log-dateien)
+- [Product Hunt](https://www.producthunt.com/products/lazyjournal)
+- [Medium](https://lifailon.medium.com/lazyjournal-a-terminal-user-interface-for-logs-de73ae96d042)
+- [Dev.to](https://dev.to/lifailon/lazyjournal-a-terminal-user-interface-for-logs-1n2j)
+
+The project is also included in a list of awesome tools:
+
+- [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging)
+- [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development)
+- [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui)
+
+Please take a look at other useful projects on the pages of these repositories.
 
 ## Alternatives
 
