@@ -159,6 +159,14 @@ If you are an Arch Linux user, you can also install from the [AUR](https://aur.a
 paru -S lazyjournal
 ```
 
+### Temporary shell (Nix)
+
+To run it in a temporary environment without a permanent installation, install [Nix](https://nixos.org/download) and launch lazyjournal via the [NixOS](https://search.nixos.org/packages?channel=26.05&query=lazyjournal#show=lazyjournal) package manager:
+
+```bash
+nix-shell -p lazyjournal
+```
+
 ### Docker (Debian-based)
 
 Download the [docker-compose](/docker/debian/docker-compose.yml) file and run the container using the image from [Docker Hub](https://hub.docker.com/r/lifailon/lazyjournal):
