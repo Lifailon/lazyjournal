@@ -1770,7 +1770,6 @@ func TestSSHManagerNavigation(t *testing.T) {
 
 	app := &App{
 		testMode:                     true,
-		fastMode:                     false,
 		getOS:                        runtime.GOOS,
 		getArch:                      runtime.GOARCH,
 		selectUnits:                  "systemUnits",

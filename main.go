@@ -71,7 +71,6 @@ type Settings struct {
 	CustomPath          string `yaml:"customPath"`
 	ColorMode           string `yaml:"colorMode"`
 	ColorActionsDisable string `yaml:"colorActionsDisable"`
-	DisableFastMode     string `yaml:"disableFastMode"`
 }
 
 // Структура доступных параметров для настройки интерфейса (#37)
@@ -181,7 +180,6 @@ type App struct {
 	sshMode                bool     // использовать вызов команд (exec.Command) через ssh
 	sshStatus              string   // режим работы (false или имя хоста) для статуса
 	sshOptions             []string // опции для ssh подключения
-	fastMode               bool     // загрузка журналов в горутине (beta mode)
 	testMode               bool     // исключаем вызовы к gocui при тестирование функций
 	colorMode              string   // режим покраски (default/tailspin/bat/disable)
 	colorActionsDisable    bool     // отключить покраску для действий
@@ -220,6 +218,9 @@ type App struct {
 	logViewCount     string   // количество логов для просмотра
 	logUpdateSeconds int      // период фонового обновления журнала
 	secondsChan      chan int // канал для изменения интервала обновления в горутине
+
+	logLoadMutex  sync.Mutex // последовательная загрузка журналов в горутинах
+	logStateMutex sync.Mutex // защита состояния вывода журнала при асинхронной загрузке
 
 	journals           []Journal // список (массив/срез) журналов для отображения
 	maxVisibleServices int       // максимальное количество видимых элементов в окне списка служб
@@ -432,7 +433,6 @@ func showConfig() {
 	fmt.Printf("  podmanContext:            %s\n", config.Settings.PodmanContext)
 	fmt.Printf("  kubernetesContext:        %s\n", config.Settings.KubernetesContext)
 	fmt.Printf("  kubernetesNamespace:      %s\n", config.Settings.KubernetesNamespace)
-	fmt.Printf("  disableFastMode:          %s\n", config.Settings.DisableFastMode)
 
 	fmt.Println("interface:")
 	fmt.Printf("  SystemLogList:            %s\n", config.Interface.SystemLogList)
@@ -783,7 +783,9 @@ func (app *App) showAudit() {
 				// Преобразуем байты в строку и обрезаем пробелы
 				csVersion := strings.TrimSpace(string(output))
 				// Удаляем текст до номера версии
-				csVersion = strings.Split(csVersion, "Version: v")[1]
+				if versionParts := strings.Split(csVersion, "Version: v"); len(versionParts) > 1 {
+					csVersion = versionParts[1]
+				}
 				// Забираем первую строку
 				csVersion = strings.Split(csVersion, "\n")[0]
 				auditText = append(auditText, "    version: "+csVersion)
@@ -841,7 +843,9 @@ func (app *App) showAudit() {
 			if err == nil {
 				auditText = append(auditText, "    installed: true")
 				csVersion := strings.TrimSpace(string(output))
-				csVersion = strings.Split(csVersion, "version ")[1]
+				if versionParts := strings.Split(csVersion, "version "); len(versionParts) > 1 {
+					csVersion = versionParts[1]
+				}
 				csVersion = strings.Split(csVersion, ", ")[0]
 				auditText = append(auditText, "    version: "+csVersion)
 				cmd := exec.Command(
@@ -969,6 +973,8 @@ var (
 	syslogUnitRegex = regexp.MustCompile(`^[a-zA-Z-_.]+\[\d+\]:$`)
 	// Находим символы покраски для их удаления
 	ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	// Дата в названии файла: DD.MM.YYYY HH:MM
+	dateNameRegex = regexp.MustCompile(`\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2}`)
 )
 
 // Ошибки
@@ -1063,7 +1069,7 @@ func remoteGetOS(sshOptions []string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", strings.TrimSpace(string(output)), err)
 	} else {
-		return strings.ToLower(string(output)), nil
+		return strings.ToLower(strings.TrimSpace(string(output))), nil
 	}
 }
 
@@ -1076,7 +1082,6 @@ func runGoCui(mock bool) {
 	// Инициализация значений по умолчанию + компиляция регулярных выражений для покраски
 	app := &App{
 		sshMode:                 false,
-		fastMode:                true,
 		testMode:                false,
 		mouseSupport:            true,
 		wrapSupport:             true,
@@ -1467,7 +1472,11 @@ func runGoCui(mock bool) {
 			// Извлекаем номера загрузок в новый массив для проверки переданного значения
 			bootNumbers := make([]string, 0, len(bootsList))
 			for _, line := range bootsList {
-				bootNumber := strings.Fields(line)[0]
+				fields := strings.Fields(line)
+				if len(fields) == 0 {
+					continue
+				}
+				bootNumber := fields[0]
 				bootNumbers = append(bootNumbers, bootNumber)
 			}
 			if !slices.Contains(bootNumbers, app.journalBoot) {
@@ -1567,13 +1576,6 @@ func runGoCui(mock bool) {
 		app.kubernetesNamespace = "--all-namespaces"
 	} else {
 		app.kubernetesNamespace = "--namespace=" + *kubernetesNamespaceFlag
-	}
-
-	// Fast mode (demo)
-	if config.Settings.DisableFastMode != "" {
-		if strings.EqualFold(config.Settings.DisableFastMode, "true") {
-			app.fastMode = false
-		}
 	}
 
 	// Определяем режим фильтрации по времени для статуса
@@ -2092,8 +2094,7 @@ func (app *App) layout(g *gocui.Gui) error {
 
 // Функция для удаления ANSI-символов покраски
 func removeANSI(input string) string {
-	ansiEscapeRegex := regexp.MustCompile(`\033\[[0-9;]*m`)
-	return ansiEscapeRegex.ReplaceAllString(input, "")
+	return ansiEscape.ReplaceAllString(input, "")
 }
 
 // Функция для извлечения даты из строки для списка загрузок ядра
@@ -2101,6 +2102,9 @@ func parseDateFromName(name string) time.Time {
 	cleanName := removeANSI(name)
 	dateFormat := "02.01.2006 15:04:05"
 	// Извлекаем дату, начиная с 22-го символа (после дефиса)
+	if len(cleanName) < 22 {
+		return time.Time{}
+	}
 	parsedDate, _ := time.Parse(dateFormat, cleanName[22:])
 	return parsedDate
 }
@@ -2557,7 +2561,11 @@ func (app *App) loadServices(journalName string) {
 				rulePart := strings.Split(rule, "-k ")
 				if len(rulePart) > 1 {
 					// Разбиваем на слова (fields) из второй части правила после ключа и извлекаем первое слово
-					keyPart := strings.Fields(rulePart[1])[0]
+					ruleFields := strings.Fields(rulePart[1])
+					if len(ruleFields) == 0 {
+						continue
+					}
+					keyPart := ruleFields[0]
 					if !keysMap[keyPart] {
 						keysMap[keyPart] = true
 						app.journals = append(app.journals, Journal{
@@ -2740,27 +2748,44 @@ func (app *App) selectService(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	// Загружаем журналы выбранной службы, обрезая пробелы в названии
-	if app.fastMode {
-		go func() {
-			app.loadJournalLogs(strings.TrimSpace(line), true)
-		}()
-	} else {
-		app.loadJournalLogs(strings.TrimSpace(line), true)
-	}
-	// Включаем загрузку журнала (только при ручном выборе для Windows)
+	// Фиксируем состояние до запуска горутины, чтобы избежать гонки с основным циклом
 	app.updateFile = true
-	// Фиксируем для ручного или автоматического обновления вывода журнала
 	app.lastWindow = "services"
 	app.lastSelected = strings.TrimSpace(line)
+	// Загружаем журналы выбранной службы, обрезая пробелы в названии
+	app.loadLogAsync(func() {
+		app.loadJournalLogs(strings.TrimSpace(line), true)
+	})
 	return nil
+}
+
+// Последовательная асинхронная загрузка журнала при ручном выборе
+func (app *App) loadLogAsync(load func()) {
+	go func() {
+		app.logLoadMutex.Lock()
+		defer app.logLoadMutex.Unlock()
+		load()
+	}()
+}
+
+// Асинхронная загрузка для фонового обновления без ожидания текущей загрузки
+func (app *App) tryLoadLogAsync(load func()) {
+	go func() {
+		if !app.logLoadMutex.TryLock() {
+			return
+		}
+		defer app.logLoadMutex.Unlock()
+		load()
+	}()
 }
 
 // Функция для загрузки записей журнала выбранной службы через journalctl
 // Второй параметр для обнолвения позиции делимитра нового вывода лога а также сброса автоскролл
 func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 	// Сбрасываем последнюю используемую систему контейнеризации (ошибка при покраске после compose)
+	app.logStateMutex.Lock()
 	app.lastContainerizationSystem = ""
+	app.logStateMutex.Unlock()
 	if serviceName == "" {
 		return
 	}
@@ -2809,7 +2834,9 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			return
 		}
 		if len(output) == 0 && app.testMode {
+			app.logStateMutex.Lock()
 			app.currentLogLines = []string{}
+			app.logStateMutex.Unlock()
 			return
 		}
 	// Читаем лог выбранного по ключу журнала аудита
@@ -2955,19 +2982,23 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		}
 	}
 	// Сохраняем строки журнала в массив
+	app.logStateMutex.Lock()
 	app.currentLogLines = strings.Split(string(output), "\n")
 	if !app.testMode {
 		app.updateDelimiter(newUpdate)
 		// Очищаем поле ввода для фильтрации, что бы не применять фильтрацию к новому журналу
 		// app.filterText = ""
 		// Применяем текущий фильтр к записям для обновления вывода
-		app.applyFilter(false)
+		app.applyFilterLocked(false)
 	}
+	app.logStateMutex.Unlock()
 }
 
 // Функция для чтения и парсинга содержимого события Windows через wevtutil
 func (app *App) loadWinEventLog(eventName string) (output []byte) {
+	app.logStateMutex.Lock()
 	app.lastContainerizationSystem = ""
+	app.logStateMutex.Unlock()
 	if eventName == "" {
 		return []byte("")
 	}
@@ -3001,9 +3032,13 @@ func (app *App) loadWinEventLog(eventName string) (output []byte) {
 			case strings.HasPrefix(trimmedLine, "Date:"):
 				dateTime = strings.ReplaceAll(trimmedLine, "Date: ", "")
 				dateTimeParse := strings.Split(dateTime, "T")
-				dateParse := strings.Split(dateTimeParse[0], "-")
-				timeParse := strings.Split(dateTimeParse[1], ".")
-				dateTime = fmt.Sprintf("%s.%s.%s %s", dateParse[2], dateParse[1], dateParse[0], timeParse[0])
+				if len(dateTimeParse) > 1 {
+					dateParse := strings.Split(dateTimeParse[0], "-")
+					timeParse := strings.Split(dateTimeParse[1], ".")
+					if len(dateParse) > 2 && len(timeParse) > 0 {
+						dateTime = fmt.Sprintf("%s.%s.%s %s", dateParse[2], dateParse[1], dateParse[0], timeParse[0])
+					}
+				}
 			case strings.HasPrefix(trimmedLine, "Event ID:"):
 				eventID = strings.ReplaceAll(trimmedLine, "Event ID: ", "")
 			case strings.HasPrefix(trimmedLine, "Level:"):
@@ -3473,6 +3508,9 @@ func (app *App) loadFiles(logPath string) {
 		if logPath == "/home/" || logPath == "/Users/" {
 			// Разбиваем строку на слова
 			words := strings.Fields(logName)
+			if len(words) == 0 {
+				continue
+			}
 			// Берем первое и последнее слово
 			firstWord := words[0]
 			lastWord := words[len(words)-1]
@@ -3725,8 +3763,7 @@ func (app *App) loadWinFiles(logPath string) {
 
 // Функция для извлечения первой втречающейся даты в формате DD.MM.YYYY HH:MM
 func extractDate(name string) string {
-	re := regexp.MustCompile(`\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2}`)
-	return re.FindString(name)
+	return dateNameRegex.FindString(name)
 }
 
 func (app *App) updateLogsList() {
@@ -3818,25 +3855,25 @@ func (app *App) selectFile(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	if app.fastMode {
-		go func() {
-			app.loadFileLogs(strings.TrimSpace(line), true)
-		}()
-	} else {
-		app.loadFileLogs(strings.TrimSpace(line), true)
-	}
 	app.lastWindow = "varLogs"
 	app.lastSelected = strings.TrimSpace(line)
+	app.loadLogAsync(func() {
+		app.loadFileLogs(strings.TrimSpace(line), true)
+	})
 	return nil
 }
 
 // Функция для чтения файла
 func (app *App) loadFileLogs(logName string, newUpdate bool) {
+	app.logStateMutex.Lock()
 	app.lastContainerizationSystem = ""
+	app.logStateMutex.Unlock()
 	if logName == "" {
 		return
 	}
 	app.debugStartTime = time.Now()
+	// Накапливаем строки локально, чтобы не менять общее состояние во время чтения
+	var loadedLines []string
 	// В параметре logName имя файла при выборе возвращяется без символов покраски
 	// Получаем путь из массива по имени
 	var logFullPath string
@@ -3900,7 +3937,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 			if stringErrors != "nil" && app.testMode {
 				log.Print("Error: ", stringErrors)
 			}
-			app.currentLogLines = strings.Split(string(decodedOutput), "\n")
+			loadedLines = strings.Split(string(decodedOutput), "\n")
 		} else {
 			var cmd *exec.Cmd
 			// Читаем логи в системах UNIX (Linux/Darwin/*BSD)
@@ -3930,7 +3967,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && app.testMode {
 					log.Print("Error: reading log using syslog tool in ASL (Apple System Log) format. ", err)
 				}
-				app.currentLogLines = strings.Split(string(output), "\n")
+				loadedLines = strings.Split(string(output), "\n")
 			// Читаем журналы Packet Capture в формате pcap/pcapng
 			case strings.HasSuffix(logFullPath, "pcap") || strings.HasSuffix(logFullPath, "pcapng"):
 				if app.sshMode {
@@ -3956,7 +3993,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				if err != nil && app.testMode {
 					log.Print("Error: reading log using tcpdump tool. ", err)
 				}
-				app.currentLogLines = strings.Split(string(output), "\n")
+				loadedLines = strings.Split(string(output), "\n")
 			// Packet Filter (PF) Firewall (OpenBSD)
 			case strings.HasSuffix(logFullPath, "pflog"):
 				if app.sshMode {
@@ -3979,7 +4016,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					_, _ = fmt.Fprintln(v, " \033[31mError reading log using tcpdump tool.\n", err, "\033[0m")
 					return
 				}
-				app.currentLogLines = strings.Split(string(output), "\n")
+				loadedLines = strings.Split(string(output), "\n")
 			// Читаем архивные логи в формате pcap/pcapng (macOS)
 			case strings.HasSuffix(logFullPath, "pcap.gz") || strings.HasSuffix(logFullPath, "pcapng.gz"):
 				var unpacker = "gzip"
@@ -4073,7 +4110,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					_, _ = fmt.Fprintln(vError, " \033[31mError finishing tcpdump.\n", err, "\033[0m")
 					return
 				}
-				app.currentLogLines = lines
+				loadedLines = lines
 			// Читаем архивные логи (unpack + stdout) в формате: gz/xz/bz2
 			case strings.HasSuffix(logFullPath, ".gz") || strings.HasSuffix(logFullPath, ".xz") || strings.HasSuffix(logFullPath, ".bz2"):
 				var unpacker string
@@ -4161,7 +4198,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					return
 				}
 				// Выводим содержимое
-				app.currentLogLines = strings.Split(string(output), "\n")
+				loadedLines = strings.Split(string(output), "\n")
 			// Читаем бинарные файлы с помощью last для wtmp, а также utmp (OpenBSD) и utx.log (FreeBSD)
 			case strings.Contains(logFullPath, "wtmp") || strings.Contains(logFullPath, "utmp") || strings.Contains(logFullPath, "utx.log"):
 				if app.sshMode {
@@ -4198,7 +4235,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				for i, j := 0, len(filteredLines)-1; i < j; i, j = i+1, j-1 {
 					filteredLines[i], filteredLines[j] = filteredLines[j], filteredLines[i]
 				}
-				app.currentLogLines = filteredLines
+				loadedLines = filteredLines
 			// lastb for btmp
 			case strings.Contains(logFullPath, "btmp"):
 				if app.sshMode {
@@ -4232,7 +4269,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				for i, j := 0, len(filteredLines)-1; i < j; i, j = i+1, j-1 {
 					filteredLines[i], filteredLines[j] = filteredLines[j], filteredLines[i]
 				}
-				app.currentLogLines = filteredLines
+				loadedLines = filteredLines
 			// Выводим содержимое из команды lastlog
 			case strings.HasSuffix(logFullPath, "lastlog"):
 				if app.sshMode {
@@ -4255,7 +4292,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					_, _ = fmt.Fprintln(v, " \033[31mError reading log using lastlog tool.\n", err, "\033[0m")
 					return
 				}
-				app.currentLogLines = strings.Split(string(output), "\n")
+				loadedLines = strings.Split(string(output), "\n")
 			// lastlogin for FreeBSD
 			case strings.HasSuffix(logFullPath, "lastlogin"):
 				if app.sshMode {
@@ -4278,7 +4315,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					_, _ = fmt.Fprintln(v, " \033[31mError reading log using lastlogin tool.\n", err, "\033[0m")
 					return
 				}
-				app.currentLogLines = strings.Split(string(output), "\n")
+				loadedLines = strings.Split(string(output), "\n")
 			default:
 				if app.sshMode {
 					cmd = exec.Command(
@@ -4295,7 +4332,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						_, _ = fmt.Fprintln(v, " \033[31mError reading log using tail tool.\n", err, "\033[0m")
 						return
 					}
-					app.currentLogLines = strings.Split(string(output), "\n")
+					loadedLines = strings.Split(string(output), "\n")
 				} else {
 					if app.logging {
 						slog.Info(logFullPath, "action", "Reading log file with io_uring")
@@ -4308,20 +4345,25 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						_, _ = fmt.Fprintln(v, " \033[31mError reading log file.\n", err, "\033[0m")
 						return
 					}
-					app.currentLogLines = strings.Split(string(output), "\n")
+					loadedLines = strings.Split(string(output), "\n")
 				}
 			}
 		}
+		app.logStateMutex.Lock()
+		app.currentLogLines = loadedLines
 		if !app.testMode {
 			app.updateDelimiter(newUpdate)
-			app.applyFilter(false)
+			app.applyFilterLocked(false)
 		}
+		app.logStateMutex.Unlock()
 	}
 }
 
 // Функция для чтения файла с опредилением кодировки в Windows
 func (app *App) loadWinFileLog(filePath string) (output []byte, stringErrors string) {
+	app.logStateMutex.Lock()
 	app.lastContainerizationSystem = ""
+	app.logStateMutex.Unlock()
 	if filePath == "" {
 		return nil, "file not selected"
 	}
@@ -4480,8 +4522,10 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					_, _ = fmt.Fprintln(vError, "\033[31mError connection to the Kubernetes cluster\033[0m")
+					app.logStateMutex.Lock()
 					app.currentLogLines = []string{string(output)}
-					app.applyFilter(false)
+					app.applyFilterLocked(false)
+					app.logStateMutex.Unlock()
 				}
 			} else {
 				_, _ = fmt.Fprintln(vError, "\033[31m"+containerizationSystem+" not installed (environment not found)\033[0m")
@@ -4694,6 +4738,9 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 		idName := scanner.Text()
 		parts := strings.Fields(idName)
 		if idName != "" && !serviceMap[idName] {
+			if len(parts) == 0 {
+				continue
+			}
 			serviceMap[idName] = true
 			var containerName string
 			var containerStatus string
@@ -4703,6 +4750,9 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 				// Собираем все статусы в одну строку
 				containerStatus = strings.Join(parts[1:], " ")
 			} else {
+				if len(parts) < 3 {
+					continue
+				}
 				containerName = parts[1]
 				containerStatus = parts[2]
 			}
@@ -4765,7 +4815,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 			}
 			// Фиксируем название namespace для k8s
 			var namespace string
-			if containerizationSystem != "kubectl" || parts[3] == "" {
+			if containerizationSystem != "kubectl" || len(parts) < 4 || parts[3] == "" {
 				namespace = ""
 			} else {
 				namespace = parts[3]
@@ -4876,15 +4926,11 @@ func (app *App) selectDocker(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	if app.fastMode {
-		go func() {
-			app.loadDockerLogs(strings.TrimSpace(line), true)
-		}()
-	} else {
-		app.loadDockerLogs(strings.TrimSpace(line), true)
-	}
 	app.lastWindow = "docker"
 	app.lastSelected = strings.TrimSpace(line)
+	app.loadLogAsync(func() {
+		app.loadDockerLogs(strings.TrimSpace(line), true)
+	})
 	return nil
 }
 
@@ -4895,12 +4941,19 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	}
 	app.debugStartTime = time.Now()
 	containerizationSystem := app.selectContainerizationSystem
+	// Накапливаем строки локально, чтобы не менять общее состояние во время чтения
+	var loadedLines []string
+	// Контейнеры compose для уникальной покраски префиксов
+	var composeContainers []string
+	var updateComposeColors bool
 	// Сохраняем систему контейнеризации для автообновления при смене окна
+	app.logStateMutex.Lock()
 	if newUpdate {
 		app.lastContainerizationSystem = app.selectContainerizationSystem
 	} else {
 		containerizationSystem = app.lastContainerizationSystem
 	}
+	app.logStateMutex.Unlock()
 	// Обновляем статус с названием источника журнала (имя контейнера)
 	if !app.testMode {
 		v, err := app.gui.View("logs")
@@ -5087,7 +5140,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					formattedLines = append(formattedLines, formattedLine)
 					// Если это последняя строка в выводе, добавляем перенос строки
 				}
-				app.currentLogLines = formattedLines
+				loadedLines = formattedLines
 			}
 		}
 	}
@@ -5156,16 +5209,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		case "compose":
 			// Сначала получаем список контейнеров в стеке Compose
 			if newUpdate {
-				containerNameArr := app.getContainersFromCompose(containerId)
-				// Предварительно очищаем карту
-				clear(app.uniquePrefixColorMap)
-				// Заполняем карту уникальных цветов для уникальной покраски названия контейнеров в префиксах compose
-				for _, containerName := range containerNameArr {
-					if containerName != "" {
-						newColor := uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(uniquePrefixColorArr)]
-						app.uniquePrefixColorMap[containerName] = newColor
-					}
-				}
+				composeContainers = app.getContainersFromCompose(containerId)
+				updateComposeColors = true
 			}
 			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.timezoneFilter
 			untilTimestamp := app.untilFilterText + "T00:00:00" + app.timezoneFilter
@@ -5391,6 +5436,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			stdoutPipe, _ := cmd.StdoutPipe()
 			_ = cmd.Start()
 			stdoutBytes, stdoutErr = io.ReadAll(stdoutPipe)
+			// Дожидаемся завершения процесса, чтобы освободить ресурсы
+			_ = cmd.Wait()
 			stdoutLines := strings.Split(string(stdoutBytes), "\n")
 			// Удаляем последнюю пустую строку
 			if len(stdoutLines) > 0 && stdoutLines[len(stdoutLines)-1] == "" {
@@ -5422,6 +5469,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					case "compose":
 						// Сначала извлекаем имя сервиса
 						parts1 := strings.SplitN(line, " | ", 2)
+						if len(parts1) < 2 {
+							continue
+						}
 						// Затем извлекаем timestamp
 						parts2 := strings.SplitN(parts1[1], " ", 2)
 						tsStr := strings.TrimSpace(parts2[0])
@@ -5429,6 +5479,9 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					case "kubectl":
 						// Сначала извлекаем префикс (название пода и контейнера в формате [pod/<podName>/<containerName>])
 						parts1 := strings.SplitN(line, "] ", 2)
+						if len(parts1) < 2 {
+							continue
+						}
 						// Затем извлекаем timestamp
 						parts2 := strings.SplitN(parts1[1], " ", 2)
 						tsStr := strings.TrimSpace(parts2[0])
@@ -5461,6 +5514,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			stderrPipe, _ := cmd.StderrPipe()
 			_ = cmd.Start()
 			stderrBytes, stderrErr = io.ReadAll(stderrPipe)
+			// Дожидаемся завершения процесса, чтобы освободить ресурсы
+			_ = cmd.Wait()
 			stderrLines := strings.Split(string(stderrBytes), "\n")
 			// Формируем итоговый массив
 			for _, line := range stderrLines {
@@ -5584,13 +5639,27 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				finalLines = append(finalLines, finalLine)
 			}
 		}
-		app.currentLogLines = finalLines
+		loadedLines = finalLines
+	}
+	app.logStateMutex.Lock()
+	if updateComposeColors {
+		// Предварительно очищаем карту
+		clear(app.uniquePrefixColorMap)
+		// Заполняем карту уникальных цветов для уникальной покраски названия контейнеров в префиксах compose
+		for _, containerName := range composeContainers {
+			if containerName != "" {
+				newColor := uniquePrefixColorArr[len(app.uniquePrefixColorMap)%len(uniquePrefixColorArr)]
+				app.uniquePrefixColorMap[containerName] = newColor
+			}
+		}
 	}
 	// Обновляем фильтр и делиметр всегда для потоков ИЛИ если есть изменения в файле при его чтение
 	if !readFileContainer || (readFileContainer && app.updateFile) || containerizationSystem != "docker" {
+		app.currentLogLines = loadedLines
 		app.updateDelimiter(newUpdate)
-		app.applyFilter(false)
+		app.applyFilterLocked(false)
 	}
+	app.logStateMutex.Unlock()
 }
 
 // Функция для получения массива из названия контейнеров в заданном проекте Compose
@@ -6033,6 +6102,13 @@ func (app *App) filterLines(input []string, mode, filter, exactFilter string, re
 
 // Функция для фильтрации записей текущего журнала + покраска
 func (app *App) applyFilter(color bool) {
+	app.logStateMutex.Lock()
+	defer app.logStateMutex.Unlock()
+	app.applyFilterLocked(color)
+}
+
+// Фильтрация и покраска при удерживаемой блокировке состояния вывода
+func (app *App) applyFilterLocked(color bool) {
 	filter := app.filterText
 	var skip = false
 	var size int
@@ -6048,7 +6124,7 @@ func (app *App) applyFilter(color bool) {
 		}
 		// Если текст фильтра не менялся и позиция курсора не в самом конце журнала, то пропускаем фильтрацию и покраску при пролистывании
 		vLogs, _ := app.gui.View("logs")
-		_, viewHeight := vLogs.Size()
+		_, viewHeight = vLogs.Size()
 		size = app.logScrollPos + viewHeight + 1
 		if app.lastFilterText == filter && size < len(app.filteredLogLines) {
 			skip = true
@@ -6085,7 +6161,7 @@ func (app *App) applyFilter(color bool) {
 					v.FrameColor = app.errorColor
 					return
 				}
-				if err != nil && !app.testMode {
+				if err != nil && app.testMode {
 					log.Print("Error: regex syntax")
 					return
 				}
@@ -6170,7 +6246,7 @@ func (app *App) applyFilter(color bool) {
 		}
 		app.updateStatus()
 		app.logScrollPos = 0
-		app.updateLogsView(true)
+		app.updateLogsViewLocked(true)
 	}
 }
 
@@ -6603,7 +6679,9 @@ func (app *App) lineColor(inputLine string) string {
 			if len(splitLine) >= 2 {
 				containerName = splitLine[0]
 				// Удаляем первый индекс из названия контейнера (квадратная открывающиеся скобка)
-				containerName = containerName[1:]
+				if len(containerName) > 0 {
+					containerName = containerName[1:]
+				}
 				// Удаляем название контейнера из покраски
 				inputLine = splitLine[1]
 			}
@@ -7493,6 +7571,13 @@ func (app *App) wordColor(inputWord string) string {
 
 // Функция для обновления вывода журнала (параметр для прокрутки в самый вниз)
 func (app *App) updateLogsView(lowerDown bool) {
+	app.logStateMutex.Lock()
+	defer app.logStateMutex.Unlock()
+	app.updateLogsViewLocked(lowerDown)
+}
+
+// Обновление вывода журнала при удерживаемой блокировке состояния вывода
+func (app *App) updateLogsViewLocked(lowerDown bool) {
 	// Получаем доступ к выводу журнала
 	v, err := app.gui.View("logs")
 	if err != nil {
@@ -7626,6 +7711,8 @@ func (app *App) viewScrollLogs(percentage int) {
 
 // Функция для скроллинга вниз
 func (app *App) scrollDownLogs(step int) error {
+	app.logStateMutex.Lock()
+	defer app.logStateMutex.Unlock()
 	v, err := app.gui.View("logs")
 	if err != nil {
 		return err
@@ -7650,13 +7737,15 @@ func (app *App) scrollDownLogs(step int) error {
 			}
 		}
 		// Вызываем функцию для обновления отображения журнала
-		app.updateLogsView(false)
+		app.updateLogsViewLocked(false)
 	}
 	return nil
 }
 
 // Функция для скроллинга вверх
 func (app *App) scrollUpLogs(step int) error {
+	app.logStateMutex.Lock()
+	defer app.logStateMutex.Unlock()
 	app.logScrollPos -= step
 	if app.logScrollPos < 0 {
 		app.logScrollPos = 0
@@ -7666,18 +7755,20 @@ func (app *App) scrollUpLogs(step int) error {
 	if !app.testMode {
 		app.updateStatus()
 	}
-	app.updateLogsView(false)
+	app.updateLogsViewLocked(false)
 	return nil
 }
 
 // Функция для переход к началу журнала
 func (app *App) pageUpLogs() {
+	app.logStateMutex.Lock()
+	defer app.logStateMutex.Unlock()
 	app.logScrollPos = 0
 	app.autoScroll = false
 	if !app.testMode {
 		app.updateStatus()
 	}
-	app.updateLogsView(false)
+	app.updateLogsViewLocked(false)
 }
 
 // Функция для очистки поля ввода фильтра вывода лога
@@ -7718,31 +7809,22 @@ func (app *App) updateLogOutput(newUpdate bool) {
 		if !app.testMode {
 			app.updateStatus()
 		}
-		switch app.lastWindow {
+		// Фиксируем состояние в основном цикле, чтобы горутина не читала его во время изменения
+		window := app.lastWindow
+		selected := app.lastSelected
+		switch window {
 		case "services":
-			if app.fastMode {
-				go func() {
-					app.loadJournalLogs(app.lastSelected, newUpdate)
-				}()
-			} else {
-				app.loadJournalLogs(app.lastSelected, newUpdate)
-			}
+			app.loadLogAsync(func() {
+				app.loadJournalLogs(selected, newUpdate)
+			})
 		case "varLogs":
-			if app.fastMode {
-				go func() {
-					app.loadFileLogs(app.lastSelected, newUpdate)
-				}()
-			} else {
-				app.loadFileLogs(app.lastSelected, newUpdate)
-			}
+			app.loadLogAsync(func() {
+				app.loadFileLogs(selected, newUpdate)
+			})
 		case "docker":
-			if app.fastMode {
-				go func() {
-					app.loadDockerLogs(app.lastSelected, newUpdate)
-				}()
-			} else {
-				app.loadDockerLogs(app.lastSelected, newUpdate)
-			}
+			app.loadLogAsync(func() {
+				app.loadDockerLogs(selected, newUpdate)
+			})
 		}
 		return nil
 	})
@@ -7768,38 +7850,30 @@ func (app *App) updateLogBackground(secondsChan chan int, newUpdate bool) {
 			ticker.Reset(time.Duration(newSeconds) * time.Second)
 		// Когда срабатывает таймер, выполняем обновление логов
 		case <-ticker.C:
-			// Обновляем журнал только если включен автоскролл
-			if app.autoScroll {
-				app.gui.Update(func(g *gocui.Gui) error {
-					switch app.lastWindow {
-					case "services":
-						if app.fastMode {
-							go func() {
-								app.loadJournalLogs(app.lastSelected, newUpdate)
-							}()
-						} else {
-							app.loadJournalLogs(app.lastSelected, newUpdate)
-						}
-					case "varLogs":
-						if app.fastMode {
-							go func() {
-								app.loadFileLogs(app.lastSelected, newUpdate)
-							}()
-						} else {
-							app.loadFileLogs(app.lastSelected, newUpdate)
-						}
-					case "docker":
-						if app.fastMode {
-							go func() {
-								app.loadDockerLogs(app.lastSelected, newUpdate)
-							}()
-						} else {
-							app.loadDockerLogs(app.lastSelected, newUpdate)
-						}
-					}
+			app.gui.Update(func(g *gocui.Gui) error {
+				// Обновляем журнал только если включен автоскролл
+				if !app.autoScroll {
 					return nil
-				})
-			}
+				}
+				// Фиксируем состояние в основном цикле, чтобы горутина не читала его во время изменения
+				window := app.lastWindow
+				selected := app.lastSelected
+				switch window {
+				case "services":
+					app.tryLoadLogAsync(func() {
+						app.loadJournalLogs(selected, newUpdate)
+					})
+				case "varLogs":
+					app.tryLoadLogAsync(func() {
+						app.loadFileLogs(selected, newUpdate)
+					})
+				case "docker":
+					app.tryLoadLogAsync(func() {
+						app.loadDockerLogs(selected, newUpdate)
+					})
+				}
+				return nil
+			})
 		}
 	}
 }
@@ -8891,7 +8965,10 @@ func (app *App) setupKeybindings() error {
 		case "bat":
 			app.colorMode = "disable"
 		}
-		if len(app.currentLogLines) != 0 {
+		app.logStateMutex.Lock()
+		hasLogLines := len(app.currentLogLines) != 0
+		app.logStateMutex.Unlock()
+		if hasLogLines {
 			app.updateLogsView(true)
 			app.applyFilter(false)
 			app.updateLogOutput(false)
@@ -8923,7 +9000,10 @@ func (app *App) setupKeybindings() error {
 		case "emerg":
 			app.journalPriority = "debug"
 		}
-		if len(app.currentLogLines) != 0 {
+		app.logStateMutex.Lock()
+		hasLogLines := len(app.currentLogLines) != 0
+		app.logStateMutex.Unlock()
+		if hasLogLines {
 			app.updateLogsView(true)
 			app.applyFilter(false)
 			app.updateLogOutput(false)
@@ -10659,6 +10739,8 @@ func syscallClipboard(s string) {
 
 // Функция для получения видимых строк в окне отображения логов после фильтрации и до покраски
 func (app *App) getVisibleLogs(g *gocui.Gui, v *gocui.View) string {
+	app.logStateMutex.Lock()
+	defer app.logStateMutex.Unlock()
 	if len(app.filteredLogLines) == 0 {
 		return ""
 	}
