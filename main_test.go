@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
@@ -1825,4 +1826,161 @@ func TestSSHManagerNavigation(t *testing.T) {
 	if fresh.FrameColor != app.selectedFrameColor || fresh.TitleColor != app.selectedTitleColor {
 		t.Fatal("rebuilt SSH manager does not have selected colors")
 	}
+}
+
+// ---------------------------------------- ssh ----------------------------------------
+
+// Проверка POSIX-экранирования аргументов удаленной команды
+func TestShellQuote(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", "''"},
+		{"simple", "uname", "'uname'"},
+		{"spaces", "docker compose", "'docker compose'"},
+		{"single quote", "a'b", "'a'\\''b'"},
+		{"glob", "*.log", "'*.log'"},
+		{"dollar", "$HOME", "'$HOME'"},
+		{"semicolon", "a;b", "'a;b'"},
+		{"double quotes", `a"b`, `'a"b'`},
+		{"stat format", "%n|%s|%Y", "'%n|%s|%Y'"},
+		{"docker format", "{{.ID}} {{.Names}} {{.State}}", "'{{.ID}} {{.Names}} {{.State}}'"},
+		{"jsonpath", "jsonpath={range .items[*]}{.metadata.name}{\"\\n\"}{end}", "'jsonpath={range .items[*]}{.metadata.name}{\"\\n\"}{end}'"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := shellQuote(c.in); got != c.want {
+				t.Fatalf("shellQuote(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// Проверка построения команды - локальный запуск и SSH с экранированием
+func TestSSHExec(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	localCases := []struct {
+		name string
+		ctx  context.Context
+	}{
+		{"local nil ctx", nil},
+		{"local with ctx", ctx},
+	}
+	for _, c := range localCases {
+		t.Run(c.name, func(t *testing.T) {
+			cmd := sshExec(c.ctx, false, []string{"ignored"}, "journalctl", "--no-pager", "-n", "100")
+			want := []string{"journalctl", "--no-pager", "-n", "100"}
+			if strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
+				t.Fatalf("Args = %v, want %v", cmd.Args, want)
+			}
+		})
+	}
+
+	t.Run("ssh nil ctx", func(t *testing.T) {
+		cmd := sshExec(nil, true, []string{"-p", "22", "user@host"}, "journalctl", "--no-pager", "-n", "100")
+		want := []string{"ssh", "-p", "22", "user@host", "'journalctl' '--no-pager' '-n' '100'"}
+		if strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
+			t.Fatalf("Args = %v, want %v", cmd.Args, want)
+		}
+	})
+
+	t.Run("ssh with ctx", func(t *testing.T) {
+		cmd := sshExec(ctx, true, []string{"user@host"}, "uname", "-s")
+		want := []string{"ssh", "user@host", "'uname' '-s'"}
+		if strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
+			t.Fatalf("Args = %v, want %v", cmd.Args, want)
+		}
+	})
+
+	t.Run("ssh quoting spaces and glob", func(t *testing.T) {
+		cmd := sshExec(nil, true, []string{"sudo", "user@host"}, "find", "/var/log", "-name", "*.log")
+		want := []string{"ssh", "sudo", "user@host", "'find' '/var/log' '-name' '*.log'"}
+		if strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
+			t.Fatalf("Args = %v, want %v", cmd.Args, want)
+		}
+	})
+
+	t.Run("ssh single quote escaping", func(t *testing.T) {
+		cmd := sshExec(nil, true, nil, "sh", "-c", "echo 'hi'")
+		want := []string{"ssh", "'sh' '-c' 'echo '\\''hi'\\'''"}
+		if strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
+			t.Fatalf("Args = %v, want %v", cmd.Args, want)
+		}
+	})
+
+	t.Run("ssh does not mutate options", func(t *testing.T) {
+		opts := make([]string, 1, 4)
+		opts[0] = "user@host"
+		_ = sshExec(nil, true, opts, "uname", "-s")
+		if len(opts) != 1 || opts[0] != "user@host" {
+			t.Fatalf("sshOptions mutated: %v", opts)
+		}
+	})
+}
+
+// Проверка обертки App.sshExec (использование app.sshMode/app.sshOptions)
+func TestAppSSHExec(t *testing.T) {
+	t.Run("local", func(t *testing.T) {
+		app := &App{sshMode: false}
+		cmd := app.sshExec(nil, "uname", "-s")
+		want := []string{"uname", "-s"}
+		if strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
+			t.Fatalf("Args = %v, want %v", cmd.Args, want)
+		}
+	})
+
+	t.Run("ssh", func(t *testing.T) {
+		app := &App{sshMode: true, sshOptions: []string{"user@host"}}
+		cmd := app.sshExec(nil, "uname", "-s")
+		want := []string{"ssh", "user@host", "'uname' '-s'"}
+		if strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
+			t.Fatalf("Args = %v, want %v", cmd.Args, want)
+		}
+	})
+}
+
+// Проверка remoteGetOS через заглушку ssh (без реального подключения)
+func TestRemoteGetOS(t *testing.T) {
+	writeFakeSSH := func(t *testing.T, binDir, body string) {
+		t.Helper()
+		if runtime.GOOS == "windows" {
+			name := filepath.Join(binDir, "ssh.cmd")
+			if err := os.WriteFile(name, []byte("@echo off\r\n"+body+"\r\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			name := filepath.Join(binDir, "ssh")
+			if err := os.WriteFile(name, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	t.Run("linux", func(t *testing.T) {
+		binDir := t.TempDir()
+		writeFakeSSH(t, binDir, "echo Linux")
+		t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+		got, err := remoteGetOS([]string{"user@host"})
+		if err != nil {
+			t.Fatalf("remoteGetOS returned error: %v", err)
+		}
+		if got != "linux" {
+			t.Fatalf("remoteGetOS = %q, want %q", got, "linux")
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		binDir := t.TempDir()
+		writeFakeSSH(t, binDir, "echo connection refused >&2\nexit 1")
+		t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+		if _, err := remoteGetOS([]string{"user@host"}); err == nil {
+			t.Fatal("remoteGetOS expected an error, got nil")
+		}
+	})
 }

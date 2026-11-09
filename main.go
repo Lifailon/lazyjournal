@@ -1036,16 +1036,7 @@ func (app *App) journalCheck(mode string) ([]string, error) {
 	case "boots":
 		flag = "--list-boots"
 	}
-	var cmd *exec.Cmd
-	if app.sshMode {
-		cmd = exec.Command(
-			"ssh", append(app.sshOptions,
-				cli, "--no-pager", flag,
-			)...)
-	} else {
-		cmd = exec.Command(
-			cli, "--no-pager", flag)
-	}
+	cmd := app.sshExec(nil, cli, "--no-pager", flag)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", string(output), err)
@@ -1054,15 +1045,47 @@ func (app *App) journalCheck(mode string) ([]string, error) {
 	}
 }
 
+// ---------------------------------------- ssh ----------------------------------------
+
+// Экранирует аргумент для безопасной передачи в удаленную оболочку через ssh
+func shellQuote(arg string) string {
+	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+}
+
+// Функция формирования команды для локального выполнения или через ssh
+func sshExec(ctx context.Context, sshMode bool, sshOptions []string, name string, args ...string) *exec.Cmd {
+	if !sshMode {
+		if ctx != nil {
+			return exec.CommandContext(ctx, name, args...)
+		}
+		return exec.Command(name, args...)
+	}
+	// Экранируем аргументы удаленной команды, чтобы ssh не терял пробелы и glob-символы
+	remoteArgs := make([]string, 0, len(args)+1)
+	remoteArgs = append(remoteArgs, shellQuote(name))
+	for _, arg := range args {
+		remoteArgs = append(remoteArgs, shellQuote(arg))
+	}
+	// Копируем опции ssh, чтобы append не изменял общий массив
+	sshArgs := make([]string, 0, len(sshOptions)+1)
+	sshArgs = append(sshArgs, sshOptions...)
+	sshArgs = append(sshArgs, strings.Join(remoteArgs, " "))
+	if ctx != nil {
+		return exec.CommandContext(ctx, "ssh", sshArgs...)
+	}
+	return exec.Command("ssh", sshArgs...)
+}
+
+// Обертка для sshExec с параметрами подключения текущего приложения
+func (app *App) sshExec(ctx context.Context, name string, args ...string) *exec.Cmd {
+	return sshExec(ctx, app.sshMode, app.sshOptions, name, args...)
+}
+
 // Функция для опредиления название удаленной системы с timeout в 5 секунд
 func remoteGetOS(sshOptions []string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(
-		ctx,
-		"ssh", append(
-			sshOptions, "uname", "-s",
-		)...)
+	cmd := sshExec(ctx, true, sshOptions, "uname", "-s")
 	cmd.WaitDelay = 5 * time.Second
 	// Извлекаем комбинированный вывод (захватываем stdout и stderr) для вывода ошибки подключения
 	output, err := cmd.CombinedOutput()
@@ -1220,6 +1243,29 @@ func runGoCui(mock bool) {
 	_, errConfig := config.getConfig()
 	if errConfig != nil {
 		fmt.Println(errConfig)
+	}
+
+	// Включаем режим ssh до проверки флагов journald,
+	// чтобы проверки (unit-types/journal-field/journal-boot) выполнялись на удаленном хосте
+	commandLineMode := *commandColor || *commandFuzzy != "" || *commandRegex != ""
+	if !commandLineMode {
+		if *sshModeFlag != "" {
+			options := strings.Fields(*sshModeFlag)
+			app.sshOptions = options
+			remoteOS, err := remoteGetOS(app.sshOptions)
+			if err != nil {
+				app.sshMode = false
+				app.sshStatus = "false"
+				app.getOS = runtime.GOOS
+			} else {
+				app.sshMode = true
+				// Забираем только название хоста в статус
+				app.sshStatus = options[0]
+				app.getOS = remoteOS
+			}
+		} else {
+			app.sshStatus = "false"
+		}
 	}
 
 	// Берем значение из конфигурации, если значение в конфигурации не пустое и значение флага по умолчанию
@@ -1748,35 +1794,12 @@ func runGoCui(mock bool) {
 	}
 
 	// Включаем режим ssh и заполняем параметры (включая sudo и другие стандартные опции ssh подключения, например, порт)
-	if *sshModeFlag != "" {
-		options := strings.Split(*sshModeFlag, " ")
-		app.sshOptions = append(app.sshOptions, options...)
-		remoteOS, err := remoteGetOS(app.sshOptions)
-		if err != nil {
-			app.sshMode = false
-			app.sshStatus = "false"
-			app.getOS = runtime.GOOS
-		} else {
-			app.sshMode = true
-			// Забираем только название хоста в статус
-			app.sshStatus = options[0]
-			app.getOS = remoteOS
-		}
-	} else {
-		app.sshStatus = "false"
-	}
+	// Инициализация выполняется выше, до проверки флагов journald
 
 	var composeVer *exec.Cmd
 	// This probe is only needed by the TUI. Keeping it out of command-line mode
 	// avoids starting Docker while processing piped input.
-	if app.sshMode {
-		composeVer = exec.Command(
-			"ssh", append(app.sshOptions,
-				"docker", "compose", "version",
-			)...)
-	} else {
-		composeVer = exec.Command("docker", "compose", "version")
-	}
+	composeVer = app.sshExec(nil, "docker", "compose", "version")
 	_, composeErr := composeVer.Output()
 	if composeErr != nil {
 		app.dockerCompose = "docker-compose"
@@ -2113,17 +2136,7 @@ func parseDateFromName(name string) time.Time {
 func (app *App) loadServices(journalName string) {
 	app.journals = nil
 	// Проверка, что в системе установлена и поддерживается утилита journalctl
-	var checkJournald *exec.Cmd
-	if app.sshMode {
-		checkJournald = exec.Command(
-			"ssh", append(app.sshOptions,
-				"journalctl", "--version",
-			)...)
-	} else {
-		checkJournald = exec.Command(
-			"journalctl", "--version",
-		)
-	}
+	checkJournald := app.sshExec(nil, "journalctl", "--version")
 	// Проверяем на ошибки (очищаем список служб, отключаем курсор и выводим ошибку)
 	if app.logging {
 		slog.Info(checkJournald.String(), "action", "Check the binary")
@@ -2151,28 +2164,12 @@ func (app *App) loadServices(journalName string) {
 		// (1) Получаем список всех юнитов со статусом работы через systemctl в формате JSON
 		var unitsList *exec.Cmd
 		var unitTypeFlag = "--type=" + app.unitType // "service,timer,scope,socket,mount" (default: service)
-		if app.sshMode {
-			if journalName == "systemUnits" {
-				unitsList = exec.Command(
-					"ssh", append(app.sshOptions,
-						"systemctl", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json",
-					)...)
-			} else {
-				unitsList = exec.Command(
-					"ssh", append(app.sshOptions,
-						"systemctl", "--user", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json",
-					)...)
-			}
+		if journalName == "systemUnits" {
+			unitsList = app.sshExec(nil,
+				"systemctl", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json")
 		} else {
-			if journalName == "systemUnits" {
-				unitsList = exec.Command(
-					"systemctl", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json",
-				)
-			} else {
-				unitsList = exec.Command(
-					"systemctl", "--user", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json",
-				)
-			}
+			unitsList = app.sshExec(nil,
+				"systemctl", "--user", "list-units", "--all", unitTypeFlag, "--no-legend", "--no-pager", "--output=json")
 		}
 		if app.logging {
 			var logSource string
@@ -2229,17 +2226,8 @@ func (app *App) loadServices(journalName string) {
 			}
 		}
 		// (2) Получаем список всех юнит-файлов для извлечения статуса автозагрузки и отключенных сервисов
-		var unitFilesList *exec.Cmd
-		if app.sshMode {
-			unitFilesList = exec.Command(
-				"ssh", append(app.sshOptions,
-					"systemctl", "list-unit-files", unitTypeFlag, "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
-				)...)
-		} else {
-			unitFilesList = exec.Command(
-				"systemctl", "list-unit-files", unitTypeFlag, "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled",
-			)
-		}
+		unitFilesList := app.sshExec(nil,
+			"systemctl", "list-unit-files", unitTypeFlag, "--all", "--no-legend", "--no-pager", "--output=json", "--state=enabled,disabled")
 		if app.logging {
 			var logSource string
 			if journalName == "systemUnits" {
@@ -2341,17 +2329,7 @@ func (app *App) loadServices(journalName string) {
 		})
 		// journalctl -n 1 -o json | jq keys
 		var fieldFlag = "--field=" + app.journalField // SYSLOG_IDENTIFIER/_UID/_PID/_COMM/_EXE/_CMDLINE
-		var cmd *exec.Cmd
-		if app.sshMode {
-			cmd = exec.Command(
-				"ssh", append(app.sshOptions,
-					"journalctl", "--no-pager", fieldFlag,
-				)...)
-		} else {
-			cmd = exec.Command(
-				"journalctl", "--no-pager", fieldFlag,
-			)
-		}
+		cmd := app.sshExec(nil, "journalctl", "--no-pager", fieldFlag)
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Loading the system journals")
 		}
@@ -2397,17 +2375,7 @@ func (app *App) loadServices(journalName string) {
 	// Kernel boot list from journald
 	case "kernelBoot":
 		// Получаем список загрузок системы
-		var cmd *exec.Cmd
-		if app.sshMode {
-			cmd = exec.Command(
-				"ssh", append(app.sshOptions,
-					"journalctl", "--list-boots", "-o", "json",
-				)...)
-		} else {
-			cmd = exec.Command(
-				"journalctl", "--list-boots", "-o", "json",
-			)
-		}
+		cmd := app.sshExec(nil, "journalctl", "--list-boots", "-o", "json")
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Loading the kernel boot")
 		}
@@ -2505,17 +2473,7 @@ func (app *App) loadServices(journalName string) {
 	// Audit rules keys from auditd
 	case "auditd":
 		// Получаем список правил
-		var cmd *exec.Cmd
-		if app.sshMode {
-			cmd = exec.Command(
-				"ssh", append(app.sshOptions,
-					"auditctl", "-l",
-				)...)
-		} else {
-			cmd = exec.Command(
-				"auditctl", "-l",
-			)
-		}
+		cmd := app.sshExec(nil, "auditctl", "-l")
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Loading the audit rules keys")
 		}
@@ -2846,17 +2804,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		} else {
 			serviceName = app.lastBootId
 		}
-		var cmd *exec.Cmd
-		if app.sshMode {
-			cmd = exec.Command(
-				"ssh", append(app.sshOptions,
-					"ausearch", "-k", serviceName, "--format", "interpret",
-				)...)
-		} else {
-			cmd = exec.Command(
-				"ausearch", "-k", serviceName, "--format", "interpret",
-			)
-		}
+		cmd := app.sshExec(nil, "ausearch", "-k", serviceName, "--format", "interpret")
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Reading logs from audit rules keys")
 		}
@@ -2887,17 +2835,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		} else {
 			boot_id = app.lastBootId
 		}
-		var cmd *exec.Cmd
-		if app.sshMode {
-			cmd = exec.Command(
-				"ssh", append(app.sshOptions,
-					"journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount,
-				)...)
-		} else {
-			cmd = exec.Command(
-				"journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount,
-			)
-		}
+		cmd := app.sshExec(nil, "journalctl", "-k", "-b", boot_id, "--no-pager", "-n", app.logViewCount)
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Reading logs from kernel boot")
 		}
@@ -2948,16 +2886,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			args = append(args, "--until", app.untilFilterText)
 		}
 		// Проверяем режим работы и формируем команду для выполнения
-		if app.sshMode {
-			// Создаем копию массива с заранее определенной емкостью
-			sshArgs := make([]string, 0, len(app.sshOptions)+1+len(args))
-			sshArgs = append(sshArgs, app.sshOptions...)
-			sshArgs = append(sshArgs, "journalctl")
-			sshArgs = append(sshArgs, args...)
-			cmd = exec.Command("ssh", sshArgs...)
-		} else {
-			cmd = exec.Command("journalctl", args...)
-		}
+		cmd = app.sshExec(nil, "journalctl", args...)
 		if app.logging {
 			var logSource string
 			switch app.selectUnits {
@@ -3083,9 +3012,7 @@ func (app *App) statFile(path string) (os.FileInfo, error) {
 	if app.sshMode {
 		// Аргументы для команды stats. Ключи для перехода по символическим ссылкам
 		// для получения информации о целевых файлах (для проверки доступа) и форматирования вывода
-		statArgs := app.sshOptions
-		statArgs = append(statArgs, "stat", "-L", "-c", "'%n|%s|%Y'", path)
-		cmd := exec.Command("ssh", statArgs...)
+		cmd := app.sshExec(nil, "stat", "-L", "-c", "%n|%s|%Y", path)
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Loading the log files")
 		}
@@ -3131,11 +3058,8 @@ func (app *App) statFiles(paths []string) (map[string]os.FileInfo, error) {
 	replPaths = strings.ReplaceAll(replPaths, "(", "")
 	replPaths = strings.ReplaceAll(replPaths, ")", "")
 	paths = strings.Split(replPaths, "\n")
-	args := make([]string, len(app.sshOptions))
-	copy(args, app.sshOptions)
-	args = append(args, "stat", "-L", "-c", "'%n|%s|%Y'")
-	args = append(args, paths...)
-	cmd := exec.Command("ssh", args...)
+	statArgs := append([]string{"-L", "-c", "%n|%s|%Y"}, paths...)
+	cmd := app.sshExec(nil, "stat", statArgs...)
 	if app.logging {
 		slog.Info(cmd.String(), "action", "Loading the log files")
 	}
@@ -3173,15 +3097,7 @@ func (app *App) loadFiles(logPath string) {
 	var output []byte
 	switch logPath {
 	case "descriptor":
-		var cmd *exec.Cmd
-		if app.sshMode {
-			cmd = exec.Command(
-				"ssh", append(app.sshOptions,
-					"lsof", "-Fn",
-				)...)
-		} else {
-			cmd = exec.Command("lsof", "-Fn")
-		}
+		cmd := app.sshExec(nil, "lsof", "-Fn")
 		// Подавить вывод ошибок при отсутствиее прав доступа (opendir: Permission denied)
 		cmd.Stderr = nil
 		if app.logging {
@@ -3226,7 +3142,6 @@ func (app *App) loadFiles(logPath string) {
 		}
 	case "varlog":
 		logPath = "/var/log/"
-		var cmd *exec.Cmd
 		// Загрузка системных журналов для macOS
 		if app.getOS == "darwin" {
 			args := []string{
@@ -3242,15 +3157,11 @@ func (app *App) loadFiles(logPath string) {
 				"-name", "*.pcapng", "-o",
 				"-name", "*.pcapng.gz",
 			}
-			if app.sshMode {
-				sshArgs := make([]string, 0, len(app.sshOptions)+1+len(args))
-				sshArgs = append(sshArgs, app.sshOptions...)
-				sshArgs = append(sshArgs, "find")
-				sshArgs = append(sshArgs, args...)
-				cmd = exec.Command("ssh", sshArgs...)
-			} else {
-				cmd = exec.Command("find", args...)
+			cmd := app.sshExec(nil, "find", args...)
+			if app.logging {
+				slog.Info(cmd.String(), "action", "Loading the log files from var logs")
 			}
+			output, _ = cmd.Output()
 		} else {
 			// Загрузка системных журналов для Linux: все файлы, которые содержат log в расширение или названии (архивы включительно), а также расширение с цифрой (архивные) и pcap/pcapng
 			args := []string{
@@ -3266,19 +3177,12 @@ func (app *App) loadFiles(logPath string) {
 				"-name", "*.pcapng", "-o",
 				"-name", "*.pcapng.gz",
 			}
-			if app.sshMode {
-				sshArgs := app.sshOptions
-				sshArgs = append(sshArgs, "find")
-				sshArgs = append(sshArgs, args...)
-				cmd = exec.Command("ssh", sshArgs...)
-			} else {
-				cmd = exec.Command("find", args...)
+			cmd := app.sshExec(nil, "find", args...)
+			if app.logging {
+				slog.Info(cmd.String(), "action", "Loading the log files from var logs")
 			}
+			output, _ = cmd.Output()
 		}
-		if app.logging {
-			slog.Info(cmd.String(), "action", "Loading the log files from var logs")
-		}
-		output, _ = cmd.Output()
 		// Преобразуем вывод команды в строку и делим на массив строк
 		files := strings.Split(strings.TrimSpace(string(output)), "\n")
 		// Если список файлов пустой, возвращаем ошибку Permission denied
@@ -3336,34 +3240,15 @@ func (app *App) loadFiles(logPath string) {
 		}
 	case "customPath":
 		logPath = app.customPath
-		var cmd *exec.Cmd
-		if app.sshMode {
-			cmd = exec.Command(
-				"ssh", append(app.sshOptions,
-					"find", logPath,
-					"-type", "f",
-					"-name", "*.log", "-o",
-					"-name", "*.log.*", "-o",
-					"-name", "*.asl", "-o",
-					"-name", "*.pcap", "-o",
-					"-name", "*.pcap.gz", "-o",
-					"-name", "*.pcapng", "-o",
-					"-name", "*.pcapng.gz",
-				)...,
-			)
-		} else {
-			cmd = exec.Command(
-				"find", logPath,
-				"-type", "f",
-				"-name", "*.log", "-o",
-				"-name", "*.log.*", "-o",
-				"-name", "*.asl", "-o",
-				"-name", "*.pcap", "-o",
-				"-name", "*.pcap.gz", "-o",
-				"-name", "*.pcapng", "-o",
-				"-name", "*.pcapng.gz",
-			)
-		}
+		cmd := app.sshExec(nil, "find", logPath,
+			"-type", "f",
+			"-name", "*.log", "-o",
+			"-name", "*.log.*", "-o",
+			"-name", "*.asl", "-o",
+			"-name", "*.pcap", "-o",
+			"-name", "*.pcap.gz", "-o",
+			"-name", "*.pcapng", "-o",
+			"-name", "*.pcapng.gz")
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Loading the log files from custom path")
 		}
@@ -3401,7 +3286,6 @@ func (app *App) loadFiles(logPath string) {
 			logPath = "/Users/"
 		}
 		// Ищем файлы с помощью системной утилиты find
-		var cmd *exec.Cmd
 		args := []string{
 			logPath,
 			"-type", "f",
@@ -3412,14 +3296,7 @@ func (app *App) loadFiles(logPath string) {
 			"-name", "*.pcapng", "-o",
 			"-name", "*.pcapng.gz",
 		}
-		if app.sshMode {
-			sshArgs := app.sshOptions
-			sshArgs = append(sshArgs, "find")
-			sshArgs = append(sshArgs, args...)
-			cmd = exec.Command("ssh", sshArgs...)
-		} else {
-			cmd = exec.Command("find", args...)
-		}
+		cmd := app.sshExec(nil, "find", args...)
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Loading the log files from users home")
 		}
@@ -3446,7 +3323,6 @@ func (app *App) loadFiles(logPath string) {
 			}
 		}
 		// Получаем содержимое файлов из домашнего каталога пользователя root
-		var cmdRootDir *exec.Cmd
 		args = []string{
 			"/root/",
 			"-type", "f",
@@ -3456,16 +3332,9 @@ func (app *App) loadFiles(logPath string) {
 			"-name", "*.pcapng", "-o",
 			"-name", "*.pcapng.gz",
 		}
-		if app.sshMode {
-			sshArgs := app.sshOptions
-			sshArgs = append(sshArgs, "find")
-			sshArgs = append(sshArgs, args...)
-			cmdRootDir = exec.Command("ssh", sshArgs...)
-		} else {
-			cmdRootDir = exec.Command("find", args...)
-		}
+		cmdRootDir := app.sshExec(nil, "find", args...)
 		if app.logging {
-			slog.Info(cmd.String(), "action", "Loading the log files from users home")
+			slog.Info(cmdRootDir.String(), "action", "Loading the log files from users home")
 		}
 		outputRootDir, err := cmdRootDir.Output()
 		// Добавляем содержимое директории /root/ в общий массив, если есть доступ
@@ -3550,17 +3419,7 @@ func (app *App) loadFiles(logPath string) {
 			serviceMap[logFullPath] = true
 			// Получаем имя процесса для файла дескриптора
 			if logPath == "descriptor" {
-				var cmd *exec.Cmd
-				if app.sshMode {
-					cmd = exec.Command(
-						"ssh", append(app.sshOptions,
-							"lsof", "-Fc", logFullPath,
-						)...)
-				} else {
-					cmd = exec.Command(
-						"lsof", "-Fc", logFullPath,
-					)
-				}
+				cmd := app.sshExec(nil, "lsof", "-Fc", logFullPath)
 				cmd.Stderr = nil
 				if app.logging {
 					slog.Info(cmd.String(), "action", "Loading the log files for process descriptor")
@@ -3944,16 +3803,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 			switch {
 			// Читаем файлы в формате ASL (Apple System Log)
 			case strings.HasSuffix(logFullPath, "asl"):
-				if app.sshMode {
-					cmd = exec.Command(
-						"ssh", append(app.sshOptions,
-							"syslog", "-f", logFullPath,
-						)...)
-				} else {
-					cmd = exec.Command(
-						"syslog", "-f", logFullPath,
-					)
-				}
+				cmd = app.sshExec(nil, "syslog", "-f", logFullPath)
 				if app.logging {
 					slog.Info(cmd.String(), "action", "Reading logs in asl format")
 				}
@@ -3970,16 +3820,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				loadedLines = strings.Split(string(output), "\n")
 			// Читаем журналы Packet Capture в формате pcap/pcapng
 			case strings.HasSuffix(logFullPath, "pcap") || strings.HasSuffix(logFullPath, "pcapng"):
-				if app.sshMode {
-					cmd = exec.Command(
-						"ssh", append(app.sshOptions,
-							"tcpdump", "-n", "-r", logFullPath,
-						)...)
-				} else {
-					cmd = exec.Command(
-						"tcpdump", "-n", "-r", logFullPath,
-					)
-				}
+				cmd = app.sshExec(nil, "tcpdump", "-n", "-r", logFullPath)
 				if app.logging {
 					slog.Info(cmd.String(), "action", "Reading logs in pcap format")
 				}
@@ -3996,16 +3837,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				loadedLines = strings.Split(string(output), "\n")
 			// Packet Filter (PF) Firewall (OpenBSD)
 			case strings.HasSuffix(logFullPath, "pflog"):
-				if app.sshMode {
-					cmd = exec.Command(
-						"ssh", append(app.sshOptions,
-							"tcpdump", "-e", "-n", "-r", logFullPath,
-						)...)
-				} else {
-					cmd = exec.Command(
-						"tcpdump", "-e", "-n", "-r", logFullPath,
-					)
-				}
+				cmd = app.sshExec(nil, "tcpdump", "-e", "-n", "-r", logFullPath)
 				if app.logging {
 					slog.Info(cmd.String(), "action", "Reading logs in pflog format")
 				}
@@ -4031,17 +3863,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				// Удаляем временный файл после обработки
 				tmpName := tmpFile.Name()
 				defer func() { _ = os.Remove(tmpName) }()
-				var cmdUnzip *exec.Cmd
-				if app.sshMode {
-					cmdUnzip = exec.Command(
-						"ssh", append(app.sshOptions,
-							unpacker, "-dc", logFullPath,
-						)...)
-				} else {
-					cmdUnzip = exec.Command(
-						unpacker, "-dc", logFullPath,
-					)
-				}
+				cmdUnzip := app.sshExec(nil, unpacker, "-dc", logFullPath)
 				cmdUnzip.Stdout = tmpFile
 				if err := cmdUnzip.Start(); err != nil && !app.testMode {
 					vError, _ := app.gui.View("logs")
@@ -4063,19 +3885,10 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 					return
 				}
 				// Создаем команду для tcpdump
-				var cmdTcpdump *exec.Cmd
-				if app.sshMode {
-					cmdTcpdump = exec.Command(
-						"ssh", append(app.sshOptions,
-							"tcpdump", "-n", "-r", tmpFile.Name(),
-						)...)
-				} else {
-					cmdTcpdump = exec.Command(
-						"tcpdump", "-n", "-r", tmpFile.Name(),
-					)
-				}
+				// Временный файл создается локально, поэтому tcpdump всегда читает его локально
+				cmdTcpdump := exec.Command("tcpdump", "-n", "-r", tmpFile.Name())
 				if app.logging {
-					slog.Info(cmd.String(), "action", "Reading logs in pcap format")
+					slog.Info(cmdTcpdump.String(), "action", "Reading logs in pcap format")
 				}
 				tcpdumpOut, err := cmdTcpdump.StdoutPipe()
 				if err != nil && !app.testMode {
@@ -4122,25 +3935,8 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				case strings.HasSuffix(logFullPath, ".bz2"):
 					unpacker = "bzip2"
 				}
-				var cmdUnzip *exec.Cmd
-				var cmdTail *exec.Cmd
-				if app.sshMode {
-					cmdUnzip = exec.Command(
-						"ssh", append(app.sshOptions,
-							unpacker, "-dc", logFullPath,
-						)...)
-					cmdTail = exec.Command(
-						"ssh", append(app.sshOptions,
-							"tail", "-n", app.logViewCount,
-						)...)
-				} else {
-					cmdUnzip = exec.Command(
-						unpacker, "-dc", logFullPath,
-					)
-					cmdTail = exec.Command(
-						"tail", "-n", app.logViewCount,
-					)
-				}
+				cmdUnzip := app.sshExec(nil, unpacker, "-dc", logFullPath)
+				cmdTail := app.sshExec(nil, "tail", "-n", app.logViewCount)
 				if app.logging {
 					slog.Info(cmdUnzip.String(), "action", "Reading the archive log")
 				}
@@ -4201,16 +3997,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				loadedLines = strings.Split(string(output), "\n")
 			// Читаем бинарные файлы с помощью last для wtmp, а также utmp (OpenBSD) и utx.log (FreeBSD)
 			case strings.Contains(logFullPath, "wtmp") || strings.Contains(logFullPath, "utmp") || strings.Contains(logFullPath, "utx.log"):
-				if app.sshMode {
-					cmd = exec.Command(
-						"ssh", append(app.sshOptions,
-							"last", "-f", logFullPath,
-						)...)
-				} else {
-					cmd = exec.Command(
-						"last", "-f", logFullPath,
-					)
-				}
+				cmd = app.sshExec(nil, "last", "-f", logFullPath)
 				if app.logging {
 					slog.Info(cmd.String(), "action", "Reading logs in wtmp/utmp/utx format")
 				}
@@ -4238,16 +4025,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				loadedLines = filteredLines
 			// lastb for btmp
 			case strings.Contains(logFullPath, "btmp"):
-				if app.sshMode {
-					cmd = exec.Command(
-						"ssh", append(app.sshOptions,
-							"lastb", "-f", logFullPath,
-						)...)
-				} else {
-					cmd = exec.Command(
-						"lastb", "-f", logFullPath,
-					)
-				}
+				cmd = app.sshExec(nil, "lastb", "-f", logFullPath)
 				if app.logging {
 					slog.Info(cmd.String(), "action", "Reading logs in btmp format")
 				}
@@ -4272,16 +4050,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				loadedLines = filteredLines
 			// Выводим содержимое из команды lastlog
 			case strings.HasSuffix(logFullPath, "lastlog"):
-				if app.sshMode {
-					cmd = exec.Command(
-						"ssh", append(app.sshOptions,
-							"lastlog",
-						)...)
-				} else {
-					cmd = exec.Command(
-						"lastlog",
-					)
-				}
+				cmd = app.sshExec(nil, "lastlog")
 				if app.logging {
 					slog.Info(cmd.String(), "action", "Reading logs in lastlog format")
 				}
@@ -4295,16 +4064,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				loadedLines = strings.Split(string(output), "\n")
 			// lastlogin for FreeBSD
 			case strings.HasSuffix(logFullPath, "lastlogin"):
-				if app.sshMode {
-					cmd = exec.Command(
-						"ssh", append(app.sshOptions,
-							"lastlogin",
-						)...)
-				} else {
-					cmd = exec.Command(
-						"lastlogin",
-					)
-				}
+				cmd = app.sshExec(nil, "lastlogin")
 				if app.logging {
 					slog.Info(cmd.String(), "action", "Reading logs in lastlogin format")
 				}
@@ -4318,10 +4078,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 				loadedLines = strings.Split(string(output), "\n")
 			default:
 				if app.sshMode {
-					cmd = exec.Command(
-						"ssh", append(app.sshOptions,
-							"tail", "-n", app.logViewCount, logFullPath,
-						)...)
+					cmd = app.sshExec(nil, "tail", "-n", app.logViewCount, logFullPath)
 					if app.logging {
 						slog.Info(cmd.String(), "action", "Reading log file")
 					}
@@ -4461,45 +4218,15 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	defer cancel()
 	// Получаем версию для проверки, что система контейнеризации установлена
 	var cmd *exec.Cmd
-	if app.sshMode {
-		if containerizationSystem == "compose" {
-			// Корректируем формат команды
-			if app.dockerCompose == "docker compose" {
-				cmd = exec.CommandContext(
-					ctx,
-					"ssh", append(app.sshOptions,
-						"docker", "compose", "version",
-					)...)
-			} else {
-				cmd = exec.CommandContext(
-					ctx,
-					"ssh", append(app.sshOptions,
-						app.dockerCompose, "version",
-					)...)
-			}
+	if containerizationSystem == "compose" {
+		// Корректируем формат команды
+		if app.dockerCompose == "docker compose" {
+			cmd = app.sshExec(ctx, "docker", "compose", "version")
 		} else {
-			cmd = exec.CommandContext(
-				ctx,
-				"ssh", append(app.sshOptions,
-					containerizationSystem, "version",
-				)...)
+			cmd = app.sshExec(ctx, app.dockerCompose, "version")
 		}
 	} else {
-		if containerizationSystem == "compose" {
-			if app.dockerCompose == "docker compose" {
-				cmd = exec.Command(
-					"docker", "compose", "version",
-				)
-			} else {
-				cmd = exec.Command(
-					app.dockerCompose, "version",
-				)
-			}
-		} else {
-			cmd = exec.Command(
-				containerizationSystem, "version",
-			)
-		}
+		cmd = app.sshExec(ctx, containerizationSystem, "version")
 	}
 	if app.logging {
 		slog.Info(cmd.String(), "action", "Check the binary")
@@ -4550,114 +4277,42 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 	switch containerizationSystem {
 	case "kubectl":
 		// Получаем список подов из k8s
-		if app.sshMode {
-			cmd = exec.CommandContext(
-				ctx,
-				"ssh", append(app.sshOptions,
-					containerizationSystem, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
-					"-o", "'jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}'",
-				)...)
-		} else {
-			cmd = exec.CommandContext(
-				ctx,
-				containerizationSystem, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
-				"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}",
-			)
-		}
+		cmd = app.sshExec(ctx,
+			containerizationSystem, "get", "pods", "--context", app.kubernetesContext, app.kubernetesNamespace,
+			"-o", "jsonpath={range .items[*]}{.metadata.uid} {.metadata.name} {.status.phase} {.metadata.namespace}{\"\\n\"}{end}")
 	case "compose":
-		if app.sshMode {
-			// Корректируем положение флага context в команде compose (после docker и перед context)
-			if app.dockerCompose == "docker-compose" {
-				cmd = exec.CommandContext(
-					ctx,
-					"ssh", append(app.sshOptions,
-						app.dockerCompose,
-						"--context", app.dockerContext, "ls", "-a",
-					)...)
-			} else {
-				cmd = exec.CommandContext(
-					ctx,
-					"ssh", append(app.sshOptions,
-						"docker",
-						"--context", app.dockerContext, "compose", "ls", "-a",
-					)...)
-			}
+		// Корректируем положение флага context в команде compose (после docker и перед context)
+		if app.dockerCompose == "docker-compose" {
+			cmd = app.sshExec(ctx,
+				app.dockerCompose,
+				"--context", app.dockerContext, "ls", "-a")
 		} else {
-			if app.dockerCompose == "docker-compose" {
-				cmd = exec.CommandContext(
-					ctx,
-					app.dockerCompose,
-					"--context", app.dockerContext, "ls", "-a",
-				)
-			} else {
-				cmd = exec.CommandContext(
-					ctx,
-					"docker",
-					"--context", app.dockerContext, "compose", "ls", "-a",
-				)
-			}
+			cmd = app.sshExec(ctx,
+				"docker",
+				"--context", app.dockerContext, "compose", "ls", "-a")
 		}
 
 	case "podman":
 		// #38 Отключаем использование контекста в Podman, если он не задан
 		if app.podmanContext == "" {
-			if app.sshMode {
-				cmd = exec.CommandContext(
-					ctx,
-					"ssh", append(app.sshOptions,
-						containerizationSystem,
-						"ps", "-a",
-						"--format", "'{{.ID}} {{.Names}} {{.State}}'",
-					)...)
-			} else {
-				cmd = exec.CommandContext(
-					ctx,
-					containerizationSystem,
-					"ps", "-a",
-					"--format", "{{.ID}} {{.Names}} {{.State}}",
-				)
-			}
+			cmd = app.sshExec(ctx,
+				containerizationSystem,
+				"ps", "-a",
+				"--format", "{{.ID}} {{.Names}} {{.State}}")
 		} else {
-			if app.sshMode {
-				cmd = exec.CommandContext(
-					ctx,
-					"ssh", append(app.sshOptions,
-						containerizationSystem,
-						"--context", app.podmanContext,
-						"ps", "-a",
-						"--format", "'{{.ID}} {{.Names}} {{.State}}'",
-					)...)
-			} else {
-				cmd = exec.CommandContext(
-					ctx,
-					containerizationSystem,
-					"--context", app.podmanContext,
-					"ps", "-a",
-					"--format", "{{.ID}} {{.Names}} {{.State}}",
-				)
-			}
+			cmd = app.sshExec(ctx,
+				containerizationSystem,
+				"--context", app.podmanContext,
+				"ps", "-a",
+				"--format", "{{.ID}} {{.Names}} {{.State}}")
 		}
 	// Docker case
 	default:
-		if app.sshMode {
-			cmd = exec.CommandContext(
-				ctx,
-				"ssh", append(app.sshOptions,
-					containerizationSystem,
-					"--context", app.dockerContext,
-					"ps", "-a",
-					// Добавляем кавычки для передаваемых через пробел параметров в ssh
-					"--format", "'{{.ID}} {{.Names}} {{.State}}'",
-				)...)
-		} else {
-			cmd = exec.CommandContext(
-				ctx,
-				containerizationSystem,
-				"--context", app.dockerContext,
-				"ps", "-a",
-				"--format", "{{.ID}} {{.Names}} {{.State}}",
-			)
-		}
+		cmd = app.sshExec(ctx,
+			containerizationSystem,
+			"--context", app.dockerContext,
+			"ps", "-a",
+			"--format", "{{.ID}} {{.Names}} {{.State}}")
 	}
 	// Ожидаем выполнение в течение 2-х секунд
 	cmd.WaitDelay = 2 * time.Second
@@ -4997,16 +4652,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	var readFileContainer bool
 	if containerizationSystem == "docker" && !app.dockerStreamLogs && app.dockerContext == "default" {
 		// Получаем путь к журналу контейнера в файловой системе по id с помощью метода docker cli
-		var cmd *exec.Cmd
-		if app.sshMode {
-			cmd = exec.CommandContext(
-				ctx,
-				"ssh", append(app.sshOptions,
-					"docker", "inspect", "--format", "{{.LogPath}}", containerId,
-				)...)
-		} else {
-			cmd = exec.Command("docker", "inspect", "--format", "{{.LogPath}}", containerId)
-		}
+		cmd := app.sshExec(ctx, "docker", "inspect", "--format", "{{.LogPath}}", containerId)
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
 		}
@@ -5025,11 +4671,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		// а для удаленного хоста оставляем tail на той стороне SSH.
 		var output []byte
 		if app.sshMode {
-			cmd = exec.CommandContext(
-				ctx,
-				"ssh", append(app.sshOptions,
-					"tail", "-n", app.logViewCount, logFilePath,
-				)...)
+			cmd = app.sshExec(ctx, "tail", "-n", app.logViewCount, logFilePath)
 			if app.logging {
 				slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
 			}
@@ -5161,50 +4803,21 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			// Собираем timezone с учетом смещения UTC
 			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.timezoneFilter
 			// Формируем команду kubectl с нужными ключами и предварительно извлеченным namespace при выборе пода
-			if app.sshMode {
-				if app.sinceDateFilterMode {
-					cmd = exec.CommandContext(
-						ctx,
-						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs",
-							"--since-time", sinceTimestamp,
-							"--context", app.kubernetesContext, "-n", namespace,
-							"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
-							"--all-containers=true", "--prefix=true",
-							"--timestamps=true", "--tail", app.logViewCount, containerId,
-						)...)
-				} else {
-					cmd = exec.CommandContext(
-						ctx,
-						"ssh", append(app.sshOptions,
-							containerizationSystem, "logs",
-							"--context", app.kubernetesContext, "-n", namespace,
-							"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
-							"--all-containers=true", "--prefix=true",
-							"--timestamps=true", "--tail", app.logViewCount, containerId,
-						)...)
-				}
+			if app.sinceDateFilterMode {
+				cmd = app.sshExec(ctx,
+					containerizationSystem, "logs",
+					"--since-time", sinceTimestamp,
+					"--context", app.kubernetesContext, "-n", namespace,
+					"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
+					"--all-containers=true", "--prefix=true",
+					"--timestamps=true", "--tail", app.logViewCount, containerId)
 			} else {
-				if app.sinceDateFilterMode {
-					cmd = exec.CommandContext(
-						ctx,
-						containerizationSystem, "logs",
-						"--since-time", sinceTimestamp,
-						"--context", app.kubernetesContext, "-n", namespace,
-						"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
-						"--all-containers=true", "--prefix=true",
-						"--timestamps=true", "--tail", app.logViewCount, containerId,
-					)
-				} else {
-					cmd = exec.CommandContext(
-						ctx,
-						containerizationSystem, "logs",
-						"--context", app.kubernetesContext, "-n", namespace,
-						"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
-						"--all-containers=true", "--prefix=true",
-						"--timestamps=true", "--tail", app.logViewCount, containerId,
-					)
-				}
+				cmd = app.sshExec(ctx,
+					containerizationSystem, "logs",
+					"--context", app.kubernetesContext, "-n", namespace,
+					"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
+					"--all-containers=true", "--prefix=true",
+					"--timestamps=true", "--tail", app.logViewCount, containerId)
 			}
 		case "compose":
 			// Сначала получаем список контейнеров в стеке Compose
@@ -5214,149 +4827,51 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.timezoneFilter
 			untilTimestamp := app.untilFilterText + "T00:00:00" + app.timezoneFilter
-			if app.sshMode {
-				if app.dockerCompose == "docker compose" {
-					switch {
-					case app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							"ssh", append(app.sshOptions,
-								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--since", sinceTimestamp,
-								"--until", untilTimestamp,
-								"--tail", app.logViewCount,
-							)...,
-						)
-					case app.sinceDateFilterMode && !app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							"ssh", append(app.sshOptions,
-								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--since", sinceTimestamp,
-								"--tail", app.logViewCount,
-							)...,
-						)
-					case !app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							"ssh", append(app.sshOptions,
-								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--until", untilTimestamp,
-								"--tail", app.logViewCount,
-							)...,
-						)
-					default:
-						cmd = exec.CommandContext(
-							ctx,
-							"ssh", append(app.sshOptions,
-								"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--tail", app.logViewCount,
-							)...,
-						)
-					}
-				} else {
-					switch {
-					case app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							"ssh", append(app.sshOptions,
-								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--since", sinceTimestamp,
-								"--until", untilTimestamp,
-								"--tail", app.logViewCount,
-							)...,
-						)
-					case app.sinceDateFilterMode && !app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							"ssh", append(app.sshOptions,
-								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--since", sinceTimestamp,
-								"--tail", app.logViewCount,
-							)...,
-						)
-					case !app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							"ssh", append(app.sshOptions,
-								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--until", untilTimestamp,
-								"--tail", app.logViewCount,
-							)...,
-						)
-					default:
-						cmd = exec.CommandContext(
-							ctx,
-							"ssh", append(app.sshOptions,
-								app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-								"--tail", app.logViewCount,
-							)...,
-						)
-					}
+			if app.dockerCompose == "docker compose" {
+				switch {
+				case app.sinceDateFilterMode && app.untilDateFilterMode:
+					cmd = app.sshExec(ctx,
+						"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
+						"--since", sinceTimestamp,
+						"--until", untilTimestamp,
+						"--tail", app.logViewCount)
+				case app.sinceDateFilterMode && !app.untilDateFilterMode:
+					cmd = app.sshExec(ctx,
+						"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
+						"--since", sinceTimestamp,
+						"--tail", app.logViewCount)
+				case !app.sinceDateFilterMode && app.untilDateFilterMode:
+					cmd = app.sshExec(ctx,
+						"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
+						"--until", untilTimestamp,
+						"--tail", app.logViewCount)
+				default:
+					cmd = app.sshExec(ctx,
+						"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
+						"--tail", app.logViewCount)
 				}
 			} else {
-				if app.dockerCompose == "docker compose" {
-					switch {
-					case app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--since", sinceTimestamp,
-							"--until", untilTimestamp,
-							"--tail", app.logViewCount,
-						)
-					case app.sinceDateFilterMode && !app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--since", sinceTimestamp,
-							"--tail", app.logViewCount,
-						)
-					case !app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--until", untilTimestamp,
-							"--tail", app.logViewCount,
-						)
-					default:
-						cmd = exec.CommandContext(
-							ctx,
-							"docker", "--context", app.dockerContext, "compose", "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--tail", app.logViewCount,
-						)
-					}
-				} else {
-					switch {
-					case app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--since", sinceTimestamp,
-							"--until", untilTimestamp,
-							"--tail", app.logViewCount,
-						)
-					case app.sinceDateFilterMode && !app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--since", sinceTimestamp,
-							"--tail", app.logViewCount,
-						)
-					case !app.sinceDateFilterMode && app.untilDateFilterMode:
-						cmd = exec.CommandContext(
-							ctx,
-							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--until", untilTimestamp,
-							"--tail", app.logViewCount,
-						)
-					default:
-						cmd = exec.CommandContext(
-							ctx,
-							app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
-							"--tail", app.logViewCount,
-						)
-					}
+				switch {
+				case app.sinceDateFilterMode && app.untilDateFilterMode:
+					cmd = app.sshExec(ctx,
+						app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
+						"--since", sinceTimestamp,
+						"--until", untilTimestamp,
+						"--tail", app.logViewCount)
+				case app.sinceDateFilterMode && !app.untilDateFilterMode:
+					cmd = app.sshExec(ctx,
+						app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
+						"--since", sinceTimestamp,
+						"--tail", app.logViewCount)
+				case !app.sinceDateFilterMode && app.untilDateFilterMode:
+					cmd = app.sshExec(ctx,
+						app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
+						"--until", untilTimestamp,
+						"--tail", app.logViewCount)
+				default:
+					cmd = app.sshExec(ctx,
+						app.dockerCompose, "--context", app.dockerContext, "--project-name", containerId, "logs", "--timestamps", "--no-color",
+						"--tail", app.logViewCount)
 				}
 			}
 		// Podman and Docker case
@@ -5394,30 +4909,8 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					cmdOptions, "logs", "--timestamps", "--tail", app.logViewCount,
 				)
 			}
-			// Добавляем ssh параметры
-			if app.sshMode {
-				cmdOptions = append([]string{containerizationSystem}, cmdOptions...)
-				cmdOptions = append(app.sshOptions, cmdOptions...)
-				// ssh sshOptions containerizationSystem cmdOptions containerId
-				cmd = exec.CommandContext(
-					ctx,
-					"ssh",
-					append(
-						cmdOptions,
-						containerId,
-					)...,
-				)
-			} else {
-				// containerizationSystem cmdOptions containerId
-				cmd = exec.CommandContext(
-					ctx,
-					containerizationSystem,
-					append(
-						cmdOptions,
-						containerId,
-					)...,
-				)
-			}
+			// Формируем команду: containerizationSystem cmdOptions containerId
+			cmd = app.sshExec(ctx, containerizationSystem, append(cmdOptions, containerId)...)
 		}
 		if app.logging {
 			slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs")
@@ -5667,36 +5160,14 @@ func (app *App) getContainersFromCompose(projectName string) []string {
 	var cmd *exec.Cmd
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if app.sshMode {
-		if app.dockerCompose == "docker-compose" {
-			cmd = exec.CommandContext(
-				ctx,
-				"ssh", append(app.sshOptions,
-					app.dockerCompose,
-					"--context", app.dockerContext, "--project-name", projectName, "ps", "-a", "--services",
-				)...)
-		} else {
-			cmd = exec.CommandContext(
-				ctx,
-				"ssh", append(app.sshOptions,
-					"docker",
-					"--context", app.dockerContext, "compose", "--project-name", projectName, "ps", "-a", "--services",
-				)...)
-		}
+	if app.dockerCompose == "docker-compose" {
+		cmd = app.sshExec(ctx,
+			app.dockerCompose,
+			"--context", app.dockerContext, "--project-name", projectName, "ps", "-a", "--services")
 	} else {
-		if app.dockerCompose == "docker-compose" {
-			cmd = exec.CommandContext(
-				ctx,
-				app.dockerCompose,
-				"--context", app.dockerContext, "--project-name", projectName, "ps", "-a", "--services",
-			)
-		} else {
-			cmd = exec.CommandContext(
-				ctx,
-				"docker",
-				"--context", app.dockerContext, "compose", "--project-name", projectName, "ps", "-a", "--services",
-			)
-		}
+		cmd = app.sshExec(ctx,
+			"docker",
+			"--context", app.dockerContext, "compose", "--project-name", projectName, "ps", "-a", "--services")
 	}
 	cmd.WaitDelay = 2 * time.Second
 	if app.logging {
@@ -9685,20 +9156,9 @@ func (app *App) nextViewManager(g *gocui.Gui, v *gocui.View, views []string) err
 
 // Функция для получения списка контекстов Docker
 func (app *App) getDockerContext() []string {
-	var cmd *exec.Cmd
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if app.sshMode {
-		cmd = exec.CommandContext(
-			ctx,
-			"ssh", append(app.sshOptions,
-				"docker", "context", "ls", "-q",
-			)...)
-	} else {
-		cmd = exec.Command(
-			"docker", "context", "ls", "-q",
-		)
-	}
+	cmd := app.sshExec(ctx, "docker", "context", "ls", "-q")
 	if app.logging {
 		slog.Info(cmd.String(), "action", "Loading the docker context list")
 	}
@@ -9712,20 +9172,9 @@ func (app *App) getDockerContext() []string {
 
 // Функция для получения списка контекстов Kubernetes
 func (app *App) getKubernetesContext() []string {
-	var cmd *exec.Cmd
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if app.sshMode {
-		cmd = exec.CommandContext(
-			ctx,
-			"ssh", append(app.sshOptions,
-				"kubectl", "config", "get-contexts", "-o", "name",
-			)...)
-	} else {
-		cmd = exec.Command(
-			"kubectl", "config", "get-contexts", "-o", "name",
-		)
-	}
+	cmd := app.sshExec(ctx, "kubectl", "config", "get-contexts", "-o", "name")
 	if app.logging {
 		slog.Info(cmd.String(), "action", "Loading the kubernetes context list")
 	}
@@ -9739,20 +9188,9 @@ func (app *App) getKubernetesContext() []string {
 
 // Функция для получения списка контекстов Kubernetes
 func (app *App) getKubernetesNamespace() []string {
-	var cmd *exec.Cmd
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if app.sshMode {
-		cmd = exec.CommandContext(
-			ctx,
-			"ssh", append(app.sshOptions,
-				"kubectl", "get", "namespace", "-o", "name",
-			)...)
-	} else {
-		cmd = exec.Command(
-			"kubectl", "get", "namespace", "-o", "name",
-		)
-	}
+	cmd := app.sshExec(ctx, "kubectl", "get", "namespace", "-o", "name")
 	if app.logging {
 		slog.Info(cmd.String(), "action", "Loading the kubernetes namespace list")
 	}
