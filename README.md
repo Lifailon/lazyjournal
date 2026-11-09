@@ -100,6 +100,14 @@ curl -sSL https://raw.githubusercontent.com/Lifailon/lazyjournal/main/scripts/in
 
 This command will run a script that will download the latest binary (auto-detect OS and arch) from the GitHub repository to your home directory along with other executables (default path is `~/.local/bin/lazyjournal`) and configurations (`~/.config/lazyjournal/config.yml`) for the current user, and also grant execute permission.
 
+### Go package
+
+You can install it as a package using [Go](https://pkg.go.dev/github.com/Lifailon/lazyjournal):
+
+```bash
+go install github.com/Lifailon/lazyjournal@0.8.7
+```
+
 ### apt (Debian / Ubuntu)
 
 LazyJournal is now officially available in the [Debian repositories](https://tracker.debian.org/pkg/lazyjournal) (unstable and testing), so to install just execute:
@@ -218,14 +226,6 @@ To read logs, automatic detection of the following encodings is supported:
 - `UTF-16 with BOM`
 - `UTF-16 without BOM`
 - `Windows-1251` by default
-
-### Go package
-
-You can install it as a package using [Go](https://pkg.go.dev/github.com/Lifailon/lazyjournal) (this will install the version from the latest commit, which may be unstable):
-
-```bash
-go install github.com/Lifailon/lazyjournal@latest
-```
 
 ## Usage
 
