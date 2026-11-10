@@ -2941,6 +2941,8 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		app.updateDelimiter(newUpdate)
 		// Очищаем поле ввода для фильтрации, что бы не применять фильтрацию к новому журналу
 		// app.filterText = ""
+		// Актуализируем время, затраченное на чтение журнала
+		app.updateDebugLoadTime()
 		// Применяем текущий фильтр к записям для обновления вывода
 		app.applyFilterLocked(false)
 	}
@@ -4174,6 +4176,7 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 		app.currentLogLines = loadedLines
 		if !app.testMode {
 			app.updateDelimiter(newUpdate)
+			app.updateDebugLoadTime()
 			app.applyFilterLocked(false)
 		}
 		app.logStateMutex.Unlock()
@@ -4315,6 +4318,7 @@ func (app *App) loadDockerContainer(containerizationSystem string) {
 					_, _ = fmt.Fprintln(vError, "\033[31mError connection to the Kubernetes cluster\033[0m")
 					app.logStateMutex.Lock()
 					app.currentLogLines = []string{string(output)}
+					app.updateDebugLoadTime()
 					app.applyFilterLocked(false)
 					app.logStateMutex.Unlock()
 				}
@@ -5239,6 +5243,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	if !readFileContainer || (readFileContainer && app.updateFile) || containerizationSystem != "docker" {
 		app.currentLogLines = loadedLines
 		app.updateDelimiter(newUpdate)
+		app.updateDebugLoadTime()
 		app.applyFilterLocked(false)
 	}
 	app.logStateMutex.Unlock()
@@ -5646,6 +5651,11 @@ func (app *App) filterLines(input []string, mode, filter, exactFilter string, re
 	return output
 }
 
+// Обновляем время загрузки журнала (#92)
+func (app *App) updateDebugLoadTime() {
+	app.debugLoadTime = time.Since(app.debugStartTime).Truncate(time.Millisecond).String()
+}
+
 // Функция для фильтрации записей текущего журнала + покраска
 func (app *App) applyFilter(color bool) {
 	app.logStateMutex.Lock()
@@ -5680,10 +5690,6 @@ func (app *App) applyFilterLocked(color bool) {
 	}
 	// Фильтруем и красим, только если это не скроллинг
 	if !skip {
-		// Debug end load time
-		endLoadTime := time.Since(app.debugStartTime)
-		// Фиксируем время окончания загрузки журнала
-		app.debugLoadTime = endLoadTime.Truncate(time.Millisecond).String()
 		// Debug start color time
 		// Фиксируем время начала покраски журнала
 		// startTime := time.Now()
