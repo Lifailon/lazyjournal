@@ -91,10 +91,10 @@ jobs:
         timeout-minutes: 10
         run: sudo env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover
 
-      # The report is published by the "Unit testing report" workflow (workflow_run
-      # follower), which runs on the base repository's context. This job executes
-      # untrusted PR code, so it keeps a read-only token, no persisted credentials,
-      # and no secrets; the artifact is the only thing it hands over.
+      # The report is published by the "[PR] Testing report (job #2)" workflow
+      # (workflow_run follower), which runs on the base repository's context. This
+      # job executes untrusted PR code, so it keeps a read-only token, no persisted
+      # credentials, and no secrets; the artifact is the only thing it hands over.
       - name: Upload junit report artifact
         if: always()
         uses: actions/upload-artifact@v7
