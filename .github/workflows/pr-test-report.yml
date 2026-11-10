@@ -1,4 +1,4 @@
-name: "Unit testing report"
+name: "[PR] Testing report (job #2)"
 
 on:
   workflow_run:

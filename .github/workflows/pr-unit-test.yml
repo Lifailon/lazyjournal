@@ -1,4 +1,4 @@
-name: "Unit testing"
+name: "[PR] Unit testing (job #1)"
 
 on:
   workflow_dispatch:
