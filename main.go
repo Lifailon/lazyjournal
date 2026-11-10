@@ -70,7 +70,7 @@ type Settings struct {
 	JournalPriority     string `yaml:"journalPriority"`
 	JournalBoot         string `yaml:"journalBoot"`
 	CustomPath          string `yaml:"customPath"`
-	ColorMode           string `yaml:"colorMode"`
+	ColorModeDisable    string `yaml:"colorModeDisable"`
 	ColorActionsDisable string `yaml:"colorActionsDisable"`
 }
 
@@ -182,8 +182,8 @@ type App struct {
 	sshStatus              string   // режим работы (false или имя хоста) для статуса
 	sshOptions             []string // опции для ssh подключения
 	testMode               bool     // исключаем вызовы к gocui при тестирование функций
-	colorMode              string   // режим покраски (default/tailspin/bat/disable)
-	colorActionsDisable    bool     // отключить покраску для действий
+	colorModeDisable       bool     // отключить покраску логов
+	colorActionsDisable    bool     // отключить покраску для действий (blue color)
 	mouseSupport           bool     // включение/отключение поддержки мыши
 	wrapSupport            bool     // включение/отключение встроенного переноса строк в окне содержимого логов
 	dockerStreamLogs       bool     // принудительное чтение журналов контейнеров Docker из потоков (по умолчанию, чтение происходит из файловой системы, если есть доступ)
@@ -269,6 +269,8 @@ type App struct {
 	currentLogLines     []string      // набор строк (срез) для хранения вывода логов без фильтрации
 	filteredLogLines    []string      // набор строк (срез) для хранения вывода логов после фильтрации и до покраски
 	coloredLogLines     []string      // набор строк (срез) для хранения вывода логов после фильтрации и покраски
+	logColored          []bool        // маска покраски (true, если строка уже окрашена)
+	lazyColor           bool          // использовать покраску только видимого окна
 	logScrollPos        int           // позиция прокрутки для отображаемых строк журнала
 	lastFilterText      string        // фиксируем содержимое последнего ввода текста для фильтрации
 	logsViewHeight      int           // количество видимых строк, которые умещается в окно отображения логов (для копирования в буфер обмена)
@@ -298,9 +300,10 @@ type App struct {
 	lastContainerizationSystem string
 	lastContainerId            string
 
-	// Фиксируем последнее время загрузки и покраски журнала
+	// Фиксируем последнее время загрузки журнала
 	debugStartTime time.Time
 	debugLoadTime  string
+	// Фиксируем последнее время покраски журнала
 	debugColorTime string
 
 	// Отключение привязки горячих клавиш на время загрузки списка
@@ -352,10 +355,10 @@ var (
 	journalPriorityDescription   = "Filter the log output by priority (available values: debug, info, notice, warning, err, crit, alert, emerg)"
 	journalBootDescription       = "Filter the log output by system boot period, e.g. 0 current or -1 previous (default: all)"
 	pathDescription              = "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)"
-	colorModeDescription         = "Highlighting mode for logs (available values: default, tailspin, bat or disable)"
-	commandColorDescription      = "ANSI coloring in command line mode"
-	commandFuzzyDescription      = "Filtering using fuzzy search in command line mode"
-	commandRegexDescription      = "Filtering using regular expression (regexp) in command line mode"
+	colorDisableDescription      = "Disable log highlighting (ANSI coloring)"
+	commandColorDescription      = "Log highlighting (ANSI coloring) in command-line mode"
+	commandFuzzyDescription      = "Filtering using fuzzy search in command-line mode"
+	commandRegexDescription      = "Filtering using regular expression (regexp) in command-line mode"
 	sshDescription               = "Connect to a remote host using standard ssh options (e.g. lazyjournal --ssh \"root@192.168.3.100 -p 22\")"
 )
 
@@ -380,8 +383,8 @@ func showHelp() {
 	fmt.Println("    --timezone-filter, -T      " + timezoneFilterDescription)
 	fmt.Println("    --mouse-disable, -m        " + mouseDisableDescription)
 	fmt.Println("    --wrap-disable, -w         " + wrapDisableDescription)
-	fmt.Println("    --color-mode, -C           " + colorModeDescription)
-	fmt.Println("    --unit-types, -U            " + unitTypeDescription)
+	fmt.Println("    --color-disable, -C        " + colorDisableDescription)
+	fmt.Println("    --unit-types, -U           " + unitTypeDescription)
 	fmt.Println("    --journal-field, -j        " + journalFieldDescription)
 	fmt.Println("    --journal-priority, -J     " + journalPriorityDescription)
 	fmt.Println("    --journal-boot, -b         " + journalBootDescription)
@@ -427,7 +430,7 @@ func showConfig() {
 	fmt.Printf("  timezoneFilter:           %s\n", config.Settings.TimezoneFilter)
 	fmt.Printf("  mouseDisable:             %s\n", config.Settings.MouseDisable)
 	fmt.Printf("  wrapModeDisable:          %s\n", config.Settings.WrapModeDisable)
-	fmt.Printf("  colorMode:                %s\n", config.Settings.ColorMode)
+	fmt.Printf("  colorModeDisable:         %s\n", config.Settings.ColorModeDisable)
 	fmt.Printf("  colorActionsDisable:      %s\n", config.Settings.ColorActionsDisable)
 	fmt.Printf("  unitType:                 %s\n", config.Settings.UnitType)
 	fmt.Printf("  journalField:             %s\n", config.Settings.JournalField)
@@ -985,10 +988,9 @@ var (
 
 // Ошибки
 var (
-	ErrConfigNotFound     = errors.New("configuration file not found")
-	ErrYamlSyntax         = errors.New("error yaml syntax in config file")
-	ErrInvalidStat        = errors.New("invalid stat output")
-	ErrBinaryFileNotFound = errors.New("binary file not found in environment")
+	ErrConfigNotFound = errors.New("configuration file not found")
+	ErrYamlSyntax     = errors.New("error yaml syntax in config file")
+	ErrInvalidStat    = errors.New("invalid stat output")
 )
 
 // Статический массив ANSI цветов для покраски названий стеков в docker compose
@@ -1189,8 +1191,8 @@ func runGoCui(mock bool) {
 	flag.BoolVar(mouseDisable, "m", false, mouseDisableDescription)
 	wrapModeDisable := flag.Bool("wrap-disable", false, wrapDisableDescription)
 	flag.BoolVar(wrapModeDisable, "w", false, wrapDisableDescription)
-	colorModeFlag := flag.String("color-mode", "default", colorModeDescription)
-	flag.StringVar(colorModeFlag, "C", "default", colorModeDescription)
+	colorDisableFlag := flag.Bool("color-disable", false, colorDisableDescription)
+	flag.BoolVar(colorDisableFlag, "C", false, colorDisableDescription)
 	// Специфические настройки
 	unitTypeFlag := flag.String("unit-types", "service", unitTypeDescription)
 	flag.StringVar(unitTypeFlag, "U", "service", unitTypeDescription)
@@ -1444,24 +1446,15 @@ func runGoCui(mock bool) {
 		app.wrapSupport = false
 	}
 
-	// -C/--color-mode
-	if config.Settings.ColorMode != "" && *colorModeFlag == "default" {
-		colorModeFlag = &config.Settings.ColorMode
+	// -C/--color-disable
+	if config.Settings.ColorModeDisable != "" && !*colorDisableFlag {
+		if strings.EqualFold(config.Settings.ColorModeDisable, "true") {
+			*colorDisableFlag = true
+		}
 	}
 
-	switch *colorModeFlag {
-	case "default", "tailspin", "bat", "disable":
-		app.colorMode = *colorModeFlag
-	default:
-		if *colorModeFlag != config.Settings.ColorMode {
-			fmt.Println("Available values for color mode: default, tailspin, bat or disable")
-			if app.loggingFile != nil {
-				_ = app.loggingFile.Close()
-			}
-			os.Exit(1)
-		} else {
-			app.colorMode = "default"
-		}
+	if *colorDisableFlag {
+		app.colorModeDisable = true
 	}
 
 	if config.Settings.ColorActionsDisable != "" {
@@ -2110,7 +2103,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		_, _ = fmt.Fprintf(v,
 			" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
 				"Update interval: \033[32m%d\033[0m sec | "+
-				"Color mode: \033[32m%s\033[0m | "+
+				"Color: \033[32m%t\033[0m | "+
 				"Filter by date: \033[32m%s\033[0m | "+
 				"Filter by priority/boot: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 				"Show timestamp: \033[32m%t\033[0m \n "+
@@ -2120,7 +2113,7 @@ func (app *App) layout(g *gocui.Gui) error {
 			app.autoScroll,
 			logViewCountMap[app.logViewCount],
 			app.logUpdateSeconds,
-			app.colorMode,
+			!app.colorModeDisable,
 			app.filterByDateStatus,
 			app.journalPriority,
 			app.journalBoot,
@@ -5505,7 +5498,7 @@ func (app *App) updateStatus() {
 	_, _ = fmt.Fprintf(vStatus,
 		" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
 			"Update interval: \033[32m%d\033[0m sec | "+
-			"Color mode: \033[32m%s\033[0m | "+
+			"Color: \033[32m%t\033[0m | "+
 			"Filter by date: \033[32m%s\033[0m | "+
 			"Filter by priority/boot: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 			"Show timestamp: \033[32m%t\033[0m \n "+
@@ -5515,7 +5508,7 @@ func (app *App) updateStatus() {
 		app.autoScroll,
 		logViewCountMap[app.logViewCount],
 		app.logUpdateSeconds,
-		app.colorMode,
+		!app.colorModeDisable,
 		app.filterByDateStatus,
 		app.journalPriority,
 		app.journalBoot,
@@ -5593,36 +5586,6 @@ func (app *App) applyFilterList() {
 			updateTitle = " (" + strconv.Itoa(app.selectedDockerContainer+1) + "/" + strconv.Itoa(len(app.dockerContainers)) + ") >"
 		}
 		v.Title = re.ReplaceAllString(v.Title, updateTitle)
-	}
-}
-
-// Функция проверки исполняемого файла
-func (app *App) checkBin(commands []string) (string, error) {
-	var binName string
-	for _, command := range commands {
-		cmd := exec.Command(command, "--version")
-		if app.logging {
-			slog.Info(cmd.String(), "action", "Check the binary")
-		}
-		_, err := cmd.Output()
-		if err == nil {
-			binName = command
-			break
-		}
-	}
-	// Возвращяем название бинарного файла для использования или выводим интерфейс ошибки на 3 секунды
-	if len(binName) > 0 {
-		return binName, nil
-	} else {
-		if !app.testMode {
-			go func() {
-				errorText := strings.Join(commands, " and ") + " not found in environment"
-				app.showInterfaceInfo(g, true, errorText)
-				time.Sleep(3 * time.Second)
-				app.closeInfo(g)
-			}()
-		}
-		return "", ErrBinaryFileNotFound
 	}
 }
 
@@ -5723,7 +5686,7 @@ func (app *App) applyFilterLocked(color bool) {
 		app.debugLoadTime = endLoadTime.Truncate(time.Millisecond).String()
 		// Debug start color time
 		// Фиксируем время начала покраски журнала
-		startTime := time.Now()
+		// startTime := time.Now()
 		// Если текст фильтра пустой или равен любому символу для regex, возвращяем вывод без фильтрации
 		// ИЛИ если длинна текста меньше флага минального кол-ва символов фильтра, пропускаем фильтрацию
 		if filter == "" || (filter == "." && app.selectFilterMode == "regex") || len(filter) < app.minSymbolFilter {
@@ -5765,54 +5728,22 @@ func (app *App) applyFilterLocked(color bool) {
 		}
 		// Копируем данные после фильтрации в слайс для покраски
 		app.coloredLogLines = make([]string, len(app.filteredLogLines))
-		copy(app.coloredLogLines, app.filteredLogLines)
-		// Определяем режим покраски или пропускаем
-		switch app.colorMode {
-		case "default":
-			app.coloredLogLines = app.mainColor(app.coloredLogLines)
-		case "tailspin":
-			// Проверяем, что tailspin или tspin установлен в системе
-			binName, err := app.checkBin([]string{"tailspin", "tspin"})
-			if err == nil {
-				cmd := exec.Command(binName)
-				logLines := strings.Join(app.coloredLogLines, "\n")
-				// Создаем пайп для передачи данных
-				cmd.Stdin = bytes.NewBufferString(logLines)
-				var out bytes.Buffer
-				cmd.Stdout = &out
-				// Если ошибка, пропускаем покраску
-				if err := cmd.Run(); err == nil {
-					colorLogLines := strings.Split(out.String(), "\n")
-					app.coloredLogLines = colorLogLines
-				}
-			}
-		case "bat":
-			binName, err := app.checkBin([]string{"bat", "batcat"})
-			if err == nil {
-				cmd := exec.Command(
-					binName,
-					"--language=log",
-					"--paging=never",
-					"--style=plain",
-					"--color=always",
-					"--decorations=always",
-					"--theme=ansi",
-				)
-				logLines := strings.Join(app.coloredLogLines, "\n")
-				// Создаем пайп для передачи данных
-				cmd.Stdin = bytes.NewBufferString(logLines)
-				var out bytes.Buffer
-				cmd.Stdout = &out
-				// Если ошибка, пропускаем покраску
-				if err := cmd.Run(); err == nil {
-					colorLogLines := strings.Split(out.String(), "\n")
-					app.coloredLogLines = colorLogLines
-				}
+		// Запускаем покраску, если она не отключена в конфигурации/флагом и не в тестовом режиме
+		app.lazyColor = !app.colorModeDisable && !app.testMode
+		if app.lazyColor {
+			// Красим только видимое окно в updateLogsViewLocked (#92)
+			app.logColored = make([]bool, len(app.filteredLogLines))
+		} else {
+			copy(app.coloredLogLines, app.filteredLogLines)
+			app.logColored = nil
+			// Покраска в тестовом режиме или при отключенной покраске
+			if !app.colorModeDisable {
+				app.coloredLogLines = app.mainColor(app.coloredLogLines)
 			}
 		}
-		// Debug end time
-		endTime := time.Since(startTime)
-		app.debugColorTime = endTime.Truncate(time.Millisecond).String()
+		// Debug end color time
+		// endTime := time.Since(startTime)
+		// app.debugColorTime = endTime.Truncate(time.Millisecond).String()
 	}
 	// Debug: корректируем текущую позицию скролла, если размер массива стал меньше
 	if size > len(app.coloredLogLines) {
@@ -7185,6 +7116,42 @@ func (app *App) wordColor(inputWord string) string {
 
 // ---------------------------------------- Log output ----------------------------------------
 
+// Покраска видимого окна (#92)
+// Красим только неокрашенные строки в диапазоне
+func (app *App) ensureLogColored(start, end int) {
+	if !app.lazyColor {
+		return
+	}
+	if start < 0 {
+		start = 0
+	}
+	if end > len(app.coloredLogLines) {
+		end = len(app.coloredLogLines)
+	}
+	if start >= end {
+		return
+	}
+	// Красим чанками параллельно, сохраняя детерминированный порядок вывода
+	workers := min(commandLineWorkers(), end-start)
+	chunkSize := (end - start + workers - 1) / workers
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for worker := range workers {
+		s := start + worker*chunkSize
+		e := min(s+chunkSize, end)
+		go func() {
+			defer wg.Done()
+			for i := s; i < e; i++ {
+				if !app.logColored[i] {
+					app.coloredLogLines[i] = app.lineColor(app.filteredLogLines[i])
+					app.logColored[i] = true
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
 // Функция для обновления вывода журнала (параметр для прокрутки в самый вниз)
 func (app *App) updateLogsView(lowerDown bool) {
 	app.logStateMutex.Lock()
@@ -7251,10 +7218,14 @@ func (app *App) updateLogsViewLocked(lowerDown bool) {
 		}
 		// Индекс начала печати не должен быть меньше 0
 		printStart := max(len(app.coloredLogLines)-viewLines-1, 0)
+		// Красим видимый диапазон в конце лога перед выводом
+		app.ensureLogColored(printStart, endLine)
 		for i := printStart; i < endLine; i++ {
 			_, _ = fmt.Fprintln(v, app.coloredLogLines[i])
 		}
 	} else {
+		// Красим видимый диапазон перед выводом
+		app.ensureLogColored(startLine, endLine)
 		// Проходим по отфильтрованным строкам и выводим их
 		for i := startLine; i < endLine; i++ {
 			_, _ = fmt.Fprintln(v, app.coloredLogLines[i])
@@ -7267,18 +7238,21 @@ func (app *App) updateLogsViewLocked(lowerDown bool) {
 		percentage = int(math.Ceil(float64((startLine+viewHeight)*100) / float64(len(app.coloredLogLines))))
 		if percentage > 100 {
 			v.Title = fmt.Sprintf(
-				"Logs: 100%% (%d) ["+app.debugLoadTime+"/"+app.debugColorTime+"]",
+				// "Logs: 100%% (%d) ["+app.debugLoadTime+"/"+app.debugColorTime+"]",
+				"Logs: 100%% (%d) ["+app.debugLoadTime+"]",
 				len(app.coloredLogLines),
 			)
 		} else {
-			v.Title = fmt.Sprintf("Logs: %d%% (%d/%d) ["+app.debugLoadTime+"/"+app.debugColorTime+"]",
+			// v.Title = fmt.Sprintf("Logs: %d%% (%d/%d) ["+app.debugLoadTime+"/"+app.debugColorTime+"]",
+			v.Title = fmt.Sprintf("Logs: %d%% (%d/%d) ["+app.debugLoadTime+"]",
 				percentage,
 				startLine+1+viewHeight,
 				len(app.coloredLogLines),
 			)
 		}
 	} else {
-		v.Title = "Logs: 0% (0) [" + app.debugLoadTime + "/" + app.debugColorTime + "]"
+		// v.Title = "Logs: 0% (0) [" + app.debugLoadTime + "/" + app.debugColorTime + "]"
+		v.Title = "Logs: 0% (0) [" + app.debugLoadTime + "]"
 	}
 	app.viewScrollLogs(percentage)
 }
@@ -8572,19 +8546,10 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
-	// Switch color mode - default (custom built-in), tailspin/tspin, bat/batcat or disable (Ctrl+W)
+	// Включение и отключение покраски логов (Ctrl+W)
 	customColor, altMode := getHotkey(config.Hotkeys.SwitchColorMode, "ctrl+w")
 	if err := app.gui.SetKeybinding("", customColor, altMode, func(g *gocui.Gui, v *gocui.View) error {
-		switch app.colorMode {
-		case "disable":
-			app.colorMode = "default"
-		case "default":
-			app.colorMode = "tailspin"
-		case "tailspin":
-			app.colorMode = "bat"
-		case "bat":
-			app.colorMode = "disable"
-		}
+		app.colorModeDisable = !app.colorModeDisable
 		app.logStateMutex.Lock()
 		hasLogLines := len(app.currentLogLines) != 0
 		app.logStateMutex.Unlock()
@@ -8969,7 +8934,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mU\033[0m - disable streaming of new events (log is loaded once without update).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mR\033[0m - update the current log output manually (relevant in disable streaming mode).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mQ\033[0m - update all log lists.")
-	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - switch color mode between default, tailspin, bat or disable.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - enable or disable log highlighting.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change read mode for docker logs (stream only or json from file system).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp for Docker and Kubernetes logs.")

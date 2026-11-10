@@ -70,19 +70,6 @@ jobs:
           sudo auditctl -w /etc/passwd -p wa -k passwd
           sudo auditctl -l
 
-      - name: Install bat and tailspin
-        run: |
-          sudo apt install -y bat
-          bat --version || batcat --version || true
-          # sudo apt install -y tailspin
-          version=$(curl -s https://api.github.com/repos/bensadeh/tailspin/releases/latest | jq -r .tag_name)
-          curl -L "https://github.com/bensadeh/tailspin/releases/download/$version/tailspin-$(uname -m)-unknown-$(uname -s | tr '[:upper:]' '[:lower:]')-musl.tar.gz" -o /usr/local/bin/tailspin.tar.gz
-          tar -xzf /usr/local/bin/tailspin.tar.gz -C /usr/local/bin
-          mv /usr/local/bin/tspin /usr/local/bin/tailspin
-          chmod +x /usr/local/bin/tailspin
-          rm /usr/local/bin/*.tar.gz
-          tailspin --version
-
       - name: Install gotestsum for junit report
         run: go install gotest.tools/gotestsum@latest
 

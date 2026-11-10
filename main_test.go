@@ -444,48 +444,6 @@ func TestColor(t *testing.T) {
 	}
 }
 
-func TestExtColor(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skip unix test")
-	}
-
-	app := &App{
-		testMode:         true,
-		colorMode:        "tailspin",
-		logViewCount:     "10000",
-		logUpdateSeconds: 5,
-		selectPath:       "home",
-		filterListText:   "color",
-	}
-
-	app.loadFiles(app.selectPath)
-	app.logfilesNotFilter = app.logfiles
-	app.applyFilterList()
-
-	if len(app.logfiles) == 0 {
-		t.Errorf("File list is null")
-	} else {
-		t.Log("Log files count:", len(app.logfiles))
-	}
-
-	var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-	logFileName := ansiEscape.ReplaceAllString(app.logfiles[0].name, "")
-	app.loadFileLogs(strings.TrimSpace(logFileName), true)
-
-	app.applyFilter(true)
-	t.Log("Lines: ", len(app.filteredLogLines))
-	for _, line := range app.filteredLogLines {
-		t.Log(line)
-	}
-
-	app.colorMode = "bat"
-	app.applyFilter(true)
-	t.Log("Lines: ", len(app.filteredLogLines))
-	for _, line := range app.filteredLogLines {
-		t.Log(line)
-	}
-}
-
 func TestFilter(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skip unix test")
@@ -1779,7 +1737,7 @@ func TestSSHManagerNavigation(t *testing.T) {
 		selectFilterMode:             "default",
 		logViewCount:                 "10000",
 		unitType:                     "service",
-		colorMode:                    "disable",
+		colorModeDisable:             true,
 		dockerContext:                "default",
 		kubernetesContext:            "default",
 		kubernetesNamespace:          "--all-namespaces",
