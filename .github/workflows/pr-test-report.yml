@@ -1,0 +1,115 @@
+name: "Unit testing report"
+
+on:
+  workflow_run:
+    workflows: ["Unit testing"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  report:
+    name: Publish test report
+
+    # Only PR-triggered runs have a pull request to report to; dispatch runs skip.
+    if: ${{ github.event.workflow_run.event == 'pull_request' }}
+
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      pull-requests: write
+      issues: write
+
+    runs-on: ubuntu-latest
+
+    steps:
+      # The PR identity comes from the workflow_run event payload, never from the
+      # artifact: the artifact's content is produced by the PR's code and must be
+      # treated as data. pull_requests is empty for fork PRs, so the fallback
+      # resolves the PR by the run's head SHA (also from the event payload).
+      - name: Resolve the triggering run's PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          head_sha=$(jq -r '.workflow_run.head_sha' "$GITHUB_EVENT_PATH")
+          pr_number=$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")
+          if [ -z "$pr_number" ]; then
+            pr_number=$(gh api "repos/${{ github.repository }}/commits/$head_sha/pulls" --jq '.[0].number // empty')
+          fi
+          if [ -z "$pr_number" ]; then
+            echo "no pull request found for $head_sha; nothing to report"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Download junit report artifact
+        if: ${{ steps.pr.outputs.skip != 'true' }}
+        id: download
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download "${{ github.event.workflow_run.id }}" --name junit-report --dir .
+
+      - name: Publish junit report in summary
+        if: ${{ steps.pr.outputs.skip != 'true' && steps.download.outcome == 'success' }}
+        uses: test-summary/action@v2
+        with:
+          paths: "report.xml"
+
+      - name: Publish junit report in annotations
+        if: ${{ steps.pr.outputs.skip != 'true' && steps.download.outcome == 'success' }}
+        id: junit_report
+        uses: mikepenz/action-junit-report@v6
+        with:
+          report_paths: "report.xml"
+          commit: ${{ steps.pr.outputs.head_sha }}
+
+      - name: Send message to Telegram
+        if: ${{ steps.pr.outputs.skip != 'true' }}
+        uses: appleboy/telegram-action@68ac04bda0e0f4755e24649161566b4b6732cc83  # v1.1.2
+        continue-on-error: true
+        with:
+          token: ${{ secrets.TELEGRAM_API_TOKEN }}
+          to: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          debug: true
+          format: markdown
+          message: |
+            🔔 **Action**: unit testing for pr [#${{ steps.pr.outputs.pr_number }}](https://github.com/${{ github.repository }}/pull/${{ steps.pr.outputs.pr_number }})
+
+            📁 **Repository**: ${{ github.repository }}
+            👤 **From user**: ${{ github.event.workflow_run.actor.login }}
+
+            💡 **Step status**: ${{ github.event.workflow_run.conclusion == 'success' && '✅' || '❌' }} ${{ github.event.workflow_run.conclusion }}
+
+            📚 **Test results**:
+            Total: ${{ steps.junit_report.outputs.total || 'n/a' }}
+            Passed: ${{ steps.junit_report.outputs.passed || 'n/a' }}
+            Skipped: ${{ steps.junit_report.outputs.skipped || 'n/a' }}
+            Failed: ${{ steps.junit_report.outputs.failed || 'n/a' }}
+
+      - name: Post test results comment on PR
+        if: ${{ steps.pr.outputs.skip != 'true' && steps.download.outcome == 'success' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          JUNIT_REPORT_SUMMARY: ${{ steps.junit_report.outputs.summary }}
+        run: |
+          {
+            printf '%s\n' "### 🧪 Unit testing results"
+            printf 'Status: %s **%s**\n' "${{ github.event.workflow_run.conclusion == 'success' && '✅' || '❌' }}" "${{ github.event.workflow_run.conclusion }}"
+            printf '%s\n' "#### 📊 Report summary"
+            printf '%s\n' "$JUNIT_REPORT_SUMMARY"
+          } > comment_body.md
+          gh pr comment "$PR_NUMBER" --body-file comment_body.md
+
+      - name: Post a no-report comment on the PR
+        if: ${{ steps.pr.outputs.skip != 'true' && steps.download.outcome != 'success' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "🧪 Unit testing ended with **${{ github.event.workflow_run.conclusion }}** and no junit report was produced (the run failed before the report was written). The workflow run log has the details."

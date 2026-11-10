@@ -1,0 +1,104 @@
+name: "Unit testing"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+run-name: "${{ github.event_name == 'workflow_dispatch' && 'Unit testing only' || format('Pull Request #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
+
+permissions:
+  contents: read
+
+jobs:
+  pr_unit_test:
+    name: Unit testing
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository from PR merge commit
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        uses: actions/checkout@v7
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout repository from current branch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: 1.27.0
+
+      - name: Code verify and check build
+        run: |
+          go vet ./...
+          go build -v -o /dev/null ./...
+
+      - name: Start docker containers using compose
+        run: |
+          version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)
+          curl -sSL "https://github.com/docker/compose/releases/download/$version/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          mkdir -p $HOME/.docker/cli-plugins
+          cp /usr/local/bin/docker-compose $HOME/.docker/cli-plugins/docker-compose
+          docker compose version
+          cd docker/debian
+          sed "s/TTYD=false/TTYD=true/" docker-compose.yml -i
+          docker compose up -d
+          docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
+
+      - name: Create pcap files
+        run: |
+          sudo tcpdump -i any -c 1 -w test.pcap
+          gzip -c test.pcap > test.pcap.gz
+          sudo tcpdump -i any -c 1 -w test.pcapng
+          gzip -c test.pcapng > test.pcapng.gz
+          ls -lh
+
+      - name: Install auditd and create rules
+        run: |
+          sudo apt install -y auditd
+          sudo auditctl -w /etc/ssh/ -p rwxa -k ssh
+          sudo auditctl -w /etc/passwd -p wa -k passwd
+          sudo auditctl -l
+
+      - name: Install bat and tailspin
+        run: |
+          sudo apt install -y bat
+          bat --version || batcat --version || true
+          # sudo apt install -y tailspin
+          version=$(curl -s https://api.github.com/repos/bensadeh/tailspin/releases/latest | jq -r .tag_name)
+          curl -L "https://github.com/bensadeh/tailspin/releases/download/$version/tailspin-$(uname -m)-unknown-$(uname -s | tr '[:upper:]' '[:lower:]')-musl.tar.gz" -o /usr/local/bin/tailspin.tar.gz
+          tar -xzf /usr/local/bin/tailspin.tar.gz -C /usr/local/bin
+          mv /usr/local/bin/tspin /usr/local/bin/tailspin
+          chmod +x /usr/local/bin/tailspin
+          rm /usr/local/bin/*.tar.gz
+          tailspin --version
+
+      - name: Install gotestsum for junit report
+        run: go install gotest.tools/gotestsum@latest
+
+      - name: Go unit testing
+        id: unitTesting
+        timeout-minutes: 10
+        run: sudo env "PATH=$PATH" gotestsum --format standard-verbose --junitfile report.xml -- ./... -v -cover
+
+      # The report is published by the "Unit testing report" workflow (workflow_run
+      # follower), which runs on the base repository's context. This job executes
+      # untrusted PR code, so it keeps a read-only token, no persisted credentials,
+      # and no secrets; the artifact is the only thing it hands over.
+      - name: Upload junit report artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-report
+          path: report.xml
+          retention-days: 5
