@@ -2,7 +2,10 @@ name: "[PR] Testing report (job #2)"
 
 on:
   workflow_run:
-    workflows: ["Unit testing"]
+    # GitHub matches this list on the workflow `name:` only. It must equal the
+    # name in pr-unit-test.yml; a rename there without a change here silently
+    # stops this follower from ever running.
+    workflows: ["[PR] Unit testing (job #1)"]
     types: [completed]
 
 permissions: {}
