@@ -7,6 +7,7 @@ settings:
   tailModeLines: 10000
   updateInterval: 5
   minSymbolFilter: 3
+  delayFilter: 500
   timezoneFilter: +00:00
   mouseDisable: false
   wrapModeDisable: false

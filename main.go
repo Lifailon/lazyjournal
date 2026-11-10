@@ -56,6 +56,7 @@ type Settings struct {
 	TailModeLines       string `yaml:"tailModeLines"`
 	UpdateInterval      string `yaml:"updateInterval"`
 	MinSymbolFilter     string `yaml:"minSymbolFilter"`
+	DelayFilter         string `yaml:"delayFilter"`
 	TimezoneFilter      string `yaml:"timezoneFilter"`
 	MouseDisable        string `yaml:"mouseDisable"`
 	WrapModeDisable     string `yaml:"wrapModeDisable"`
@@ -261,14 +262,16 @@ type App struct {
 	windowWidth  int
 	windowHeight int
 
-	minSymbolFilter  int      // минимальное кол-во символов дли фильтрации вывода
-	filterText       string   // текст для фильтрации вывода логов
-	currentLogLines  []string // набор строк (срез) для хранения вывода логов без фильтрации
-	filteredLogLines []string // набор строк (срез) для хранения вывода логов после фильтрации и до покраски
-	coloredLogLines  []string // набор строк (срез) для хранения вывода логов после фильтрации и покраски
-	logScrollPos     int      // позиция прокрутки для отображаемых строк журнала
-	lastFilterText   string   // фиксируем содержимое последнего ввода текста для фильтрации
-	logsViewHeight   int      // количество видимых строк, которые умещается в окно отображения логов (для копирования в буфер обмена)
+	minSymbolFilter     int           // минимальное кол-во символов дли фильтрации вывода
+	filterDebounce      time.Duration // задержка применения фильтра при вводе текста (дебаунс в мс)
+	filterDebounceTimer *time.Timer   // таймер дебаунса фильтра вывода логов
+	filterText          string        // текст для фильтрации вывода логов
+	currentLogLines     []string      // набор строк (срез) для хранения вывода логов без фильтрации
+	filteredLogLines    []string      // набор строк (срез) для хранения вывода логов после фильтрации и до покраски
+	coloredLogLines     []string      // набор строк (срез) для хранения вывода логов после фильтрации и покраски
+	logScrollPos        int           // позиция прокрутки для отображаемых строк журнала
+	lastFilterText      string        // фиксируем содержимое последнего ввода текста для фильтрации
+	logsViewHeight      int           // количество видимых строк, которые умещается в окно отображения логов (для копирования в буфер обмена)
 
 	// Настройка логирования приложения
 	logging     bool
@@ -335,6 +338,7 @@ var (
 	tailLinesDescription         = "Change the number of log lines to output (range: 200-200000, default: 10K)"
 	updateIntervalDescription    = "Change the update interval of the log output (range: 2-10, default: 5)"
 	minSymbolsFilterDescription  = "Minimum number of symbols for filtering output (range: 1-10, default: 3)"
+	delayFilterDescription       = "Debounce delay before filtering during text input (range: 100–2000, default value: 500)"
 	timezoneFilterDescription    = "UTC offset when filtering by date (default: +00:00)"
 	mouseDisableDescription      = "Disable mouse control support"
 	wrapDisableDescription       = "Disable wrap mode in log content"
@@ -372,6 +376,7 @@ func showHelp() {
 	fmt.Println("    --tail-lines, -t           " + tailLinesDescription)
 	fmt.Println("    --update-interval, -u      " + updateIntervalDescription)
 	fmt.Println("    --min-symbols-filter, -F   " + minSymbolsFilterDescription)
+	fmt.Println("    --delay-filter             " + delayFilterDescription)
 	fmt.Println("    --timezone-filter, -T      " + timezoneFilterDescription)
 	fmt.Println("    --mouse-disable, -m        " + mouseDisableDescription)
 	fmt.Println("    --wrap-disable, -w         " + wrapDisableDescription)
@@ -418,6 +423,7 @@ func showConfig() {
 	fmt.Printf("  tailModeLines:            %s\n", config.Settings.TailModeLines)
 	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
 	fmt.Printf("  minSymbolFilter:          %s\n", config.Settings.MinSymbolFilter)
+	fmt.Printf("  delayFilter:              %s\n", config.Settings.DelayFilter)
 	fmt.Printf("  timezoneFilter:           %s\n", config.Settings.TimezoneFilter)
 	fmt.Printf("  mouseDisable:             %s\n", config.Settings.MouseDisable)
 	fmt.Printf("  wrapModeDisable:          %s\n", config.Settings.WrapModeDisable)
@@ -1045,7 +1051,7 @@ func (app *App) journalCheck(mode string) ([]string, error) {
 	}
 }
 
-// ---------------------------------------- ssh ----------------------------------------
+// ---------------------------------------- ssh (#90) ----------------------------------------
 
 // Экранирует аргумент для безопасной передачи в удаленную оболочку через ssh
 func shellQuote(arg string) string {
@@ -1176,6 +1182,7 @@ func runGoCui(mock bool) {
 	flag.IntVar(updateFlag, "u", 5, updateIntervalDescription)
 	minSymbolFilterFlag := flag.Int("min-symbols-filter", 3, minSymbolsFilterDescription)
 	flag.IntVar(minSymbolFilterFlag, "F", 3, minSymbolsFilterDescription)
+	delayFilterFlag := flag.Int("delay-filter", 500, delayFilterDescription)
 	timezoneFilterFlag := flag.String("timezone-filter", "+00:00", timezoneFilterDescription)
 	flag.StringVar(timezoneFilterFlag, "T", "+00:00", timezoneFilterDescription)
 	mouseDisable := flag.Bool("mouse-disable", false, mouseDisableDescription)
@@ -1375,6 +1382,30 @@ func runGoCui(mock bool) {
 			os.Exit(1)
 		} else {
 			app.minSymbolFilter = 3
+		}
+	}
+
+	// --delay-filter (#91)
+	if config.Settings.DelayFilter != "" && *delayFilterFlag == 500 {
+		delayFilterInt, err := strconv.Atoi(config.Settings.DelayFilter)
+		if err == nil {
+			delayFilterFlag = &delayFilterInt
+		}
+	}
+
+	// Проверяем значение флага --delay-filter на валидность (задержка дебаунса фильтра в мс)
+	if *delayFilterFlag >= 100 && *delayFilterFlag <= 2000 {
+		app.filterDebounce = time.Duration(*delayFilterFlag) * time.Millisecond
+	} else {
+		delayFilterInt, err := strconv.Atoi(config.Settings.DelayFilter)
+		if err == nil && *delayFilterFlag != delayFilterInt {
+			fmt.Println("Valid range: 100-2000 (default: 500 milliseconds)")
+			if app.loggingFile != nil {
+				_ = app.loggingFile.Close()
+			}
+			os.Exit(1)
+		} else {
+			app.filterDebounce = 500 * time.Millisecond
 		}
 	}
 
@@ -3733,6 +3764,10 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 	app.debugStartTime = time.Now()
 	// Накапливаем строки локально, чтобы не менять общее состояние во время чтения
 	var loadedLines []string
+	// Флаг инкрементального чтения хвоста (читаем только новые дописанные байты)
+	appendMode := false
+	// Фиксируем предыдущий размер файла до его перезаписи (для чтения только новых байт)
+	prevSizeFile := app.lastSizeFile
 	// В параметре logName имя файла при выборе возвращяется без символов покраски
 	// Получаем путь из массива по имени
 	var logFullPath string
@@ -3778,6 +3813,10 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 			app.lastDateUpdateFile = fileModTime
 			app.lastSizeFile = fileSize
 			app.updateFile = true
+			// Файл только дополнялся (размер вырос без обрезки) - читаем только новые байты
+			if fileSize > prevSizeFile {
+				appendMode = true
+			}
 		} else {
 			app.updateFile = false
 		}
@@ -4095,14 +4134,46 @@ func (app *App) loadFileLogs(logName string, newUpdate bool) {
 						slog.Info(logFullPath, "action", "Reading log file with io_uring")
 					}
 					maxLines, _ := strconv.Atoi(app.logViewCount)
-					output, err := readLastLines(logFullPath, maxLines)
-					if err != nil && !app.testMode {
-						v, _ := app.gui.View("logs")
-						v.Clear()
-						_, _ = fmt.Fprintln(v, " \033[31mError reading log file.\n", err, "\033[0m")
-						return
+					if appendMode {
+						// Читаем только новые байты с последнего смещения (stream/append без повторного чтения всего хвоста)
+						output, err := readFromOffset(logFullPath, prevSizeFile)
+						if err != nil && !app.testMode {
+							v, _ := app.gui.View("logs")
+							v.Clear()
+							_, _ = fmt.Fprintln(v, " \033[31mError reading log file.\n", err, "\033[0m")
+							return
+						}
+						if err != nil && app.testMode {
+							log.Print("Error: reading log file. ", err)
+						}
+						if len(output) == 0 {
+							// Нет новых данных - пропускаем обновление
+							return
+						}
+						// Разбиваем новые байты на строки
+						newLines := strings.Split(string(output), "\n")
+						// Копируем текущий хвост без завершающей пустой строки
+						prevLines := app.currentLogLines
+						if len(prevLines) > 0 && prevLines[len(prevLines)-1] == "" {
+							prevLines = prevLines[:len(prevLines)-1]
+						}
+						loadedLines = make([]string, 0, len(prevLines)+len(newLines))
+						loadedLines = append(loadedLines, prevLines...)
+						loadedLines = append(loadedLines, newLines...)
+						// Ограничиваем хвост количеством строк logViewCount (отбрасываем самые старые)
+						if len(loadedLines) > maxLines+1 {
+							loadedLines = loadedLines[len(loadedLines)-(maxLines+1):]
+						}
+					} else {
+						output, err := readLastLines(logFullPath, maxLines)
+						if err != nil && !app.testMode {
+							v, _ := app.gui.View("logs")
+							v.Clear()
+							_, _ = fmt.Fprintln(v, " \033[31mError reading log file.\n", err, "\033[0m")
+							return
+						}
+						loadedLines = strings.Split(string(output), "\n")
 					}
-					loadedLines = strings.Split(string(output), "\n")
 				}
 			}
 		}
@@ -4598,6 +4669,10 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 	containerizationSystem := app.selectContainerizationSystem
 	// Накапливаем строки локально, чтобы не менять общее состояние во время чтения
 	var loadedLines []string
+	// Флаг инкрементального чтения хвоста json-файла контейнера (только новые байты)
+	appendMode := false
+	// Фиксируем предыдущий размер файла до его перезаписи (для чтения только новых байт)
+	prevSizeFile := app.lastSizeFile
 	// Контейнеры compose для уникальной покраски префиксов
 	var composeContainers []string
 	var updateComposeColors bool
@@ -4667,6 +4742,23 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			log.Print("Error: get log path via docker inspect. ", err)
 		}
 		logFilePath := strings.TrimSpace(string(logFilePathBytes))
+		// Для локального чтения заранее определяем изменения файла, чтобы дочитывать только новые байты и пропускать чтение без изменений
+		if !app.sshMode {
+			app.updateFile = false
+			fileInfo, statErr := app.statFile(logFilePath)
+			if statErr != nil {
+				// Ошибка доступа к файлу - попытаемся прочитать как обычно, ошибка чтения запустит fallback к потоку
+				app.updateFile = true
+			} else if newUpdate || fileInfo.ModTime() != app.lastDateUpdateFile || fileInfo.Size() != app.lastSizeFile {
+				app.lastDateUpdateFile = fileInfo.ModTime()
+				app.lastSizeFile = fileInfo.Size()
+				app.updateFile = true
+				// Файл только дополнялся (размер вырос без обрезки) - читаем только новые байты
+				if !newUpdate && fileInfo.Size() > prevSizeFile {
+					appendMode = true
+				}
+			}
+		}
 		// Читаем файл с конца. Для локального файла используем io_uring,
 		// а для удаленного хоста оставляем tail на той стороне SSH.
 		var output []byte
@@ -4676,7 +4768,12 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 				slog.Info(cmd.String(), "action", "Reading "+containerName+" container logs from file system")
 			}
 			output, err = cmd.Output()
-		} else {
+		} else if appendMode {
+			if app.logging {
+				slog.Info(logFilePath, "action", "Reading "+containerName+" container logs with io_uring (append)")
+			}
+			output, err = readFromOffset(logFilePath, prevSizeFile)
+		} else if app.updateFile {
 			if app.logging {
 				slog.Info(logFilePath, "action", "Reading "+containerName+" container logs with io_uring")
 			}
@@ -4701,28 +4798,15 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			app.dockerStreamLogsStatus = "json-file"
 		}
 		if readFileContainer {
-			// Проверяем, что есть изменения в файле при повторном считывание
-			if newUpdate {
-				// Фиксируем новую дату изменения и размер для выбранного файла
-				fileInfo, err := app.statFile(logFilePath)
-				if err != nil {
+			// Определяем изменения файла после чтения
+			if app.sshMode {
+				fileInfo, statErr := app.statFile(logFilePath)
+				if statErr != nil {
 					return
 				}
 				fileModTime := fileInfo.ModTime()
 				fileSize := fileInfo.Size()
-				app.lastDateUpdateFile = fileModTime
-				app.lastSizeFile = fileSize
-				app.updateFile = true
-			} else {
-				// Проверяем дату изменения
-				fileInfo, err := app.statFile(logFilePath)
-				if err != nil {
-					return
-				}
-				fileModTime := fileInfo.ModTime()
-				fileSize := fileInfo.Size()
-				// Обновлять файл, только если есть изменения (проверяем дату модификации и размер)
-				if fileModTime != app.lastDateUpdateFile || fileSize != app.lastSizeFile {
+				if newUpdate || fileModTime != app.lastDateUpdateFile || fileSize != app.lastSizeFile {
 					app.lastDateUpdateFile = fileModTime
 					app.lastSizeFile = fileSize
 					app.updateFile = true
@@ -4782,7 +4866,19 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 					formattedLines = append(formattedLines, formattedLine)
 					// Если это последняя строка в выводе, добавляем перенос строки
 				}
-				loadedLines = formattedLines
+				if appendMode {
+					// Дописываем только новые отформатированные строки к текущему хвосту
+					loadedLines = make([]string, 0, len(app.currentLogLines)+len(formattedLines))
+					loadedLines = append(loadedLines, app.currentLogLines...)
+					loadedLines = append(loadedLines, formattedLines...)
+					// Ограничиваем хвост количеством строк logViewCount (отбрасываем самые старые)
+					maxLines, _ := strconv.Atoi(app.logViewCount)
+					if len(loadedLines) > maxLines {
+						loadedLines = loadedLines[len(loadedLines)-maxLines:]
+					}
+				} else {
+					loadedLines = formattedLines
+				}
 			}
 		}
 	}
@@ -5275,12 +5371,28 @@ func (app *App) createFilterEditor(window string) gocui.Editor {
 		case "logs":
 			// Обновляем текст в буфере
 			app.filterText = strings.TrimSpace(v.Buffer())
-			// Применяем функцию фильтрации к выводу записей журнала
-			app.applyFilter(true)
+			// Применяем функцию фильтрации к выводу записей журнала с задержкой (дебаунс)
+			app.scheduleFilterDebounce()
 		case "lists":
 			app.filterListText = strings.TrimSpace(v.Buffer())
 			app.applyFilterList()
 		}
+	})
+}
+
+// Планирование применения фильтра с задержкой, чтобы не пересчитывать вывод на каждое нажатие до срабатывания таймера (#91)
+func (app *App) scheduleFilterDebounce() {
+	// Отменяем предыдущий отложенный запуск, если он еще не сработал
+	if app.filterDebounceTimer != nil {
+		app.filterDebounceTimer.Stop()
+	}
+	// Планируем новое применение фильтра через заданную задержку
+	app.filterDebounceTimer = time.AfterFunc(app.filterDebounce, func() {
+		// Выполняем применение фильтра в основном цикле gocui
+		app.gui.Update(func(g *gocui.Gui) error {
+			app.applyFilter(true)
+			return nil
+		})
 	})
 }
 
@@ -5768,14 +5880,17 @@ func (app *App) fuzzyFilter(inputLine, filter string) string {
 	}
 }
 
-// Regex: Функция для поска с использованием регулярных выражений (параметры: строка из цикла и скомпилированное регулярное выражение)
+// Regex: Функция поиска с использованием регулярных выражений (параметры: строка из цикла и скомпилированное регулярное выражение)
 func (app *App) regexFilter(inputLine string, regex *regexp.Regexp) string {
 	// Проверяем, что строка подходит под регулярное выражение
 	if regex.MatchString(inputLine) {
 		// Находим все найденные совпадени
-		matches := regex.FindAllString(inputLine, -1)
+		// matches := regex.FindAllString(inputLine, -1)
+		// Находим первое совпадение (FindString вместо FindAllString для экономии памяти)
+		match := regex.FindString(inputLine)
 		// Красим только первое найденное совпадение
-		inputLine = strings.ReplaceAll(inputLine, matches[0], "\x1b[0;44m"+matches[0]+"\033[0m")
+		// inputLine = strings.ReplaceAll(inputLine, matches[0], "\x1b[0;44m"+matches[0]+"\033[0m")
+		inputLine = strings.ReplaceAll(inputLine, match, "\x1b[0;44m"+match+"\033[0m")
 		return inputLine
 	} else {
 		return ""
@@ -5856,6 +5971,36 @@ func readLastLines(path string, maxLines int) ([]byte, error) {
 		output = append(output, chunks[i]...)
 	}
 	return tailBytes(output, maxLines), nil
+}
+
+// Читает содержимое локального файла начиная с указанного смещения (offset) через io_uring, чтобы в tail-режиме дочитывать только новые дописанные байты (#91)
+func readFromOffset(path string, offset int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= info.Size() {
+		return nil, nil
+	}
+	reader := iouring.NewFileReaderAt(file)
+	defer func() { _ = reader.Close() }()
+	buffer := make([]byte, int(info.Size()-offset))
+	n, readErr := reader.ReadAt(buffer, offset)
+	if n > 0 {
+		buffer = buffer[:n]
+	}
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
+		return nil, readErr
+	}
+	return buffer, nil
 }
 
 type commandLineBatch struct {
@@ -7253,6 +7398,10 @@ func (app *App) clearFilterEditor(g *gocui.Gui) {
 	}
 	// Очищаем буфер фильтра
 	app.filterText = ""
+	// Отменяем отложенный запуск фильтра, чтобы очистка применилась мгновенно
+	if app.filterDebounceTimer != nil {
+		app.filterDebounceTimer.Stop()
+	}
 	app.applyFilter(false)
 }
 
