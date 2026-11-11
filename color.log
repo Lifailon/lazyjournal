@@ -26,15 +26,19 @@ kernel: system running
 rsyslogd: rsyslog running
 sudo: service was restarted
 
-⎯⎯⎯ HTTP status codes and methods ⎯⎯⎯
+⎯⎯⎯ HTTP status codes ⎯⎯⎯
 
-200 201 302 304 
-400 401 404 502 
+200 - 208 ;
+300 - 308 ;
+400 - 431 ;
+500 - 511 ;
+
+⎯⎯⎯ HTTP request methods ⎯⎯⎯
 
 GET, POST, CONNECT, DELETE
 PUT, PATCH, TRACE, OPTIONS
 
-⎯⎯⎯ Statuses ⎯⎯⎯
+⎯⎯⎯ Statuses (uppercase) ⎯⎯⎯
 
 DONE, WARNING, WARN, WRN, DEBUG, INFO, INF, NOTICE, ERROR, ERR
 CRITICAL, CRIT, ALERT, EMERGENCY, EMERG, FAILURE, FAIL, FATAL
@@ -55,6 +59,9 @@ Integers: 1, 10, 100, (1), [10], {100}, "1000"
 ⎯⎯⎯ Warnings and known names (yellow) ⎯⎯⎯
 
 warnings, warning, warn
+restarting, restarted, restart
+reconnection, reconnected, reconnecting, reconnect
+retries, retried, retrying, retry
 lifailon, root, daemon
 
 ⎯⎯⎯ Success (green) ⎯⎯⎯
@@ -94,7 +101,7 @@ panicked, panics, panic
 emergency, emerg
 rejecting, rejection, rejected, reject
 refusing, refused, refuses, refuse
-denied, unavailable, unknown, unsuccessful, unauthorized, forbidden, conflict, severe
+unhealth, unstable, unavailable, unknown, unsuccessful, unauthorized, forbidden, conflict
 false, null, nil, none
 Not found
 Bad request
@@ -109,7 +116,6 @@ return, returne, returned
 listening, listener, listen
 opening, opened, open
 created, creating, creates, create
-resolved, resolving, resolve, restarting, restarted, restart
 reboot, booting, boot
 overloading, overloaded, overload, uploading, uploaded, uploads, upload
 downloading, downloaded, downloads, download, loading, loaded, load
