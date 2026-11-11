@@ -64,15 +64,7 @@ Supports 4 filtering modes:
 
 ### Highlighting
 
-Several log output coloring modes are supported:
-
-- **default** - built-in log highlighter by default, requires no dependencies and is several times faster than other tools (including in [command-line mode](#command-line-mode)).
-- **tailspin** - uses [tailspin](https://github.com/bensadeh/tailspin).
-- **bat** - uses [bat](https://github.com/sharkdp/bat) in ansi mode and log language (much slower than other modes).
-
-When using external tools, they are required to be already installed on your system. You can also disable output highlighting with the `Ctrl+Q` keyboard shortcut, this is useful for improving performance when viewing large logs or if your terminal already has a built-in highlighting feature, such as [WindTerm](https://github.com/kingToolbox/WindTerm).
-
-The built-in highlighting by default supports several color groups:
+The project features built-in log highlighting, which supports several color groups:
 
 - **Custom** - URLs, HTTP request methods and response status codes, double quotes and braces for json, file paths and processes in UNIX.
 - **Yellow** - warnings and known names (host name and system users).
@@ -85,6 +77,8 @@ A full list of all keywords can be found in the [color.log](/color.log) file (us
 
 > [!NOTE]
 > If you have suggestions for improving log highlighting (e.g. adding new keywords), you can open an [issue](https://github.com/Lifailon/lazyjournal/issues) for a new feature.
+
+You can disable output highlighting using the `Ctrl+W` keyboard shortcut. This can be useful in cases where the terminal already includes a built-in highlighting feature (for example, in [WindTerm](https://github.com/kingToolbox/WindTerm)).
 
 ## Install
 
@@ -102,7 +96,7 @@ This command will run a script that will download the latest binary (auto-detect
 
 ### Go package
 
-You can install it as a package using [Go](https://pkg.go.dev/github.com/Lifailon/lazyjournal):
+You can install it on any system using the [Go](https://pkg.go.dev/github.com/Lifailon/lazyjournal) package manager:
 
 ```bash
 go install github.com/Lifailon/lazyjournal@0.8.7
@@ -275,7 +269,7 @@ Host *
   StrictHostKeyChecking no
 ```
 
-### Command-line mode
+### Command-line mode (cli)
 
 Output highlighting and filtering are supported in command line mode:
 
