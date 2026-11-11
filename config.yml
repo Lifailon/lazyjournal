@@ -6,6 +6,7 @@ settings:
   tailModeDisable: false
   tailModeLines: 10000
   updateInterval: 5
+  ignoreCaseFilter: false
   minSymbolFilter: 3
   delayFilter: 500
   timezoneFilter: +00:00
@@ -81,6 +82,7 @@ hotkeys:
   autoUpdateJournal: ctrl+u
   updateJournal: ctrl+r
   updateLists: ctrl+q
+  switchIgnoreCaseFilter: ctrl+i
   switchColorMode: ctrl+w
   switchPriority: ctrl+p
   switchDockerMode: ctrl+d
