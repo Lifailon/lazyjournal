@@ -276,6 +276,7 @@ type App struct {
 	lazyColor           bool          // использовать покраску только видимого окна
 	logScrollPos        int           // позиция прокрутки для отображаемых строк журнала
 	lastFilterText      string        // фиксируем содержимое последнего ввода текста для фильтрации
+	lastFilterMode      string        // фиксируем последний режим фильтрации (для пересчёта при смене режима)
 	logsViewHeight      int           // количество видимых строк, которые умещается в окно отображения логов (для копирования в буфер обмена)
 
 	// Настройка логирования приложения
@@ -5441,7 +5442,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				app.sinceDateFilterMode = false
 				v.FrameColor = app.errorColor
 				v.Clear()
-				_, _ = fmt.Fprint(v, "⎯")
+				_, _ = fmt.Fprint(v, app.sinceFilterText)
 				app.updateFilterStatus()
 				return
 			// Игнорируем другие символы
@@ -5470,7 +5471,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				app.untilDateFilterMode = false
 				v.FrameColor = app.errorColor
 				v.Clear()
-				_, _ = fmt.Fprint(v, "⎯")
+				_, _ = fmt.Fprint(v, app.untilFilterText)
 				app.updateFilterStatus()
 				return
 			default:
@@ -5500,6 +5501,17 @@ func (app *App) switchDate(inputDate time.Time, up bool) (time.Time, string) {
 		outDate = inputDate.AddDate(0, 0, -1)
 	}
 	return outDate, outDate.Format("2006-01-02")
+}
+
+// Функция для определения цвета окна фильтра по дате - красный, если фильтр не активен (#95)
+func (app *App) dateFilterFrameColor(enabled bool, selected bool) gocui.Attribute {
+	if !enabled {
+		return app.errorColor
+	}
+	if selected {
+		return app.selectedFrameColor
+	}
+	return app.frameColor
 }
 
 // Функция для обновления статуса работы фильтра по дате
@@ -5741,11 +5753,12 @@ func (app *App) applyFilterLocked(color bool) {
 		vLogs, _ := app.gui.View("logs")
 		_, viewHeight = vLogs.Size()
 		size = app.logScrollPos + viewHeight + 1
-		if app.lastFilterText == filter && size < len(app.filteredLogLines) {
+		if app.lastFilterText == filter && app.lastFilterMode == app.selectFilterMode && size < len(app.filteredLogLines) {
 			skip = true
 		}
-		// Фиксируем текущий текст из фильтра
+		// Фиксируем текущий текст и режим фильтра
 		app.lastFilterText = filter
+		app.lastFilterMode = app.selectFilterMode
 	}
 	// Фильтруем и красим, только если это не скроллинг
 	if !skip {
@@ -8848,13 +8861,13 @@ func (app *App) setupKeybindings() error {
 	}
 	// Очистка поля ввода для фильтрации по дате
 	if err := app.gui.SetKeybinding("sinceFilter", customExit, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if v.Buffer() == "⎯" {
+		if v.FrameColor == app.errorColor {
 			return quit(g, v)
 		} else {
 			app.sinceDateFilterMode = false
 			v.FrameColor = app.errorColor
 			v.Clear()
-			_, _ = fmt.Fprint(v, "⎯")
+			_, _ = fmt.Fprint(v, app.sinceFilterText)
 			app.updateFilterStatus()
 			return nil
 		}
@@ -8862,13 +8875,13 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 	if err := app.gui.SetKeybinding("untilFilter", customExit, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if v.Buffer() == "⎯" {
+		if v.FrameColor == app.errorColor {
 			return quit(g, v)
 		} else {
 			app.untilDateFilterMode = false
 			v.FrameColor = app.errorColor
 			v.Clear()
-			_, _ = fmt.Fprint(v, "⎯")
+			_, _ = fmt.Fprint(v, app.untilFilterText)
 			app.updateFilterStatus()
 			return nil
 		}
@@ -9531,7 +9544,7 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 			// Обработка времени и даты
 			v.Editor = app.timestampFilterEditor("sinceFilter")
 			// Изменить цвет окна
-			v.FrameColor = app.selectedFrameColor
+			v.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, true)
 			v.TitleColor = app.selectedTitleColor
 			// Выбираем новое окно
 			if _, err := g.SetCurrentView("sinceFilter"); err != nil {
@@ -9549,6 +9562,7 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 			v2.Editable = true
 			v2.Wrap = true
 			v2.Editor = app.timestampFilterEditor("untilFilter")
+			v2.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, false)
 			_, _ = fmt.Fprint(v2, app.untilFilterText)
 			if err = v2.SetCursor(len(app.untilFilterText), 0); err != nil {
 				return nil
@@ -9570,6 +9584,10 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 		v.TitleColor = app.selectedTitleColor
 		selectedFilter.Title = "Filter (Exact)"
 		app.selectFilterMode = "exact"
+	}
+	// Сбрасываем красный цвет в случае ошибки регулярного выражения при смене режима фильтрации (#95)
+	if app.selectFilterMode != "regex" {
+		selectedFilter.FrameColor = app.selectedFrameColor
 	}
 	if app.selectFilterMode == "timestamp" {
 	} else {
@@ -9596,7 +9614,7 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 			v.Editable = true
 			v.Wrap = true
 			v.Editor = app.timestampFilterEditor("sinceFilter")
-			v.FrameColor = app.selectedFrameColor
+			v.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, true)
 			v.TitleColor = app.selectedTitleColor
 			if _, err := g.SetCurrentView("sinceFilter"); err != nil {
 				return nil
@@ -9611,6 +9629,7 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 			v2.Editable = true
 			v2.Wrap = true
 			v2.Editor = app.timestampFilterEditor("untilFilter")
+			v2.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, false)
 			_, _ = fmt.Fprint(v2, app.untilFilterText)
 			if err = v2.SetCursor(len(app.untilFilterText), 0); err != nil {
 				return nil
@@ -9636,6 +9655,14 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 	case "Filter (Fuzzy)":
 		selectedFilter.Title = "Filter (Exact)"
 		app.selectFilterMode = "exact"
+	}
+	// Сбрасываем красный цвет ошибки регулярного выражения при смене режима
+	if app.selectFilterMode != "regex" {
+		selectedFilter.FrameColor = app.selectedFrameColor
+	}
+	if app.selectFilterMode == "timestamp" {
+	} else {
+		app.applyFilter(false)
 	}
 	return nil
 }
@@ -10066,8 +10093,10 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.TitleColor = app.titleColor
 				selectedDocker.FrameColor = app.dockerFrameColor
 				selectedDocker.TitleColor = app.titleColor
-				sinceFilter.FrameColor = app.selectedFrameColor
+				sinceFilter.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, true)
 				sinceFilter.TitleColor = app.selectedTitleColor
+				untilFilter.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, false)
+				untilFilter.TitleColor = app.titleColor
 				selectedLogs.FrameColor = app.frameColor
 				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
@@ -10097,16 +10126,18 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
-			sinceFilter.FrameColor = app.frameColor
+			sinceFilter.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, false)
 			sinceFilter.TitleColor = app.titleColor
-			untilFilter.FrameColor = app.selectedFrameColor
+			untilFilter.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, true)
 			untilFilter.TitleColor = app.selectedTitleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case "filter", "untilFilter":
 			if app.timestampFilterView {
-				untilFilter.FrameColor = app.frameColor
+				sinceFilter.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, false)
+				sinceFilter.TitleColor = app.titleColor
+				untilFilter.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, false)
 				untilFilter.TitleColor = app.titleColor
 			}
 			nextView = "logs"
@@ -10260,7 +10291,9 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.TitleColor = app.titleColor
 				selectedDocker.FrameColor = app.dockerFrameColor
 				selectedDocker.TitleColor = app.titleColor
-				untilFilter.FrameColor = app.selectedFrameColor
+				sinceFilter.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, false)
+				sinceFilter.TitleColor = app.titleColor
+				untilFilter.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, true)
 				untilFilter.TitleColor = app.selectedTitleColor
 				selectedLogs.FrameColor = app.frameColor
 				selectedLogs.TitleColor = app.titleColor
@@ -10291,17 +10324,19 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedVarLog.TitleColor = app.titleColor
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
-			sinceFilter.FrameColor = app.selectedFrameColor
+			sinceFilter.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, true)
 			sinceFilter.TitleColor = app.selectedTitleColor
-			untilFilter.FrameColor = app.frameColor
+			untilFilter.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, false)
 			untilFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
 		case "filter", "sinceFilter":
 			if app.timestampFilterView {
-				sinceFilter.FrameColor = app.frameColor
+				sinceFilter.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, false)
 				sinceFilter.TitleColor = app.titleColor
+				untilFilter.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, false)
+				untilFilter.TitleColor = app.titleColor
 			}
 			nextView = "docker"
 			selectedFilterList.FrameColor = app.frameColor
@@ -10370,7 +10405,14 @@ func (app *App) setSelectView(g *gocui.Gui, viewName string) error {
 	}
 	for _, name := range views {
 		if v, err := g.View(name); err == nil {
-			v.FrameColor = app.frameColor
+			switch name {
+			case "sinceFilter":
+				v.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, false)
+			case "untilFilter":
+				v.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, false)
+			default:
+				v.FrameColor = app.frameColor
+			}
 			// Исключение для tail
 			if name != "logs" {
 				v.TitleColor = app.titleColor
@@ -10379,7 +10421,14 @@ func (app *App) setSelectView(g *gocui.Gui, viewName string) error {
 	}
 	// Устанавливаем цвет для активного окна
 	if v, err := g.View(viewName); err == nil {
-		v.FrameColor = app.selectedFrameColor
+		switch viewName {
+		case "sinceFilter":
+			v.FrameColor = app.dateFilterFrameColor(app.sinceDateFilterMode, true)
+		case "untilFilter":
+			v.FrameColor = app.dateFilterFrameColor(app.untilDateFilterMode, true)
+		default:
+			v.FrameColor = app.selectedFrameColor
+		}
 		if viewName != "logs" {
 			v.TitleColor = app.selectedTitleColor
 		}
