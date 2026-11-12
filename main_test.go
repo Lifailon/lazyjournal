@@ -453,7 +453,7 @@ func TestFilter(t *testing.T) {
 		name             string
 		selectFilterMode string
 	}{
-		{"Default filter mode", "default"},
+		{"Exact filter mode", "exact"},
 		{"Fuzzy filter mode", "fuzzy"},
 		{"Regex filter mode", "regex"},
 	}
@@ -546,7 +546,7 @@ func TestCommandColor(t *testing.T) {
 		selectUnits:                  "services",
 		selectPath:                   "varlog",
 		selectContainerizationSystem: "docker",
-		selectFilterMode:             "default",
+		selectFilterMode:             "exact",
 		logViewCount:                 "10000",
 		logUpdateSeconds:             5,
 		journalListFrameColor:        gocui.ColorDefault,
@@ -629,7 +629,7 @@ func TestCommandFuzzyFilter(t *testing.T) {
 		selectUnits:                  "services",
 		selectPath:                   "varlog",
 		selectContainerizationSystem: "docker",
-		selectFilterMode:             "default",
+		selectFilterMode:             "exact",
 		logViewCount:                 "10000",
 		logUpdateSeconds:             5,
 		journalListFrameColor:        gocui.ColorDefault,
@@ -675,7 +675,7 @@ func TestCommandRegexFilter(t *testing.T) {
 		selectUnits:                  "services",
 		selectPath:                   "varlog",
 		selectContainerizationSystem: "docker",
-		selectFilterMode:             "default",
+		selectFilterMode:             "exact",
 		logViewCount:                 "10000",
 		logUpdateSeconds:             5,
 		journalListFrameColor:        gocui.ColorDefault,
@@ -731,7 +731,7 @@ func TestMockInterface(t *testing.T) {
 		selectUnits:                  "services",
 		selectPath:                   "varlog",
 		selectContainerizationSystem: "docker",
-		selectFilterMode:             "default",
+		selectFilterMode:             "exact",
 		logViewCount:                 "10000",
 		logUpdateSeconds:             5,
 		journalListFrameColor:        gocui.ColorDefault,
@@ -1321,7 +1321,7 @@ func TestMockInterface(t *testing.T) {
 		_ = app.setFilterModeRight(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			textLog := "Filter default"
+			textLog := "Filter exact (default)"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
@@ -1355,7 +1355,7 @@ func TestMockInterface(t *testing.T) {
 		_ = app.setFilterModeLeft(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
-			textLog := "Filter default"
+			textLog := "Filter exact"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
@@ -1734,7 +1734,7 @@ func TestSSHManagerNavigation(t *testing.T) {
 		selectUnits:                  "systemUnits",
 		selectPath:                   "varlog",
 		selectContainerizationSystem: "docker",
-		selectFilterMode:             "default",
+		selectFilterMode:             "exact",
 		logViewCount:                 "10000",
 		unitType:                     "service",
 		colorModeDisable:             true,

@@ -55,6 +55,7 @@ type Settings struct {
 	TailModeDisable     string `yaml:"tailModeDisable"`
 	TailModeLines       string `yaml:"tailModeLines"`
 	UpdateInterval      string `yaml:"updateInterval"`
+	IgnoreCaseFilter    string `yaml:"ignoreCaseFilter"`
 	MinSymbolFilter     string `yaml:"minSymbolFilter"`
 	DelayFilter         string `yaml:"delayFilter"`
 	TimezoneFilter      string `yaml:"timezoneFilter"`
@@ -94,39 +95,40 @@ type Interface struct {
 
 // Структура доступных сочетаний клавиш для переопределения (#23)
 type Hotkeys struct {
-	ShowHelp             string `yaml:"showHelp"`
-	ShowManager          string `yaml:"showManager"`
-	SwitchWindow         string `yaml:"switchWindow"`
-	BackSwitchWindows    string `yaml:"backSwitchWindows"`
-	Up                   string `yaml:"up"`
-	QuickUp              string `yaml:"quickUp"`
-	VeryQuickUp          string `yaml:"veryQuickUp"`
-	SwitchFilterMode     string `yaml:"switchFilterMode"`
-	Down                 string `yaml:"down"`
-	QuickDown            string `yaml:"quickDown"`
-	VeryQuickDown        string `yaml:"veryQuickDown"`
-	BackSwitchFilterMode string `yaml:"backSwitchFilterMode"`
-	Left                 string `yaml:"left"`
-	Right                string `yaml:"right"`
-	DisableFilterByDate  string `yaml:"disableFilterByDate"`
-	LoadJournal          string `yaml:"loadJournal"`
-	GoToFilter           string `yaml:"goToFilter"`
-	GoToEnd              string `yaml:"goToEnd"`
-	GoToTop              string `yaml:"goToTop"`
-	TailModeMore         string `yaml:"tailModeMore"`
-	TailModeLess         string `yaml:"tailModeLess"`
-	UpdateIntervalMore   string `yaml:"updateIntervalMore"`
-	UpdateIntervalLess   string `yaml:"updateIntervalLess"`
-	AutoUpdateJournal    string `yaml:"autoUpdateJournal"`
-	UpdateJournal        string `yaml:"updateJournal"`
-	UpdateLists          string `yaml:"updateLists"`
-	SwitchColorMode      string `yaml:"switchColorMode"`
-	SwitchPriority       string `yaml:"switchPriority"`
-	SwitchDockerMode     string `yaml:"switchDockerMode"`
-	SwitchStreamMode     string `yaml:"switchStreamMode"`
-	TimestampShow        string `yaml:"timestampShow"`
-	CopyToClipboard      string `yaml:"copyToClipboard"`
-	Exit                 string `yaml:"exit"`
+	ShowHelp               string `yaml:"showHelp"`
+	ShowManager            string `yaml:"showManager"`
+	SwitchWindow           string `yaml:"switchWindow"`
+	BackSwitchWindows      string `yaml:"backSwitchWindows"`
+	Up                     string `yaml:"up"`
+	QuickUp                string `yaml:"quickUp"`
+	VeryQuickUp            string `yaml:"veryQuickUp"`
+	SwitchFilterMode       string `yaml:"switchFilterMode"`
+	Down                   string `yaml:"down"`
+	QuickDown              string `yaml:"quickDown"`
+	VeryQuickDown          string `yaml:"veryQuickDown"`
+	BackSwitchFilterMode   string `yaml:"backSwitchFilterMode"`
+	Left                   string `yaml:"left"`
+	Right                  string `yaml:"right"`
+	DisableFilterByDate    string `yaml:"disableFilterByDate"`
+	LoadJournal            string `yaml:"loadJournal"`
+	GoToFilter             string `yaml:"goToFilter"`
+	GoToEnd                string `yaml:"goToEnd"`
+	GoToTop                string `yaml:"goToTop"`
+	TailModeMore           string `yaml:"tailModeMore"`
+	TailModeLess           string `yaml:"tailModeLess"`
+	UpdateIntervalMore     string `yaml:"updateIntervalMore"`
+	UpdateIntervalLess     string `yaml:"updateIntervalLess"`
+	AutoUpdateJournal      string `yaml:"autoUpdateJournal"`
+	UpdateJournal          string `yaml:"updateJournal"`
+	UpdateLists            string `yaml:"updateLists"`
+	SwitchIgnoreCaseFilter string `yaml:"switchIgnoreCaseFilter"`
+	SwitchColorMode        string `yaml:"switchColorMode"`
+	SwitchPriority         string `yaml:"switchPriority"`
+	SwitchDockerMode       string `yaml:"switchDockerMode"`
+	SwitchStreamMode       string `yaml:"switchStreamMode"`
+	TimestampShow          string `yaml:"timestampShow"`
+	CopyToClipboard        string `yaml:"copyToClipboard"`
+	Exit                   string `yaml:"exit"`
 }
 
 // Структура с содержимым массива ssh хостов с параметрами подключения
@@ -214,7 +216,7 @@ type App struct {
 	selectUnits                  string // название журнала (systemUnits/userUnits/systemJournals/kernelBoot/auditd)
 	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
 	selectContainerizationSystem string // название системы контейнеризации (docker/compose/podman/kubernetes)
-	selectFilterMode             string // режим фильтрации (default/fuzzy/regex/timestamp)
+	selectFilterMode             string // режим фильтрации (exact/fuzzy/regex/timestamp)
 
 	logViewCount     string   // количество логов для просмотра
 	logUpdateSeconds int      // период фонового обновления журнала
@@ -262,6 +264,7 @@ type App struct {
 	windowWidth  int
 	windowHeight int
 
+	ignoreCaseFilter    bool          // включить режим игнорирования регистра при фильтрации вывода логов по умолчанию
 	minSymbolFilter     int           // минимальное кол-во символов дли фильтрации вывода
 	filterDebounce      time.Duration // задержка применения фильтра при вводе текста (дебаунс в мс)
 	filterDebounceTimer *time.Timer   // таймер дебаунса фильтра вывода логов
@@ -340,6 +343,7 @@ var (
 	tailModeDisableDescription   = "Disable streaming of new events (log is loaded once without update)"
 	tailLinesDescription         = "Change the number of log lines to output (range: 200-200000, default: 10K)"
 	updateIntervalDescription    = "Change the update interval of the log output (range: 2-10, default: 5)"
+	ignoreCaseFilterDescription  = "Ignore case when filtering"
 	minSymbolsFilterDescription  = "Minimum number of symbols for filtering output (range: 1-10, default: 3)"
 	delayFilterDescription       = "Debounce delay before filtering during text input (range: 100–2000, default value: 500)"
 	timezoneFilterDescription    = "UTC offset when filtering by date (default: +00:00)"
@@ -378,8 +382,9 @@ func showHelp() {
 	fmt.Println("    --tail-mode-disable, -d    " + tailModeDisableDescription)
 	fmt.Println("    --tail-lines, -t           " + tailLinesDescription)
 	fmt.Println("    --update-interval, -u      " + updateIntervalDescription)
+	fmt.Println("    --ignore-case-filter, -i   " + ignoreCaseFilterDescription)
 	fmt.Println("    --min-symbols-filter, -F   " + minSymbolsFilterDescription)
-	fmt.Println("    --delay-filter             " + delayFilterDescription)
+	fmt.Println("    --delay-filter, -y         " + delayFilterDescription)
 	fmt.Println("    --timezone-filter, -T      " + timezoneFilterDescription)
 	fmt.Println("    --mouse-disable, -m        " + mouseDisableDescription)
 	fmt.Println("    --wrap-disable, -w         " + wrapDisableDescription)
@@ -425,6 +430,7 @@ func showConfig() {
 	fmt.Printf("  tailModeDisable:          %s\n", config.Settings.TailModeDisable)
 	fmt.Printf("  tailModeLines:            %s\n", config.Settings.TailModeLines)
 	fmt.Printf("  updateInterval:           %s\n", config.Settings.UpdateInterval)
+	fmt.Printf("  ignoreCaseFilter:         %s\n", config.Settings.IgnoreCaseFilter)
 	fmt.Printf("  minSymbolFilter:          %s\n", config.Settings.MinSymbolFilter)
 	fmt.Printf("  delayFilter:              %s\n", config.Settings.DelayFilter)
 	fmt.Printf("  timezoneFilter:           %s\n", config.Settings.TimezoneFilter)
@@ -486,6 +492,7 @@ func showConfig() {
 	fmt.Printf("  autoUpdateJournal:        %s\n", config.Hotkeys.AutoUpdateJournal)
 	fmt.Printf("  updateJournal:            %s\n", config.Hotkeys.UpdateJournal)
 	fmt.Printf("  updateLists:              %s\n", config.Hotkeys.UpdateLists)
+	fmt.Printf("  switchIgnoreCaseFilter:   %s\n", config.Hotkeys.SwitchIgnoreCaseFilter)
 	fmt.Printf("  switchColorMode:          %s\n", config.Hotkeys.SwitchColorMode)
 	fmt.Printf("  switchPriority:           %s\n", config.Hotkeys.SwitchPriority)
 	fmt.Printf("  switchDockerMode:         %s\n", config.Hotkeys.SwitchDockerMode)
@@ -1130,7 +1137,7 @@ func runGoCui(mock bool) {
 		selectedDockerContainer: 0,
 		debugLoadTime:           "0s",
 		debugColorTime:          "0s",
-		selectFilterMode:        "default",
+		selectFilterMode:        "exact",
 		timestampFilterView:     false,
 		sinceDateFilterMode:     false,
 		untilDateFilterMode:     false,
@@ -1182,9 +1189,12 @@ func runGoCui(mock bool) {
 	flag.StringVar(tailFlag, "t", "10000", tailLinesDescription)
 	updateFlag := flag.Int("update-interval", 5, updateIntervalDescription)
 	flag.IntVar(updateFlag, "u", 5, updateIntervalDescription)
+	ignoreCaseFilterFlag := flag.Bool("ignore-case-filter", false, ignoreCaseFilterDescription)
+	flag.BoolVar(ignoreCaseFilterFlag, "i", false, ignoreCaseFilterDescription)
 	minSymbolFilterFlag := flag.Int("min-symbols-filter", 3, minSymbolsFilterDescription)
 	flag.IntVar(minSymbolFilterFlag, "F", 3, minSymbolsFilterDescription)
 	delayFilterFlag := flag.Int("delay-filter", 500, delayFilterDescription)
+	flag.IntVar(delayFilterFlag, "y", 500, delayFilterDescription)
 	timezoneFilterFlag := flag.String("timezone-filter", "+00:00", timezoneFilterDescription)
 	flag.StringVar(timezoneFilterFlag, "T", "+00:00", timezoneFilterDescription)
 	mouseDisable := flag.Bool("mouse-disable", false, mouseDisableDescription)
@@ -1363,6 +1373,17 @@ func runGoCui(mock bool) {
 		}
 	}
 
+	// -i/--ignore-case-filter (#94)
+	if config.Settings.IgnoreCaseFilter != "" && !*ignoreCaseFilterFlag {
+		if strings.EqualFold(config.Settings.IgnoreCaseFilter, "true") {
+			*ignoreCaseFilterFlag = true
+		}
+	}
+
+	if *ignoreCaseFilterFlag {
+		app.ignoreCaseFilter = true
+	}
+
 	// -F/--min-symbols-filter
 	if config.Settings.MinSymbolFilter != "" && *minSymbolFilterFlag == 3 {
 		minSymbolFilterInt, err := strconv.Atoi(config.Settings.MinSymbolFilter)
@@ -1387,7 +1408,7 @@ func runGoCui(mock bool) {
 		}
 	}
 
-	// --delay-filter (#91)
+	// -y/--delay-filter (#91)
 	if config.Settings.DelayFilter != "" && *delayFilterFlag == 500 {
 		delayFilterInt, err := strconv.Atoi(config.Settings.DelayFilter)
 		if err == nil {
@@ -1801,9 +1822,11 @@ func runGoCui(mock bool) {
 		app.commandLineFuzzy(*commandFuzzy, *commandColor)
 		return
 	case *commandRegex != "":
-		filter := strings.ToLower(*commandRegex)
-		// Добавляем флаг для нечувствительности к регистру по умолчанию
-		filter = "(?i)" + filter
+		filter := *commandRegex
+		if app.ignoreCaseFilter {
+			// Опускаем регистр (#94)
+			filter = "(?i)" + strings.ToLower(filter)
+		}
 		// Компилируем и проверяем регулярное выражение
 		regex, err := regexp.Compile(filter)
 		if err != nil {
@@ -2052,7 +2075,7 @@ func (app *App) layout(g *gocui.Gui) error {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
-		v.Title = "Filter (Default)"
+		v.Title = "Filter (Exact)"
 		v.Editable = true                         // включить окно редактируемым для ввода текста
 		v.Editor = app.createFilterEditor("logs") // редактор для обработки ввода
 		v.Wrap = true
@@ -2104,6 +2127,7 @@ func (app *App) layout(g *gocui.Gui) error {
 			" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
 				"Update interval: \033[32m%d\033[0m sec | "+
 				"Color: \033[32m%t\033[0m | "+
+				"Filter ignore case: \033[32m%t\033[0m | "+
 				"Filter by date: \033[32m%s\033[0m | "+
 				"Filter by priority/boot: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 				"Show timestamp: \033[32m%t\033[0m \n "+
@@ -2114,6 +2138,7 @@ func (app *App) layout(g *gocui.Gui) error {
 			logViewCountMap[app.logViewCount],
 			app.logUpdateSeconds,
 			!app.colorModeDisable,
+			app.ignoreCaseFilter,
 			app.filterByDateStatus,
 			app.journalPriority,
 			app.journalBoot,
@@ -5504,6 +5529,7 @@ func (app *App) updateStatus() {
 		" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
 			"Update interval: \033[32m%d\033[0m sec | "+
 			"Color: \033[32m%t\033[0m | "+
+			"Filter ignore case: \033[32m%t\033[0m | "+
 			"Filter by date: \033[32m%s\033[0m | "+
 			"Filter by priority/boot: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
 			"Show timestamp: \033[32m%t\033[0m \n "+
@@ -5514,6 +5540,7 @@ func (app *App) updateStatus() {
 		logViewCountMap[app.logViewCount],
 		app.logUpdateSeconds,
 		!app.colorModeDisable,
+		app.ignoreCaseFilter,
 		app.filterByDateStatus,
 		app.journalPriority,
 		app.journalBoot,
@@ -5601,6 +5628,38 @@ func (app *App) filterLine(line, mode, filter, exactFilter string, regex *regexp
 	case "regex":
 		return app.regexFilter(line, regex)
 	default:
+		// Точное совпадение (exact)
+		// Регистронезависимый поиск и покраска всех вхождений (#94)
+		if app.ignoreCaseFilter {
+			filterLower := strings.ToLower(exactFilter)
+			lineLower := strings.ToLower(line)
+			if !strings.Contains(lineLower, filterLower) {
+				return ""
+			}
+			// Если смена регистра меняет длину строки (Unicode)
+			if len(lineLower) != len(line) || len(filterLower) != len(exactFilter) {
+				return strings.ReplaceAll(lineLower, filterLower, "\x1b[0;44m"+filterLower+"\033[0m")
+			}
+			var result strings.Builder
+			result.Grow(len(line))
+			last := 0
+			// Ищем все вхождения без учета регистра
+			for start := 0; ; {
+				idx := strings.Index(lineLower[start:], filterLower)
+				if idx == -1 {
+					break
+				}
+				start += idx
+				result.WriteString(line[last:start])
+				result.WriteString("\x1b[0;44m")
+				result.WriteString(line[start : start+len(exactFilter)])
+				result.WriteString("\033[0m")
+				last = start + len(exactFilter)
+				start = last
+			}
+			result.WriteString(line[last:])
+			return result.String()
+		}
 		if strings.Contains(line, exactFilter) {
 			return strings.ReplaceAll(line, exactFilter, "\x1b[0;44m"+exactFilter+"\033[0m")
 		}
@@ -5698,13 +5757,17 @@ func (app *App) applyFilterLocked(color bool) {
 		if filter == "" || (filter == "." && app.selectFilterMode == "regex") || len(filter) < app.minSymbolFilter {
 			app.filteredLogLines = append([]string(nil), app.currentLogLines...)
 		} else {
-			// Опускаем регистр ввода текста для фильтра
-			filter = strings.ToLower(filter)
+			// Опускаем регистр искомого текста для фильтра при включенном игнорировании регистра (#94)
+			if app.ignoreCaseFilter {
+				filter = strings.ToLower(filter)
+			}
 			// Проверка регулярного выражения
 			var regex *regexp.Regexp
 			if app.selectFilterMode == "regex" {
-				// Добавляем флаг для нечувствительности к регистру по умолчанию
-				filter = "(?i)" + filter
+				// Добавляем флаг для нечувствительности к регистру в режиме regex
+				if app.ignoreCaseFilter {
+					filter = "(?i)" + filter
+				}
 				// Компилируем регулярное выражение
 				regex, err = regexp.Compile(filter)
 				// В случае синтаксической ошибки регулярного выражения, красим окно красным цветом и завершаем цикл
@@ -5774,8 +5837,11 @@ func (app *App) applyFilterLocked(color bool) {
 func (app *App) fuzzyFilter(inputLine, filter string) string {
 	// Разбиваем текст фильтра на массив из строк
 	filterWords := strings.Fields(filter)
-	// Опускаем регистр текущей строки цикла
-	lineLower := strings.ToLower(inputLine)
+	// Опускаем регистр текущей строки цикла при включенном игнорировании регистра (#94)
+	lineLower := inputLine
+	if app.ignoreCaseFilter {
+		lineLower = strings.ToLower(inputLine)
+	}
 	var match = true
 	// Проверяем, если строка не содержит хотя бы одно слово из фильтра, то пропускаем строку
 	for _, word := range filterWords {
@@ -5792,12 +5858,19 @@ func (app *App) fuzzyFilter(inputLine, filter string) string {
 		originalLine := inputLine
 		// Проходимся по всем словосочетаниям фильтра (массив через пробел) для позиционирования покраски
 		for _, word := range filterWords {
-			wordLower := strings.ToLower(word)
+			wordLower := word
+			if app.ignoreCaseFilter {
+				wordLower = strings.ToLower(word)
+			}
 			start := 0
 			// Ищем все вхождения слова в строке с учетом регистра
 			for {
 				// Находим индекс вхождения с учетом регистра
-				idx := strings.Index(strings.ToLower(originalLine[start:]), wordLower)
+				compareLine := originalLine[start:]
+				if app.ignoreCaseFilter {
+					compareLine = strings.ToLower(compareLine)
+				}
+				idx := strings.Index(compareLine, wordLower)
 				if idx == -1 {
 					break // Если больше нет вхождений, выходим
 				}
@@ -6152,6 +6225,9 @@ func (app *App) processCommandLine(transform func(string) string, color bool) {
 
 // -f/--command-fuzzy
 func (app *App) commandLineFuzzy(filter string, color bool) {
+	if app.ignoreCaseFilter {
+		filter = strings.ToLower(filter)
+	}
 	app.processCommandLine(func(line string) string {
 		return app.fuzzyFilter(line, filter)
 	}, color)
@@ -8566,6 +8642,24 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
+	// Включение и отключение игнорирования регистра при фильтрации (Ctrl+I)
+	customIgnoreCase, altMode := getHotkey(config.Hotkeys.SwitchIgnoreCaseFilter, "ctrl+i")
+	if err := app.gui.SetKeybinding("", customIgnoreCase, altMode, func(g *gocui.Gui, v *gocui.View) error {
+		app.ignoreCaseFilter = !app.ignoreCaseFilter
+		app.logStateMutex.Lock()
+		hasLogLines := len(app.currentLogLines) != 0
+		app.logStateMutex.Unlock()
+		if hasLogLines {
+			app.updateLogsView(true)
+			app.applyFilter(false)
+			app.updateLogOutput(false)
+		}
+		app.updateStatus()
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	// Включение и отключение покраски логов (Ctrl+W)
 	customColor, altMode := getHotkey(config.Hotkeys.SwitchColorMode, "ctrl+w")
 	if err := app.gui.SetKeybinding("", customColor, altMode, func(g *gocui.Gui, v *gocui.View) error {
@@ -8908,7 +9002,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help (ширина, высота)
-	width, height := 108, 44
+	width, height := 108, 45
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -8954,6 +9048,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mU\033[0m - disable streaming of new events (log is loaded once without update).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mR\033[0m - update the current log output manually (relevant in disable streaming mode).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mQ\033[0m - update all log lists.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mI\033[0m - enable or disable ignore case when filtering.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - enable or disable log highlighting.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change read mode for docker logs (stream only or json from file system).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
@@ -9415,7 +9510,7 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 		log.Panicln(err)
 	}
 	switch selectedFilter.Title {
-	case "Filter (Default)":
+	case "Filter (Exact)":
 		selectedFilter.Title = "Filter (Fuzzy)"
 		app.selectFilterMode = "fuzzy"
 	case "Filter (Fuzzy)":
@@ -9473,8 +9568,8 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 		}
 		v.FrameColor = app.selectedFrameColor
 		v.TitleColor = app.selectedTitleColor
-		selectedFilter.Title = "Filter (Default)"
-		app.selectFilterMode = "default"
+		selectedFilter.Title = "Filter (Exact)"
+		app.selectFilterMode = "exact"
 	}
 	if app.selectFilterMode == "timestamp" {
 	} else {
@@ -9490,7 +9585,7 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 		log.Panicln(err)
 	}
 	switch selectedFilter.Title {
-	case "Filter (Default)":
+	case "Filter (Exact)":
 		selectedFilter.Title = "Filter (Timestamp)"
 		app.selectFilterMode = "timestamp"
 		maxX, _ := g.Size()
@@ -9539,8 +9634,8 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 		selectedFilter.Title = "Filter (Fuzzy)"
 		app.selectFilterMode = "fuzzy"
 	case "Filter (Fuzzy)":
-		selectedFilter.Title = "Filter (Default)"
-		app.selectFilterMode = "default"
+		selectedFilter.Title = "Filter (Exact)"
+		app.selectFilterMode = "exact"
 	}
 	return nil
 }
