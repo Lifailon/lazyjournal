@@ -23,6 +23,9 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    env:
+      GH_REPO: ${{ github.repository }}
+
     steps:
       # The PR identity comes from the workflow_run event payload, never from the
       # artifact: the artifact's content is produced by the PR's code and must be
