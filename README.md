@@ -57,10 +57,12 @@ This tool is inspired by and made with love for [LazyDocker](https://github.com/
 
 Supports 4 filtering modes:
 
-- **Default** - case sensitive exact search.
-- **Fuzzy** (like `fzf`) - custom inexact case-insensitive search (searches for all phrases separated by a space anywhere on a line).
-- **Regex** (like `grep`) - search with regular expression support, based on the built-in [regexp](https://pkg.go.dev/regexp) library, case-insensitive by default (in case a regular expression syntax error occurs, the input field will be highlighted in red).
-- **Date** - filtering by date (`since` and/or `until`) for journald logs, as well as Docker or Podman containers (only supported in streaming mode) using the left and right arrow keys. This mode can be used in combination with other filtering modes and can improve loading performance for large logs. Changing the UTC offset is supported using the `-T/--timezone-filter` flag or the `timezoneFilter` configuration parameter (default: `+00:00`).
+- **Exact** (default) - an exact search for the specified substring.
+- **Fuzzy** (like `fzf`) - searches for all specified words (separated by spaces) anywhere within a string.
+- **Regex** (like `grep`) - search with support for regular expressions, based on the built-in [regexp](https://pkg.go.dev/regexp) library (if there is a syntax error in the regular expression, the input field will be highlighted in red).
+- **Date** - filtering by date (`since` and/or `until`) for journald logs, as well as Docker and Podman containers (only supported in streaming mode) using the left and right arrow keys. This mode can be used in combination with other filtering modes and can improve loading performance for large logs. Changing the UTC offset is supported using the `-T/--timezone-filter` flag or the `timezoneFilter` configuration parameter (default: `+00:00`). Use the `delete` (default) key to disable date-based filtering (the current filter mode is displayed at the bottom of the interface).
+
+In all filtering modes, a global ignore case search can be enabled using the `Ctrl+I` hotkey.
 
 ### Highlighting
 
@@ -274,20 +276,21 @@ Host *
 Output highlighting and filtering are supported in command line mode:
 
 ```bash
-# Add an alias to your shell profile
-alias lj=lazyjournal >> $HOME/.bashrc
+# Add an alias to your shell profile (optional)
+echo "alias lj=lazyjournal" >> "$HOME/.bashrc" && source "$HOME/.bashrc"
 
 # Highlight output from standard input
 cat /var/log/syslog | lj -c
 
-# Filtering in fuzzy search
-cat /var/log/syslog | lj -f "error"
+# Filtering in exact search mode
+cat /var/log/syslog | lj -e "error"
+# Filtering in fuzzy search mode
+cat /var/log/syslog | lj -f "error docker"
+# Filtering using regular expressions (regex)
+cat /var/log/syslog | lj -r "error|fail|fatal"
 
-# Filtering using regular expressions
-cat /var/log/syslog | lj -r "error|fatal|fail|crash"
-
-# Filtering with subsequent highlighting of the output
-cat /var/log/syslog | lj -r "error|fatal|fail|crash" -c
+# Highlighting and ignore case are supported with any filtering mode
+cat /var/log/syslog | lj -r "error|fail|fatal" -c -i
 ```
 
 ## Build
@@ -331,9 +334,9 @@ Mentions of the project on social media:
 
 The project is also included in a list of awesome tools:
 
-- [Awesome-Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging)
-- [Awesome-TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development)
-- [Awesome-Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal-ui)
+- [Awesome Go](https://github.com/avelino/awesome-go?tab=readme-ov-file#logging)
+- [Awesome TUIs](https://github.com/rothgar/awesome-tuis?tab=readme-ov-file#development)
+- [Awesome Docker](https://github.com/veggiemonk/awesome-docker?tab=readme-ov-file#terminal)
 
 Please take a look at other useful projects on the pages of these repositories.
 
