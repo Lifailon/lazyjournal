@@ -2,10 +2,7 @@ name: "[PR] Testing report (job #2)"
 
 on:
   workflow_run:
-    # GitHub matches this list on the workflow `name:` only. It must equal the
-    # name in pr-unit-test.yml; a rename there without a change here silently
-    # stops this follower from ever running.
-    workflows: ["[PR] Unit testing (job #1)"]
+    workflows: ['\[PR\] Unit testing (job #1)']
     types: [completed]
 
 permissions: {}
@@ -73,7 +70,7 @@ jobs:
 
       - name: Send message to Telegram
         if: ${{ steps.pr.outputs.skip != 'true' }}
-        uses: appleboy/telegram-action@68ac04bda0e0f4755e24649161566b4b6732cc83  # v1.1.2
+        uses: appleboy/telegram-action@68ac04bda0e0f4755e24649161566b4b6732cc83 # v1.1.2
         continue-on-error: true
         with:
           token: ${{ secrets.TELEGRAM_API_TOKEN }}
