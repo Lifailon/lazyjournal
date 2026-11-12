@@ -361,6 +361,7 @@ var (
 	pathDescription              = "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)"
 	colorDisableDescription      = "Disable log highlighting (ANSI coloring)"
 	commandColorDescription      = "Log highlighting (ANSI coloring) in command-line mode"
+	commandExactDescription      = "Filtering using exact match in command-line mode"
 	commandFuzzyDescription      = "Filtering using fuzzy search in command-line mode"
 	commandRegexDescription      = "Filtering using regular expression (regexp) in command-line mode"
 	sshDescription               = "Connect to a remote host using standard ssh options (e.g. lazyjournal --ssh \"root@192.168.3.100 -p 22\")"
@@ -400,6 +401,7 @@ func showHelp() {
 	fmt.Println("    --kubernetes-context, -K   " + kubernetesContextDescription)
 	fmt.Println("    --kubernetes-namespace, -n " + namespaceDescription)
 	fmt.Println("    --command-color, -c        " + commandColorDescription)
+	fmt.Println("    --command-exact, -e        " + commandExactDescription)
 	fmt.Println("    --command-fuzzy, -f        " + commandFuzzyDescription)
 	fmt.Println("    --command-regex, -r        " + commandRegexDescription)
 	fmt.Println("    --ssh, -s                  " + sshDescription)
@@ -1224,9 +1226,11 @@ func runGoCui(mock bool) {
 	flag.StringVar(kubernetesContextFlag, "K", "default", kubernetesContextDescription)
 	kubernetesNamespaceFlag := flag.String("kubernetes-namespace", "all", namespaceDescription)
 	flag.StringVar(kubernetesNamespaceFlag, "n", "all", namespaceDescription)
-	// cli
+	// cli (command-line mode)
 	commandColor := flag.Bool("command-color", false, commandColorDescription)
 	flag.BoolVar(commandColor, "c", false, commandColorDescription)
+	commandExact := flag.String("command-exact", "", commandExactDescription)
+	flag.StringVar(commandExact, "e", "", commandExactDescription)
 	commandFuzzy := flag.String("command-fuzzy", "", commandFuzzyDescription)
 	flag.StringVar(commandFuzzy, "f", "", commandFuzzyDescription)
 	commandRegex := flag.String("command-regex", "", commandRegexDescription)
@@ -1266,7 +1270,7 @@ func runGoCui(mock bool) {
 
 	// Включаем режим ssh до проверки флагов journald,
 	// чтобы проверки (unit-types/journal-field/journal-boot) выполнялись на удаленном хосте
-	commandLineMode := *commandColor || *commandFuzzy != "" || *commandRegex != ""
+	commandLineMode := *commandColor || *commandExact != "" || *commandFuzzy != "" || *commandRegex != ""
 	if !commandLineMode {
 		if *sshModeFlag != "" {
 			options := strings.Fields(*sshModeFlag)
@@ -1815,9 +1819,12 @@ func runGoCui(mock bool) {
 		}
 	}
 
-	// Command-line modes consume stdin once. Filtering and coloring are fused into
-	// one streaming pipeline, so input can be processed before the producer exits.
+	// В режимах командной строки стандартный ввод (stdin) считывается однократно.
+	// Фильтрация и раскрашивание объединены в единый потоковый конвейер.
 	switch {
+	case *commandExact != "":
+		app.commandLineExact(*commandExact, *commandColor)
+		return
 	case *commandFuzzy != "":
 		app.commandLineFuzzy(*commandFuzzy, *commandColor)
 		return
@@ -1840,8 +1847,8 @@ func runGoCui(mock bool) {
 		return
 	}
 
-	// Включаем режим ssh и заполняем параметры (включая sudo и другие стандартные опции ssh подключения, например, порт)
-	// Инициализация выполняется выше, до проверки флагов journald
+	// Включаем режим ssh и заполняем параметры (включая sudo и другие стандартные опции ssh подключения)
+	// Инициализация выполняется до проверки флагов journald
 
 	var composeVer *exec.Cmd
 	// This probe is only needed by the TUI. Keeping it out of command-line mode
@@ -6237,6 +6244,13 @@ func (app *App) commandLineFuzzy(filter string, color bool) {
 func (app *App) commandLineRegex(regex *regexp.Regexp, color bool) {
 	app.processCommandLine(func(line string) string {
 		return app.regexFilter(line, regex)
+	}, color)
+}
+
+// -e/--command-exact
+func (app *App) commandLineExact(filter string, color bool) {
+	app.processCommandLine(func(line string) string {
+		return app.filterLine(line, "exact", filter, filter, nil)
 	}, color)
 }
 
