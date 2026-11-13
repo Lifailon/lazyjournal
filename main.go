@@ -1025,22 +1025,6 @@ var mapColorFromConfig = map[string]gocui.Attribute{
 	"white":   gocui.ColorWhite,
 }
 
-// Карта для хранения сокращенных значений количества логов для статуса
-var logViewCountMap = map[string]string{
-	"200":    "200",
-	"500":    "500",
-	"1000":   "1K",
-	"5000":   "5K",
-	"10000":  "10K",
-	"20000":  "20K",
-	"30000":  "30K",
-	"40000":  "40K",
-	"50000":  "50K",
-	"100000": "100K",
-	"150000": "150K",
-	"200000": "200K",
-}
-
 // Функция получения списка всех доступных полей в журналах или списка загрузкок системы для проверки значения флага
 func (app *App) journalCheck(mode string) ([]string, error) {
 	var flag string
@@ -1675,16 +1659,7 @@ func runGoCui(mock bool) {
 	}
 
 	// Определяем режим фильтрации по времени для статуса
-	switch {
-	case app.sinceDateFilterMode && !app.untilDateFilterMode:
-		app.filterByDateStatus = "since only"
-	case !app.sinceDateFilterMode && app.untilDateFilterMode:
-		app.filterByDateStatus = "until only"
-	case app.sinceDateFilterMode && app.untilDateFilterMode:
-		app.filterByDateStatus = "since and until"
-	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
-		app.filterByDateStatus = "false"
-	}
+	app.setStatusDateFilter()
 
 	// Определяем списки в панелях по умолчанию при запуске интерфейса (#37)
 
@@ -2130,33 +2105,9 @@ func (app *App) layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Frame = false // Отключаем рамку для статуса
+		v.BgColor = app.backgroundColor
 		v.FgColor = app.foregroundColor
-		_, _ = fmt.Fprintf(v,
-			" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
-				"Update interval: \033[32m%d\033[0m sec | "+
-				"Color: \033[32m%t\033[0m | "+
-				"Filter ignore case: \033[32m%t\033[0m | "+
-				"Filter by date: \033[32m%s\033[0m | "+
-				"Filter by priority/boot: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
-				"Show timestamp: \033[32m%t\033[0m \n "+
-				"SSH mode: \033[32m%s\033[0m | "+
-				"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
-				"Kubernetes context/namespace: \033[32m%s\033[0m/\033[32m%s\033[0m",
-			app.autoScroll,
-			logViewCountMap[app.logViewCount],
-			app.logUpdateSeconds,
-			!app.colorModeDisable,
-			app.ignoreCaseFilter,
-			app.filterByDateStatus,
-			app.journalPriority,
-			app.journalBoot,
-			app.timestampDocker,
-			app.sshStatus,
-			app.dockerStreamLogsStatus,
-			app.dockerContext,
-			app.kubernetesContext,
-			app.kubernetesNamespaceStatus,
-		)
+		app.renderStatus(v)
 	}
 
 	// Включение курсора в режиме фильтра и отключение в остальных окнах
@@ -5450,7 +5401,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				v.FrameColor = app.errorColor
 				v.Clear()
 				_, _ = fmt.Fprint(v, app.sinceFilterText)
-				app.updateFilterStatus()
+				app.updateStatusFilterByDate()
 				return
 			// Игнорируем другие символы
 			default:
@@ -5467,7 +5418,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			_, _ = fmt.Fprint(v, app.sinceFilterText)
 			app.sinceDateFilterMode = true
 			v.FrameColor = app.selectedFrameColor
-			app.updateFilterStatus()
+			app.updateStatusFilterByDate()
 		case "untilFilter":
 			switch {
 			case key == gocui.KeyArrowRight || ch == customRight:
@@ -5479,7 +5430,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 				v.FrameColor = app.errorColor
 				v.Clear()
 				_, _ = fmt.Fprint(v, app.untilFilterText)
-				app.updateFilterStatus()
+				app.updateStatusFilterByDate()
 				return
 			default:
 				return
@@ -5494,7 +5445,7 @@ func (app *App) timestampFilterEditor(window string) gocui.Editor {
 			_, _ = fmt.Fprint(v, app.untilFilterText)
 			app.untilDateFilterMode = true
 			v.FrameColor = app.selectedFrameColor
-			app.updateFilterStatus()
+			app.updateStatusFilterByDate()
 		}
 	})
 }
@@ -5521,55 +5472,133 @@ func (app *App) dateFilterFrameColor(enabled bool, selected bool) gocui.Attribut
 	return app.frameColor
 }
 
-// Функция для обновления статуса работы фильтра по дате
-func (app *App) updateFilterStatus() {
-	switch {
-	case app.sinceDateFilterMode && !app.untilDateFilterMode:
-		app.filterByDateStatus = "since only"
-	case !app.sinceDateFilterMode && app.untilDateFilterMode:
-		app.filterByDateStatus = "until only"
-	case app.sinceDateFilterMode && app.untilDateFilterMode:
-		app.filterByDateStatus = "since and until"
-	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
-		app.filterByDateStatus = "false"
-	}
-	app.updateStatus()
-	app.updateLogsView(false)
-}
-
 // Функция для обновления всех параметров в статусе
 func (app *App) updateStatus() {
 	vStatus, err := app.gui.View("status")
 	if err != nil {
 		return
 	}
-	vStatus.Clear()
-	_, _ = fmt.Fprintf(vStatus,
-		" Tail mode: \033[32m%t\033[0m (\033[32m%s\033[0m lines) | "+
-			"Update interval: \033[32m%d\033[0m sec | "+
-			"Color: \033[32m%t\033[0m | "+
-			"Filter ignore case: \033[32m%t\033[0m | "+
-			"Filter by date: \033[32m%s\033[0m | "+
-			"Filter by priority/boot: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
-			"Show timestamp: \033[32m%t\033[0m \n "+
-			"SSH mode: \033[32m%s\033[0m | "+
-			"Docker mode/context: \033[32m%s\033[0m/\033[32m%s\033[0m | "+
-			"Kubernetes context/namespace: \033[32m%s\033[0m/\033[32m%s\033[0m",
-		app.autoScroll,
-		logViewCountMap[app.logViewCount],
+	app.renderStatus(vStatus)
+}
+
+// Функция для отображения статуса (#97)
+func (app *App) renderStatus(v *gocui.View) {
+	help := ""
+	key := strings.TrimSpace(config.Hotkeys.ShowHelp)
+	if key != "" {
+		help = "Help " + strings.ToUpper(key)
+	}
+	lines := statusInt(app.logViewCount)
+	if lines == "" {
+		lines = app.logViewCount
+	}
+	v.Clear()
+	_, _ = fmt.Fprintf(v,
+		" \033[36m▌\033[0m \033[36mSTREAM\033[0m"+
+			" \033[1mUpdate\033[0m %s"+
+			" \033[2m›\033[0m \033[1mLines\033[0m \033[33m%s\033[0m"+
+			" \033[2m›\033[0m \033[1mInterval\033[0m \033[33m%ds\033[0m"+
+			" \033[2m›\033[0m \033[1;36mFILTER\033[0m"+
+			" \033[1mIgnore case\033[0m %s"+
+			" \033[2m›\033[0m \033[1mDate\033[0m %s"+
+			" \033[2m›\033[0m \033[1mPriority\033[0m %s"+
+			" \033[2m›\033[0m \033[1mBoot\033[0m %s"+
+			" \033[2m›\033[0m \033[1;36mCOLOR\033[0m %s\n",
+		statusBool(app.autoScroll),
+		lines,
 		app.logUpdateSeconds,
-		!app.colorModeDisable,
-		app.ignoreCaseFilter,
-		app.filterByDateStatus,
-		app.journalPriority,
-		app.journalBoot,
-		app.timestampDocker,
-		app.sshStatus,
-		app.dockerStreamLogsStatus,
-		app.dockerContext,
-		app.kubernetesContext,
-		app.kubernetesNamespaceStatus,
+		statusBool(app.ignoreCaseFilter),
+		statusString(app.filterByDateStatus),
+		statusString(app.journalPriority),
+		statusString(app.journalBoot),
+		statusBool(!app.colorModeDisable),
 	)
+	line := fmt.Sprintf(
+		" \033[36m▌\033[0m \033[36mSSH\033[0m %s"+
+			" \033[2m›\033[0m \033[36mDOCKER\033[0m"+
+			" \033[1mContext\033[0m %s"+
+			" \033[2m›\033[0m\033[1m Mode\033[0m %s"+
+			" \033[2m›\033[0m \033[1mTimestamp\033[0m %s"+
+			" \033[2m›\033[0m \033[36mK8S\033[0m"+
+			" \033[1mContext\033[0m %s"+
+			" \033[2m›\033[0m \033[1mNamespace\033[0m %s",
+		statusString(app.sshStatus),
+		statusString(app.dockerContext),
+		statusString(app.dockerStreamLogsStatus),
+		statusBool(app.timestampDocker),
+		statusString(app.kubernetesContext),
+		statusString(app.kubernetesNamespaceStatus),
+	)
+	if help == "" {
+		_, _ = fmt.Fprintln(v, line)
+		return
+	}
+	width, _ := v.Size()
+	padding := width - utf8.RuneCountInString(ansiEscape.ReplaceAllString(line, "")) - utf8.RuneCountInString(help)
+	if padding < 1 {
+		padding = 1
+	}
+	_, _ = fmt.Fprintln(v, line+strings.Repeat(" ", padding)+"\033[2m"+help+"\033[0m")
+}
+
+// Функция для форматирования булевых значений в статусе
+func statusBool(value bool) string {
+	if value {
+		return "\033[32mon\033[0m"
+	}
+	return "\033[33moff\033[0m"
+}
+
+// Функция для округления тысячных значений в статусе
+func statusInt(value string) string {
+	if strings.HasSuffix(value, "000") {
+		return strings.TrimSuffix(value, "000") + "K"
+	}
+	return value
+}
+
+// Функция для форматирования строковых значений в статусе
+func statusString(value string) string {
+	switch value {
+	case "":
+		return "\033[2m—\033[0m"
+	case "true":
+		return "\033[32m" + "on" + "\033[0m"
+	case "false":
+		return "\033[33m" + "off" + "\033[0m"
+	case "stream", "since", "until", "since & until":
+		return "\033[32m" + value + "\033[0m"
+	case "json":
+		return "\033[33m" + value + "\033[0m"
+	case "all", "default", "debug":
+		return "\033[2m" + value + "\033[0m"
+	case "warning", "notice":
+		return "\033[33m" + value + "\033[0m"
+	case "err", "crit", "alert", "emerg":
+		return "\033[31m" + value + "\033[0m"
+	default:
+		return "\033[33m" + value + "\033[0m"
+	}
+}
+
+func (app *App) setStatusDateFilter() {
+	switch {
+	case app.sinceDateFilterMode && !app.untilDateFilterMode:
+		app.filterByDateStatus = "since"
+	case !app.sinceDateFilterMode && app.untilDateFilterMode:
+		app.filterByDateStatus = "until"
+	case app.sinceDateFilterMode && app.untilDateFilterMode:
+		app.filterByDateStatus = "since & until"
+	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
+		app.filterByDateStatus = "false"
+	}
+}
+
+// Функция для обновления статуса работы фильтра по дате
+func (app *App) updateStatusFilterByDate() {
+	app.setStatusDateFilter()
+	app.updateStatus()
+	app.updateLogsView(false)
 }
 
 // Функция для фильтрации всех списоков журналов
@@ -7620,6 +7649,7 @@ func (app *App) updateWindowSize(seconds int) {
 					app.maxVisibleDockerContainers = viewHeight
 				}
 				app.applyFilterList()
+				app.updateStatus()
 			}
 			// Обновляем ширину для фильтрации по дате
 			maxX, _ := g.Size()
@@ -8882,7 +8912,7 @@ func (app *App) setupKeybindings() error {
 			v.FrameColor = app.errorColor
 			v.Clear()
 			_, _ = fmt.Fprint(v, app.sinceFilterText)
-			app.updateFilterStatus()
+			app.updateStatusFilterByDate()
 			return nil
 		}
 	}); err != nil {
@@ -8896,7 +8926,7 @@ func (app *App) setupKeybindings() error {
 			v.FrameColor = app.errorColor
 			v.Clear()
 			_, _ = fmt.Fprint(v, app.untilFilterText)
-			app.updateFilterStatus()
+			app.updateStatusFilterByDate()
 			return nil
 		}
 	}); err != nil {
@@ -9029,7 +9059,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help (ширина, высота)
-	width, height := 108, 45
+	width, height := 108, 46
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -9077,6 +9107,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mQ\033[0m - update all log lists.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mI\033[0m - enable or disable ignore case when filtering.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - enable or disable log highlighting.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mP\033[0m - change the priority for log output filtering.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change read mode for docker logs (stream only or json from file system).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp for Docker and Kubernetes logs.")

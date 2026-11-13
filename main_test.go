@@ -1988,3 +1988,209 @@ func TestRemoteGetOS(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------- Status bar ----------------------------------------
+
+// Проверка форматирования логических значений в статусе
+func TestStatusBool(t *testing.T) {
+	tests := []struct {
+		name  string
+		value bool
+		want  string
+	}{
+		{"on", true, "\033[32mon\033[0m"},
+		{"off", false, "\033[33moff\033[0m"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := statusBool(tt.value); got != tt.want {
+				t.Fatalf("statusBool(%t) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+// Проверка сокращения количества строк в статусе
+func TestStatusInt(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"200", "200"},
+		{"500", "500"},
+		{"1000", "1K"},
+		{"5000", "5K"},
+		{"10000", "10K"},
+		{"150000", "150K"},
+		{"200000", "200K"},
+		{"0", "0"},
+		{"000", "K"},
+		{"1234", "1234"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := statusInt(tt.input); got != tt.want {
+				t.Fatalf("statusInt(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// Проверка форматирования строковых значений в статусе
+func TestStatusString(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"", "\033[2m—\033[0m"},
+		{"true", "\033[32mon\033[0m"},
+		{"false", "\033[33moff\033[0m"},
+		{"stream", "\033[32mstream\033[0m"},
+		{"json", "\033[33mjson\033[0m"},
+		{"all", "\033[2mall\033[0m"},
+		{"default", "\033[2mdefault\033[0m"},
+		{"debug", "\033[2mdebug\033[0m"},
+		{"warning", "\033[33mwarning\033[0m"},
+		{"notice", "\033[33mnotice\033[0m"},
+		{"err", "\033[31merr\033[0m"},
+		{"crit", "\033[31mcrit\033[0m"},
+		{"alert", "\033[31malert\033[0m"},
+		{"emerg", "\033[31memerg\033[0m"},
+		{"since", "\033[32msince\033[0m"},
+		{"until", "\033[32muntil\033[0m"},
+		{"since & until", "\033[32msince & until\033[0m"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := statusString(tt.input); got != tt.want {
+				t.Fatalf("statusString(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// Проверка определения статуса фильтрации по дате
+func TestSetStatusDateFilter(t *testing.T) {
+	tests := []struct {
+		name  string
+		since bool
+		until bool
+		want  string
+	}{
+		{"since", true, false, "since"},
+		{"until", false, true, "until"},
+		{"since & until", true, true, "since & until"},
+		{"disabled", false, false, "false"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &App{sinceDateFilterMode: tt.since, untilDateFilterMode: tt.until}
+			app.setStatusDateFilter()
+			if app.filterByDateStatus != tt.want {
+				t.Fatalf("filterByDateStatus = %q, want %q", app.filterByDateStatus, tt.want)
+			}
+		})
+	}
+}
+
+// Проверка отрисовки двухстрочного статуса и выравнивания подсказки
+func TestRenderStatus(t *testing.T) {
+	oldHelp := config.Hotkeys.ShowHelp
+	config.Hotkeys.ShowHelp = "f1"
+	defer func() { config.Hotkeys.ShowHelp = oldHelp }()
+
+	gui, err := gocui.NewGui(gocui.OutputSimulator, true)
+	if err != nil {
+		t.Fatalf("new gui: %v", err)
+	}
+	defer gui.Close()
+
+	app := &App{
+		autoScroll:                true,
+		logViewCount:              "10000",
+		logUpdateSeconds:          5,
+		ignoreCaseFilter:          false,
+		filterByDateStatus:        "since",
+		journalPriority:           "debug",
+		journalBoot:               "all",
+		colorModeDisable:          false,
+		sshStatus:                 "off",
+		dockerContext:             "default",
+		dockerStreamLogsStatus:    "stream",
+		kubernetesContext:         "default",
+		kubernetesNamespaceStatus: "all",
+		timestampDocker:           false,
+	}
+
+	var buffer string
+	var width int
+	rendered := make(chan struct{})
+	gui.SetManagerFunc(func(g *gocui.Gui) error {
+		_, maxY := g.Size()
+		v, err := g.SetView("status", -1, maxY-3, 300, maxY, 8)
+		if err != nil && err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Frame = false
+		app.renderStatus(v)
+		buffer = v.ViewBuffer()
+		width, _ = v.Size()
+		select {
+		case <-rendered:
+		default:
+			close(rendered)
+		}
+		return nil
+	})
+	go func() {
+		<-rendered
+		time.Sleep(20 * time.Millisecond)
+		gui.Update(func(g *gocui.Gui) error { return gocui.ErrQuit })
+	}()
+	if err := gui.MainLoop(); err != nil && err != gocui.ErrQuit {
+		t.Fatalf("main loop: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimRight(buffer, "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected 2 status lines, got %d: %q", len(lines), buffer)
+	}
+	first := removeANSI(lines[0])
+	for _, want := range []string{
+		"STREAM",
+		"Update on",
+		"Lines 10K",
+		"Interval 5s",
+		"FILTER",
+		"Date since",
+		"Priority debug",
+		"Boot all",
+		"COLOR on",
+	} {
+		if !strings.Contains(first, want) {
+			t.Fatalf("first status line missing %q: %q", want, first)
+		}
+	}
+	second := removeANSI(lines[1])
+	for _, want := range []string{
+		"SSH off",
+		"DOCKER Context default",
+		"Mode stream",
+		"Timestamp off",
+		"K8S Context default",
+		"Namespace all",
+	} {
+		if !strings.Contains(second, want) {
+			t.Fatalf("second status line missing %q: %q", want, second)
+		}
+	}
+	if strings.Index(second, "Timestamp") > strings.Index(second, "K8S") {
+		t.Fatalf("Timestamp must be before K8S: %q", second)
+	}
+	if !strings.HasSuffix(second, "Help F1") {
+		t.Fatalf("help is not right-aligned at the end: %q", second)
+	}
+	if got := len([]rune(second)); got != width {
+		t.Fatalf("second status line width = %d, want view width %d: %q", got, width, second)
+	}
+}
