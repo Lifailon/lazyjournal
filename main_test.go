@@ -617,6 +617,52 @@ func TestCommandColor(t *testing.T) {
 	os.Stdin = originalStdin
 }
 
+func TestCommandExactFilter(t *testing.T) {
+	app := &App{
+		testMode:                     false,
+		startServices:                0,
+		selectedJournal:              0,
+		startFiles:                   0,
+		selectedFile:                 0,
+		startDockerContainers:        0,
+		selectedDockerContainer:      0,
+		selectUnits:                  "services",
+		selectPath:                   "varlog",
+		selectContainerizationSystem: "docker",
+		selectFilterMode:             "exact",
+		logViewCount:                 "10000",
+		logUpdateSeconds:             5,
+		journalListFrameColor:        gocui.ColorDefault,
+		fileSystemFrameColor:         gocui.ColorDefault,
+		dockerFrameColor:             gocui.ColorDefault,
+		autoScroll:                   true,
+		trimHttpRegex:                trimHttpRegex,
+		trimHttpsRegex:               trimHttpsRegex,
+		hexByteRegex:                 hexByteRegex,
+		dateTimeRegex:                dateTimeRegex,
+		integersInputRegex:           integersInputRegex,
+		syslogUnitRegex:              syslogUnitRegex,
+		keybindingsEnabled:           true,
+		uniquePrefixColorMap:         make(map[string]string),
+	}
+
+	data, err := os.ReadFile("color.log")
+	if err != nil {
+		t.Fatalf("Error read test file: %v", err)
+	}
+	bytes.NewReader(data)
+	pr, pw, _ := os.Pipe()
+	os.Stdin = pr
+	go func() {
+		_, _ = pw.Write(data)
+		_ = pw.Close()
+	}()
+
+	var filter = "success"
+	app.commandLineExact(filter, false)
+	app.commandLineExact(filter, true)
+}
+
 func TestCommandFuzzyFilter(t *testing.T) {
 	app := &App{
 		testMode:                     false,
