@@ -124,6 +124,7 @@ type Hotkeys struct {
 	SwitchIgnoreCaseFilter string `yaml:"switchIgnoreCaseFilter"`
 	SwitchColorMode        string `yaml:"switchColorMode"`
 	SwitchPriority         string `yaml:"switchPriority"`
+	SwitchSystemBootPeriod string `yaml:"switchSystemBootPeriod"`
 	SwitchDockerMode       string `yaml:"switchDockerMode"`
 	SwitchStreamMode       string `yaml:"switchStreamMode"`
 	TimestampShow          string `yaml:"timestampShow"`
@@ -249,7 +250,8 @@ type App struct {
 	untilFilterText     string    // конец отрезка времени
 	untilFilterDate     time.Time // конец отрезка времени в формате time для проверки
 	limitFilterDate     time.Time // предельное значение для проверки untilFilterDate
-	filterByDateStatus  string    // текстовое значение режима работы фильтра для статуса
+	filterByDateStatus  string    // текстовое значение режима работы фильтра по дате для статуса
+	filterByBootStatus  string    // текстовое значение режима работы фильтра по номеру загрузки системы для статуса
 	timezoneFilter      string    // смещение UTC для фильтрации по дате
 
 	// Текст для фильтрации список журналов
@@ -498,6 +500,7 @@ func showConfig() {
 	fmt.Printf("  switchIgnoreCaseFilter:   %s\n", config.Hotkeys.SwitchIgnoreCaseFilter)
 	fmt.Printf("  switchColorMode:          %s\n", config.Hotkeys.SwitchColorMode)
 	fmt.Printf("  switchPriority:           %s\n", config.Hotkeys.SwitchPriority)
+	fmt.Printf("  switchSystemBootPeriod:   %s\n", config.Hotkeys.SwitchSystemBootPeriod)
 	fmt.Printf("  switchDockerMode:         %s\n", config.Hotkeys.SwitchDockerMode)
 	fmt.Printf("  switchStreamMode:         %s\n", config.Hotkeys.SwitchStreamMode)
 	fmt.Printf("  timestampShow:            %s\n", config.Hotkeys.TimestampShow)
@@ -1618,7 +1621,7 @@ func runGoCui(mock bool) {
 			if err != nil {
 				app.dockerStreamLogsStatus = app.dockerStreamMode
 			} else {
-				app.dockerStreamLogsStatus = "json-file"
+				app.dockerStreamLogsStatus = "json"
 			}
 		}
 	}
@@ -1658,8 +1661,9 @@ func runGoCui(mock bool) {
 		app.kubernetesNamespace = "--namespace=" + *kubernetesNamespaceFlag
 	}
 
-	// Определяем режим фильтрации по времени для статуса
+	// Определяем режимы фильтрации для статуса
 	app.setStatusDateFilter()
+	app.setStatusBootFilter()
 
 	// Определяем списки в панелях по умолчанию при запуске интерфейса (#37)
 
@@ -4762,7 +4766,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			output, err = readLastLines(logFilePath, maxLines)
 		}
 		// Если ошибка чтения, значит нет доступа и переходим к чтению из потока
-		if err != nil && app.dockerStreamLogsStatus == "json-file" {
+		if err != nil && app.dockerStreamLogsStatus == "json" {
 			readFileContainer = false
 			app.dockerStreamLogsStatus = app.dockerStreamMode
 			app.dockerStreamLogs = true
@@ -4776,7 +4780,7 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 			}
 		} else {
 			readFileContainer = true
-			app.dockerStreamLogsStatus = "json-file"
+			app.dockerStreamLogsStatus = "json"
 		}
 		if readFileContainer {
 			// Определяем изменения файла после чтения
@@ -5494,34 +5498,34 @@ func (app *App) renderStatus(v *gocui.View) {
 	}
 	v.Clear()
 	_, _ = fmt.Fprintf(v,
-		" \033[36m▌\033[0m \033[36mSTREAM\033[0m"+
+		" \033[36m▌\033[0m\033[36m STREAM\033[0m"+
 			" \033[1mUpdate\033[0m %s"+
-			" \033[2m›\033[0m \033[1mLines\033[0m \033[33m%s\033[0m"+
-			" \033[2m›\033[0m \033[1mInterval\033[0m \033[33m%ds\033[0m"+
-			" \033[2m›\033[0m \033[1;36mFILTER\033[0m"+
+			" \033[2m•\033[0m\033[1m Lines\033[0m \033[33m%s\033[0m"+
+			" \033[2m•\033[0m\033[1m Interval\033[0m \033[33m%ds\033[0m"+
+			" \033[2m│\033[0m\033[1;36m FILTER\033[0m"+
 			" \033[1mIgnore case\033[0m %s"+
-			" \033[2m›\033[0m \033[1mDate\033[0m %s"+
-			" \033[2m›\033[0m \033[1mPriority\033[0m %s"+
-			" \033[2m›\033[0m \033[1mBoot\033[0m %s"+
-			" \033[2m›\033[0m \033[1;36mCOLOR\033[0m %s\n",
+			" \033[2m•\033[0m\033[1m Date\033[0m %s"+
+			" \033[2m•\033[0m\033[1m Priority\033[0m %s"+
+			" \033[2m•\033[0m\033[1m Boot\033[0m %s"+
+			" \033[2m│\033[0m\033[1;36m COLOR\033[0m %s\n",
 		statusBool(app.autoScroll),
 		lines,
 		app.logUpdateSeconds,
 		statusBool(app.ignoreCaseFilter),
 		statusString(app.filterByDateStatus),
 		statusString(app.journalPriority),
-		statusString(app.journalBoot),
+		statusString(app.filterByBootStatus),
 		statusBool(!app.colorModeDisable),
 	)
 	line := fmt.Sprintf(
-		" \033[36m▌\033[0m \033[36mSSH\033[0m %s"+
-			" \033[2m›\033[0m \033[36mDOCKER\033[0m"+
+		" \033[36m▌\033[0m\033[36m SSH\033[0m %s"+
+			" \033[2m│\033[0m\033[36m DOCKER\033[0m"+
 			" \033[1mContext\033[0m %s"+
-			" \033[2m›\033[0m\033[1m Mode\033[0m %s"+
-			" \033[2m›\033[0m \033[1mTimestamp\033[0m %s"+
-			" \033[2m›\033[0m \033[36mK8S\033[0m"+
+			" \033[2m•\033[0m\033[1m Source\033[0m %s"+
+			" \033[2m•\033[0m\033[1m Timestamp\033[0m %s"+
+			" \033[2m│\033[0m\033[36m K8S\033[0m"+
 			" \033[1mContext\033[0m %s"+
-			" \033[2m›\033[0m \033[1mNamespace\033[0m %s",
+			" \033[2m•\033[0m\033[1m Namespace\033[0m %s",
 		statusString(app.sshStatus),
 		statusString(app.dockerContext),
 		statusString(app.dockerStreamLogsStatus),
@@ -5563,21 +5567,21 @@ func statusString(value string) string {
 	case "":
 		return "\033[2m—\033[0m"
 	case "true":
-		return "\033[32m" + "on" + "\033[0m"
+		return "\033[32m" + "on" + "\033[0m" // Green
 	case "false":
-		return "\033[33m" + "off" + "\033[0m"
-	case "stream", "since", "until", "since & until":
-		return "\033[32m" + value + "\033[0m"
-	case "json":
-		return "\033[33m" + value + "\033[0m"
+		return "\033[33m" + "off" + "\033[0m" // Yellow
+	case "stream", "since", "until", "since & until", "current":
+		return "\033[32m" + value + "\033[0m" // Green
 	case "all", "default", "debug":
-		return "\033[2m" + value + "\033[0m"
-	case "warning", "notice":
-		return "\033[33m" + value + "\033[0m"
+		return "\033[2m" + value + "\033[0m" // grey
+	case "info", "notice":
+		return "\033[34m" + value + "\033[0m" // Blue
+	case "warning", "previous", "json":
+		return "\033[33m" + value + "\033[0m" // Yellow
 	case "err", "crit", "alert", "emerg":
-		return "\033[31m" + value + "\033[0m"
+		return "\033[31m" + value + "\033[0m" // Red
 	default:
-		return "\033[33m" + value + "\033[0m"
+		return "\033[33m" + value + "\033[0m" // Yellow
 	}
 }
 
@@ -5591,6 +5595,17 @@ func (app *App) setStatusDateFilter() {
 		app.filterByDateStatus = "since & until"
 	case !app.sinceDateFilterMode && !app.untilDateFilterMode:
 		app.filterByDateStatus = "false"
+	}
+}
+
+func (app *App) setStatusBootFilter() {
+	switch {
+	case app.journalBoot == "0":
+		app.filterByBootStatus = "current"
+	case app.journalBoot == "-1":
+		app.filterByBootStatus = "previous"
+	default:
+		app.filterByBootStatus = app.journalBoot
 	}
 }
 
@@ -8770,13 +8785,39 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
+	// Switch system boot period hotkey for journald (Ctrl+B) #97
+	customBoot, altMode := getHotkey(config.Hotkeys.SwitchSystemBootPeriod, "ctrl+b")
+	if err := app.gui.SetKeybinding("", customBoot, altMode, func(g *gocui.Gui, v *gocui.View) error {
+		switch app.journalBoot {
+		case "all":
+			app.journalBoot = "0"
+		case "0":
+			app.journalBoot = "-1"
+		case "-1":
+			app.journalBoot = "all"
+		}
+		app.setStatusBootFilter()
+		app.logStateMutex.Lock()
+		hasLogLines := len(app.currentLogLines) != 0
+		app.logStateMutex.Unlock()
+		if hasLogLines {
+			app.updateLogsView(true)
+			app.applyFilter(false)
+			app.updateLogOutput(false)
+		}
+		app.updateStatus()
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	// Docker log load mode from stream or file system (Ctrl+D)
 	// Переключение режима чтения журналов Docker из потоков или файловой системы
 	customDockerMode, altMode := getHotkey(config.Hotkeys.SwitchDockerMode, "ctrl+d")
 	if err := app.gui.SetKeybinding("", customDockerMode, altMode, func(g *gocui.Gui, v *gocui.View) error {
 		if app.dockerStreamLogs {
 			app.dockerStreamLogs = false
-			app.dockerStreamLogsStatus = "json-file"
+			app.dockerStreamLogsStatus = "json"
 		} else {
 			app.dockerStreamLogs = true
 			app.dockerStreamLogsStatus = app.dockerStreamMode
@@ -9059,7 +9100,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help (ширина, высота)
-	width, height := 108, 46
+	width, height := 108, 47
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -9107,9 +9148,10 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mQ\033[0m - update all log lists.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mI\033[0m - enable or disable ignore case when filtering.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mW\033[0m - enable or disable log highlighting.")
-	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mP\033[0m - change the priority for log output filtering.")
-	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change read mode for docker logs (stream only or json from file system).")
-	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change stream display mode for docker logs (all, stdout or stderr only).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mP\033[0m - change the priority for journald log filtering (debug, info, notice, warning, err, etc.).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mB\033[0m - change the system boot period for journald log filtering (all, current or previous).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change the Docker log reading mode (sources: stream or json file).")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change the Docker log stream display mode (all, stdout or stderr only).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp for Docker and Kubernetes logs.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mShift\033[0m+\033[32mC\033[0m - copy the visible text from the log window to the clipboard.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mC\033[0m - clear input text in the filter window or exit.")

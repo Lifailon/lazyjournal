@@ -85,6 +85,7 @@ hotkeys:
   switchIgnoreCaseFilter: ctrl+i
   switchColorMode: ctrl+w
   switchPriority: ctrl+p
+  switchSystemBootPeriod: ctrl+b
   switchDockerMode: ctrl+d
   switchStreamMode: ctrl+s
   timestampShow: ctrl+t
