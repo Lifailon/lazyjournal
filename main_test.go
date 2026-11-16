@@ -2167,7 +2167,7 @@ func TestNextJournalBoot(t *testing.T) {
 }
 
 // Проверка формирования аргументов journalctl для journald-списков
-func TestbuildJournaldArgs(t *testing.T) {
+func TestBuildJournaldArgs(t *testing.T) {
 	app := &App{
 		journalField:      "SYSLOG_IDENTIFIER",
 		journalPriority:   "err",
@@ -2290,7 +2290,7 @@ func TestRenderStatus(t *testing.T) {
 		"Date since",
 		"Priority debug",
 		"Boot all",
-		"COLOR on",
+		"Color on",
 	} {
 		if !strings.Contains(first, want) {
 			t.Fatalf("first status line missing %q: %q", want, first)
