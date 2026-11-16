@@ -62,7 +62,7 @@ Supports 4 filtering modes:
 - **Regex** (like `grep`) - search with support for regular expressions, based on the built-in [regexp](https://pkg.go.dev/regexp) library (if there is a syntax error in the regular expression, the input field will be highlighted in red).
 - **Date** - filtering by date (`since` and/or `until`) for journald logs, as well as Docker and Podman containers (only supported in streaming mode) using the left and right arrow keys. This mode can be used in combination with other filtering modes and can improve loading performance for large logs. Changing the UTC offset is supported using the `-T/--timezone-filter` flag or the `timezoneFilter` configuration parameter (default: `+00:00`). Use the `delete` (default) key to disable date-based filtering (the current filter mode is displayed at the bottom of the interface).
 
-In all filtering modes, a global ignore case search can be enabled using the `Ctrl+I` hotkey.
+In all filtering modes, a global ignore case search can be enabled using the `Ctrl+I` hotkey. In addition to text-based filtering, `journald` logs can be filtered by priority (`Ctrl+P`, `-J/--journal-priority`, or `journalPriority`) and by system boot period (`Ctrl+B`, `-b/--journal-boot`, or `journalBootPeriod`).
 
 ### Highlighting
 

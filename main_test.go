@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -280,7 +281,7 @@ func TestLinuxJournal(t *testing.T) {
 				unitType:           "service",
 				journalField:       "SYSLOG_IDENTIFIER",
 				journalPriority:    "debug",
-				journalBoot:        "all",
+				journalBootPeriod:  "all",
 			}
 
 			app.loadServices(app.selectUnits)
@@ -1798,7 +1799,7 @@ func TestSSHManagerNavigation(t *testing.T) {
 		selectedTitleColor:           gocui.ColorYellow,
 		filterByDateStatus:           "false",
 		journalPriority:              "debug",
-		journalBoot:                  "all",
+		journalBootPeriod:            "all",
 	}
 	var err error
 	g, err = gocui.NewGui(gocui.OutputSimulator, true)
@@ -2051,7 +2052,8 @@ func TestStatusString(t *testing.T) {
 		{"default", "\033[2mdefault\033[0m"},
 		{"debug", "\033[2mdebug\033[0m"},
 		{"warning", "\033[33mwarning\033[0m"},
-		{"notice", "\033[33mnotice\033[0m"},
+		{"info", "\033[34minfo\033[0m"},
+		{"notice", "\033[34mnotice\033[0m"},
 		{"err", "\033[31merr\033[0m"},
 		{"crit", "\033[31mcrit\033[0m"},
 		{"alert", "\033[31malert\033[0m"},
@@ -2059,6 +2061,8 @@ func TestStatusString(t *testing.T) {
 		{"since", "\033[32msince\033[0m"},
 		{"until", "\033[32muntil\033[0m"},
 		{"since & until", "\033[32msince & until\033[0m"},
+		{"current", "\033[32mcurrent\033[0m"},
+		{"previous", "\033[33mprevious\033[0m"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
@@ -2093,6 +2097,127 @@ func TestSetStatusDateFilter(t *testing.T) {
 	}
 }
 
+// Проверка определения статуса фильтрации по номеру загрузки системы
+func TestSetStatusBootFilter(t *testing.T) {
+	tests := []struct {
+		name string
+		boot string
+		want string
+	}{
+		{"all", "all", "all"},
+		{"current", "0", "current"},
+		{"previous", "-1", "previous"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &App{journalBootPeriod: tt.boot}
+			app.setStatusBootFilter()
+			if app.filterByBootStatus != tt.want {
+				t.Fatalf("filterByBootStatus = %q, want %q", app.filterByBootStatus, tt.want)
+			}
+		})
+	}
+}
+
+// Проверка приоритета флага и конфигурации при выборе периода загрузки системы
+func TestResolveJournalBoot(t *testing.T) {
+	tests := []struct {
+		name   string
+		passed bool
+		flag   string
+		config string
+		want   string
+	}{
+		{"flag over config", true, "-1", "-2", "-1"},
+		{"config fallback", false, "all", "-2", "-2"},
+		{"default", false, "all", "", "all"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveJournalBoot(tt.passed, tt.flag, tt.config); got != tt.want {
+				t.Fatalf("resolveJournalBoot(%t, %q, %q) = %q, want %q", tt.passed, tt.flag, tt.config, got, tt.want)
+			}
+		})
+	}
+}
+
+// Проверка цикла переключения периода загрузки системы
+func TestNextJournalBoot(t *testing.T) {
+	tests := []struct {
+		name       string
+		current    string
+		initial    string
+		initialSet bool
+		want       string
+	}{
+		{"all", "all", "", false, "0"},
+		{"current", "0", "", false, "-1"},
+		{"previous", "-1", "", false, "all"},
+		{"previous to flag value", "-1", "-2", true, "-2"},
+		{"flag value to all", "-2", "-2", true, "all"},
+		{"unknown value", "5", "", false, "all"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := nextJournalBoot(tt.current, tt.initial, tt.initialSet); got != tt.want {
+				t.Fatalf("nextJournalBoot(%q, %q, %t) = %q, want %q", tt.current, tt.initial, tt.initialSet, got, tt.want)
+			}
+		})
+	}
+}
+
+// Проверка формирования аргументов journalctl для journald-списков
+func TestBuildJournaldArgs(t *testing.T) {
+	app := &App{
+		journalField:      "SYSLOG_IDENTIFIER",
+		journalPriority:   "err",
+		journalBootPeriod: "0",
+		logViewCount:      "10000",
+	}
+
+	// Системные юниты: фильтр по unit, boot и приоритету
+	args := app.buildJournaldArgs("systemUnits", "sshd.service")
+	for _, want := range []string{"--unit=sshd.service", "--boot=0", "--priority=err", "--no-pager", "--lines=10000"} {
+		if !slices.Contains(args, want) {
+			t.Fatalf("systemUnits args missing %q: %v", want, args)
+		}
+	}
+	if slices.Contains(args, "--user") {
+		t.Fatalf("systemUnits args must not contain --user: %v", args)
+	}
+
+	// Пользовательские юниты: добавляется --user
+	args = app.buildJournaldArgs("userUnits", "_all")
+	if !slices.Contains(args, "--user") {
+		t.Fatalf("userUnits args missing --user: %v", args)
+	}
+	if slices.Contains(args, "--unit=_all") {
+		t.Fatalf("userUnits args must not contain --unit=_all: %v", args)
+	}
+
+	// Системные журналы: фильтр по полю вместо unit
+	args = app.buildJournaldArgs("systemJournals", "kernel")
+	if !slices.Contains(args, "SYSLOG_IDENTIFIER=kernel") {
+		t.Fatalf("systemJournals args missing field filter: %v", args)
+	}
+	if slices.Contains(args, "--unit=kernel") {
+		t.Fatalf("systemJournals args must not contain --unit=kernel: %v", args)
+	}
+
+	// Фильтры по времени добавляются парами флаг/значение
+	app.sinceDateFilterMode = true
+	app.sinceFilterText = "2026-01-01"
+	app.untilDateFilterMode = true
+	app.untilFilterText = "2026-01-02"
+	args = app.buildJournaldArgs("systemUnits", "_all")
+	if !slices.Contains(args, "--since") || !slices.Contains(args, "2026-01-01") {
+		t.Fatalf("args missing --since filter: %v", args)
+	}
+	if !slices.Contains(args, "--until") || !slices.Contains(args, "2026-01-02") {
+		t.Fatalf("args missing --until filter: %v", args)
+	}
+}
+
 // Проверка отрисовки двухстрочного статуса и выравнивания подсказки
 func TestRenderStatus(t *testing.T) {
 	oldHelp := config.Hotkeys.ShowHelp
@@ -2112,7 +2237,7 @@ func TestRenderStatus(t *testing.T) {
 		ignoreCaseFilter:          false,
 		filterByDateStatus:        "since",
 		journalPriority:           "debug",
-		journalBoot:               "all",
+		filterByBootStatus:        "all",
 		colorModeDisable:          false,
 		sshStatus:                 "off",
 		dockerContext:             "default",
@@ -2165,7 +2290,7 @@ func TestRenderStatus(t *testing.T) {
 		"Date since",
 		"Priority debug",
 		"Boot all",
-		"COLOR on",
+		"Color on",
 	} {
 		if !strings.Contains(first, want) {
 			t.Fatalf("first status line missing %q: %q", want, first)
@@ -2175,7 +2300,7 @@ func TestRenderStatus(t *testing.T) {
 	for _, want := range []string{
 		"SSH off",
 		"DOCKER Context default",
-		"Mode stream",
+		"Source stream",
 		"Timestamp off",
 		"K8S Context default",
 		"Namespace all",
