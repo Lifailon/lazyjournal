@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"os"
@@ -2317,5 +2319,1478 @@ func TestRenderStatus(t *testing.T) {
 	}
 	if got := len([]rune(second)); got != width {
 		t.Fatalf("second status line width = %d, want view width %d: %q", got, width, second)
+	}
+}
+
+func TestUpdateStatus(t *testing.T) {
+	app := &App{
+		gui:          newTestGui(t),
+		autoScroll:   true,
+		logViewCount: "10000",
+	}
+	app.updateStatus()
+
+	app.gui = newTestGui(t, "status")
+	app.updateStatus()
+	view, err := app.gui.View("status")
+	if err != nil {
+		t.Fatalf("view status: %v", err)
+	}
+	if !strings.Contains(removeANSI(view.ViewBuffer()), "STREAM") {
+		t.Fatalf("status view was not rendered: %q", view.ViewBuffer())
+	}
+}
+
+func TestRenderStatusNoHelp(t *testing.T) {
+	oldHelp := config.Hotkeys.ShowHelp
+	config.Hotkeys.ShowHelp = "   "
+	defer func() { config.Hotkeys.ShowHelp = oldHelp }()
+
+	app := &App{
+		gui:                newTestGui(t, "status"),
+		autoScroll:         true,
+		logViewCount:       "10000",
+		logUpdateSeconds:   5,
+		sshStatus:          "off",
+		dockerContext:      "default",
+		journalPriority:    "all",
+		filterByBootStatus: "all",
+	}
+	view, _ := app.gui.View("status")
+	app.renderStatus(view)
+	buffer := view.ViewBuffer()
+	if strings.Contains(removeANSI(buffer), "Help") {
+		t.Fatalf("help must be hidden: %q", buffer)
+	}
+	if lines := strings.Split(strings.TrimRight(buffer, "\n"), "\n"); len(lines) != 2 {
+		t.Fatalf("expected 2 status lines, got %d: %q", len(lines), buffer)
+	}
+}
+
+func TestRenderStatusNarrowAndFallback(t *testing.T) {
+	oldHelp := config.Hotkeys.ShowHelp
+	config.Hotkeys.ShowHelp = "?"
+	defer func() { config.Hotkeys.ShowHelp = oldHelp }()
+
+	app := &App{
+		gui:                newTestGuiWidth(t, 40, "status"),
+		autoScroll:         false,
+		logViewCount:       "",
+		logUpdateSeconds:   1,
+		sshStatus:          "off",
+		dockerContext:      "default",
+		journalPriority:    "all",
+		filterByBootStatus: "all",
+	}
+	view, _ := app.gui.View("status")
+	app.renderStatus(view)
+	lines := strings.Split(strings.TrimRight(view.ViewBuffer(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 status lines, got %d", len(lines))
+	}
+	first := removeANSI(lines[0])
+	if !strings.Contains(first, "Lines ") {
+		t.Fatalf("status fallback line missing: %q", first)
+	}
+	second := removeANSI(lines[1])
+	if !strings.HasSuffix(second, " Help ?") {
+		t.Fatalf("narrow status must use one space before help: %q", second)
+	}
+}
+
+func TestStatusStringUnknown(t *testing.T) {
+	if got, want := statusString("custom"), "\033[33mcustom\033[0m"; got != want {
+		t.Fatalf("statusString unknown = %q, want %q", got, want)
+	}
+}
+
+func TestUpdateStatusFilterByDate(t *testing.T) {
+	app := &App{
+		gui:              newTestGui(t, "status", "logs"),
+		colorModeDisable: true,
+	}
+	app.updateStatusFilterByDate()
+	if app.filterByDateStatus != "false" {
+		t.Fatalf("filterByDateStatus = %q, want false", app.filterByDateStatus)
+	}
+
+	app.sinceDateFilterMode = true
+	app.updateStatusFilterByDate()
+	if app.filterByDateStatus != "since" {
+		t.Fatalf("filterByDateStatus = %q, want since", app.filterByDateStatus)
+	}
+
+	app.untilDateFilterMode = true
+	app.updateStatusFilterByDate()
+	if app.filterByDateStatus != "since & until" {
+		t.Fatalf("filterByDateStatus = %q, want since & until", app.filterByDateStatus)
+	}
+	view, _ := app.gui.View("status")
+	if !strings.Contains(removeANSI(view.ViewBuffer()), "Date since & until") {
+		t.Fatalf("status view missing date filter: %q", view.ViewBuffer())
+	}
+
+	app.sinceDateFilterMode = false
+	app.updateStatusFilterByDate()
+	if app.filterByDateStatus != "until" {
+		t.Fatalf("filterByDateStatus = %q, want until", app.filterByDateStatus)
+	}
+}
+
+// ---------------------------------------- Filter ----------------------------------------
+
+func newTestApp() *App {
+	return &App{
+		testMode:             true,
+		logViewCount:         "10000",
+		logUpdateSeconds:     5,
+		minSymbolFilter:      1,
+		ignoreCaseFilter:     true,
+		selectFilterMode:     "exact",
+		hostName:             "testhost",
+		userName:             "testuser",
+		frameColor:           gocui.ColorDefault,
+		selectedFrameColor:   gocui.ColorGreen,
+		errorColor:           gocui.ColorRed,
+		trimHttpRegex:        trimHttpRegex,
+		trimHttpsRegex:       trimHttpsRegex,
+		hexByteRegex:         hexByteRegex,
+		dateTimeRegex:        dateTimeRegex,
+		integersInputRegex:   integersInputRegex,
+		syslogUnitRegex:      syslogUnitRegex,
+		uniquePrefixColorMap: make(map[string]string),
+	}
+}
+
+func newTestGui(t *testing.T, names ...string) *gocui.Gui {
+	return newTestGuiWidth(t, 100, names...)
+}
+
+func newTestGuiWidth(t *testing.T, width int, names ...string) *gocui.Gui {
+	t.Helper()
+	gui, err := gocui.NewGui(gocui.OutputSimulator, true)
+	if err != nil {
+		t.Fatalf("new gui: %v", err)
+	}
+	names = append(names, "scrollLogs")
+	for _, name := range names {
+		if _, err := gui.SetView(name, 0, 0, width, 20, 0); err != nil && err != gocui.ErrUnknownView {
+			gui.Close()
+			t.Fatalf("set view %q: %v", name, err)
+		}
+	}
+	t.Cleanup(func() { gui.Close() })
+	return gui
+}
+
+func feedStdin(t *testing.T, data string) {
+	t.Helper()
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stdin pipe: %v", err)
+	}
+	old := os.Stdin
+	os.Stdin = pr
+	t.Cleanup(func() {
+		os.Stdin = old
+		_ = pr.Close()
+	})
+	go func() {
+		_, _ = pw.WriteString(data)
+		_ = pw.Close()
+	}()
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	return captureOutput(t, &os.Stdout, "stdout", fn)
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	return captureOutput(t, &os.Stderr, "stderr", fn)
+}
+
+func captureOutput(t *testing.T, target **os.File, name string, fn func()) string {
+	t.Helper()
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("%s pipe: %v", name, err)
+	}
+	old := *target
+	*target = pw
+	done := make(chan string, 1)
+	go func() {
+		var builder strings.Builder
+		scanner := bufio.NewScanner(pr)
+		for scanner.Scan() {
+			builder.WriteString(scanner.Text())
+			builder.WriteByte('\n')
+		}
+		done <- builder.String()
+	}()
+	fn()
+	_ = pw.Close()
+	*target = old
+	output := <-done
+	_ = pr.Close()
+	return output
+}
+
+func assertContains(t *testing.T, got, want string) {
+	t.Helper()
+	if !strings.Contains(got, want) {
+		t.Fatalf("%q does not contain %q", got, want)
+	}
+}
+
+func TestCompileFilterRegex(t *testing.T) {
+	regex, err := compileFilterRegex(`\S+`, true)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if !regex.MatchString("ABC") {
+		t.Fatal(`\S+ with ignore case must match upper case text`)
+	}
+	if regex.MatchString("   ") {
+		t.Fatal(`\S+ with ignore case must not match spaces`)
+	}
+	if _, err := compileFilterRegex("[", false); err == nil {
+		t.Fatal("invalid regex must return an error")
+	}
+}
+
+func TestExactFilter(t *testing.T) {
+	app := newTestApp()
+
+	got := app.exactFilter("Alpha alpha", "Alpha")
+	if strings.Count(got, "\x1b[0;44m") != 2 {
+		t.Fatalf("exact ignore case must highlight all matches: %q", got)
+	}
+
+	app.ignoreCaseFilter = false
+	if got := app.exactFilter("alpha", "Alpha"); got != "" {
+		t.Fatalf("case-sensitive exact match must fail, got %q", got)
+	}
+	if got := app.exactFilter("Alpha Alpha", "Alpha"); strings.Count(got, "\x1b[0;44m") != 2 {
+		t.Fatalf("case-sensitive exact match must highlight all matches: %q", got)
+	}
+
+	app.ignoreCaseFilter = true
+	got = app.exactFilter("İstanbul", "İ")
+	if !strings.Contains(got, "\x1b[0;44m") {
+		t.Fatalf("unicode exact fallback must highlight: %q", got)
+	}
+}
+
+func TestFuzzyFilter(t *testing.T) {
+	app := newTestApp()
+
+	if got := app.fuzzyFilter("Hello World", "hello world"); !strings.Contains(got, "\x1b[0;44mHello\x1b[0m") {
+		t.Fatalf("fuzzy ignore case did not highlight: %q", got)
+	}
+	if got := app.fuzzyFilter("hello", "hello world"); got != "" {
+		t.Fatalf("fuzzy must require all words, got %q", got)
+	}
+	if got := app.fuzzyFilter("world hello", "hello world"); got == "" {
+		t.Fatal("fuzzy must match regardless of word order")
+	}
+	if got := app.fuzzyFilter("Hello", ""); got != "Hello" {
+		t.Fatalf("empty fuzzy filter changed the line: %q", got)
+	}
+	if got := app.fuzzyFilter("hello world", "HELLO"); !strings.Contains(got, "\x1b[0;44mhello\x1b[0m") {
+		t.Fatalf("fuzzy ignore case must accept upper case filter: %q", got)
+	}
+
+	app.ignoreCaseFilter = false
+	if got := app.fuzzyFilter("Hello", "hello"); got != "" {
+		t.Fatalf("case-sensitive fuzzy match must fail, got %q", got)
+	}
+}
+
+func TestRegexFilter(t *testing.T) {
+	app := newTestApp()
+
+	got := app.regexFilter("abc 123 xyz", regexp.MustCompile(`\d+`))
+	if !strings.Contains(got, "\x1b[0;44m123\x1b[0m") {
+		t.Fatalf("regex did not highlight match: %q", got)
+	}
+	if got := app.regexFilter("abc", regexp.MustCompile(`\d+`)); got != "" {
+		t.Fatalf("regex without match must return empty string, got %q", got)
+	}
+}
+
+func TestFilterLine(t *testing.T) {
+	app := newTestApp()
+
+	got := app.filterLine("Alpha alpha", "exact", "", "Alpha", nil)
+	if strings.Count(got, "\x1b[0;44m") != 2 {
+		t.Fatalf("exact ignore case must highlight all matches: %q", got)
+	}
+	if got := app.filterLine("alpha", "exact", "", "Alpha", nil); got == "" {
+		t.Fatal("exact ignore case must match")
+	}
+
+	app.ignoreCaseFilter = false
+	if got := app.filterLine("alpha", "exact", "", "Alpha", nil); got != "" {
+		t.Fatalf("case-sensitive exact match must fail, got %q", got)
+	}
+	app.ignoreCaseFilter = true
+
+	if got := app.filterLine("hello world", "fuzzy", "hello world", "", nil); got == "" {
+		t.Fatal("fuzzy filter must match")
+	}
+	regex := regexp.MustCompile(`\d+`)
+	if got := app.filterLine("value 42", "regex", "", "", regex); !strings.Contains(got, "42") {
+		t.Fatalf("regex filter must match: %q", got)
+	}
+	if got := app.filterLine("coffee", "timestamp", "", "coffee", nil); got == "" {
+		t.Fatal("timestamp mode must use exact filtering")
+	}
+	if got := app.filterLine("coffee", "timestamp", "", "zzz", nil); got != "" {
+		t.Fatalf("timestamp mode must not match, got %q", got)
+	}
+
+	got = app.filterLine("İstanbul", "exact", "", "İ", nil)
+	if !strings.Contains(got, "\x1b[0;44m") {
+		t.Fatalf("unicode exact fallback must highlight: %q", got)
+	}
+}
+
+func TestFilterLines(t *testing.T) {
+	app := newTestApp()
+	app.ignoreCaseFilter = false
+
+	input := []string{"skip", "match one", "skip", "match two"}
+	got := app.filterLines(input, "exact", "match", "match", nil)
+	if len(got) != 2 {
+		t.Fatalf("filterLines returned %d lines, want 2: %v", len(got), got)
+	}
+
+	oldProcs := runtime.GOMAXPROCS(2)
+	defer runtime.GOMAXPROCS(oldProcs)
+	large := make([]string, 4096)
+	for i := range large {
+		if i%100 == 0 {
+			large[i] = fmt.Sprintf("match %d", i)
+		} else {
+			large[i] = "skip"
+		}
+	}
+	got = app.filterLines(large, "exact", "match", "match", nil)
+	if len(got) != 41 {
+		t.Fatalf("parallel filterLines returned %d lines, want 41", len(got))
+	}
+	assertContains(t, removeANSI(got[0]), "match 0")
+	assertContains(t, removeANSI(got[len(got)-1]), "match 4000")
+}
+
+func TestTailBytes(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    string
+		maxLines int
+		want     string
+	}{
+		{"zero", "a\nb", 0, ""},
+		{"negative", "a\nb", -1, ""},
+		{"empty", "", 2, ""},
+		{"less than limit", "a\nb", 5, "a\nb"},
+		{"limit", "a\nb\nc\n", 2, "b\nc\n"},
+		{"no trailing newline", "a\nb\nc", 2, "b\nc"},
+		{"exact limit", "a\nb", 1, "b"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := string(tailBytes([]byte(c.input), c.maxLines)); got != c.want {
+				t.Fatalf("tailBytes(%q, %d) = %q, want %q", c.input, c.maxLines, got, c.want)
+			}
+		})
+	}
+}
+
+func TestReadLastLines(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.log")
+	if err := os.WriteFile(path, []byte("a\nb\nc"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readLastLines(path, 2)
+	if err != nil {
+		t.Fatalf("readLastLines: %v", err)
+	}
+	if string(got) != "b\nc" {
+		t.Fatalf("readLastLines = %q, want %q", got, "b\nc")
+	}
+	if got, err := readLastLines(path, 0); err != nil || got != nil {
+		t.Fatalf("readLastLines maxLines=0 = %q, %v", got, err)
+	}
+	if _, err := readLastLines(filepath.Join(dir, "missing.log"), 1); err == nil {
+		t.Fatal("readLastLines must fail for a missing file")
+	}
+
+	empty := filepath.Join(dir, "empty.log")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := readLastLines(empty, 1); err != nil || got != nil {
+		t.Fatalf("readLastLines empty = %q, %v", got, err)
+	}
+
+	var builder strings.Builder
+	for i := 0; i < 120000; i++ {
+		_, _ = fmt.Fprintf(&builder, "line-%05d\n", i)
+	}
+	large := filepath.Join(dir, "large.log")
+	if err := os.WriteFile(large, []byte(builder.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err = readLastLines(large, 2)
+	if err != nil {
+		t.Fatalf("readLastLines large: %v", err)
+	}
+	assertContains(t, string(got), "line-119999")
+	assertContains(t, string(got), "line-119998")
+}
+
+func TestReadFromOffset(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "offset.log")
+	if err := os.WriteFile(path, []byte("0123456789"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readFromOffset(path, 3)
+	if err != nil || string(got) != "3456789" {
+		t.Fatalf("readFromOffset(3) = %q, %v", got, err)
+	}
+	got, err = readFromOffset(path, -1)
+	if err != nil || string(got) != "0123456789" {
+		t.Fatalf("readFromOffset(-1) = %q, %v", got, err)
+	}
+	if got, err := readFromOffset(path, 10); err != nil || got != nil {
+		t.Fatalf("readFromOffset(size) = %q, %v", got, err)
+	}
+	if got, err := readFromOffset(path, 100); err != nil || got != nil {
+		t.Fatalf("readFromOffset(beyond) = %q, %v", got, err)
+	}
+	if _, err := readFromOffset(filepath.Join(dir, "missing.log"), 0); err == nil {
+		t.Fatal("readFromOffset must fail for a missing file")
+	}
+}
+
+func TestCommandLineWorkers(t *testing.T) {
+	if workers := commandLineWorkers(); workers < 1 || workers > 32 {
+		t.Fatalf("commandLineWorkers = %d, want 1..32", workers)
+	}
+}
+
+func TestCreateFilterEditor(t *testing.T) {
+	app := newTestApp()
+	app.gui = newTestGui(t, "filter", "logs", "lists")
+	app.filterDebounce = time.Hour
+	defer func() {
+		if app.filterDebounceTimer != nil {
+			app.filterDebounceTimer.Stop()
+		}
+	}()
+
+	view, _ := app.gui.View("filter")
+	editor := app.createFilterEditor("logs")
+	editor.Edit(view, 0, 'a', 0)
+	editor.Edit(view, 0, 'b', 0)
+	editor.Edit(view, gocui.KeySpace, 0, 0)
+	if got := strings.TrimSuffix(view.Buffer(), "\n"); got != "ab " {
+		t.Fatalf("editor buffer = %q, want %q", got, "ab ")
+	}
+	if app.filterText != "ab" {
+		t.Fatalf("filterText = %q, want ab", app.filterText)
+	}
+	editor.Edit(view, gocui.KeyBackspace, 0, 0)
+	if got := strings.TrimSuffix(view.Buffer(), "\n"); got != "ab" {
+		t.Fatalf("backspace buffer = %q, want ab", got)
+	}
+
+	view.Clear()
+	_, _ = fmt.Fprint(view, "ab cd")
+	_ = view.SetCursor(5, 0)
+	editor.Edit(view, gocui.KeyArrowLeft, 0, gocui.ModAlt)
+	if x, _ := view.Cursor(); x != 2 {
+		t.Fatalf("alt-left cursor = %d, want 2", x)
+	}
+	_ = view.SetCursor(0, 0)
+	editor.Edit(view, gocui.KeyArrowRight, 0, gocui.ModAlt)
+	if x, _ := view.Cursor(); x != 3 {
+		t.Fatalf("alt-right cursor = %d, want 3", x)
+	}
+
+	view.Clear()
+	_, _ = fmt.Fprint(view, "abc")
+	_ = view.SetCursor(3, 0)
+	editor.Edit(view, gocui.KeyArrowLeft, 0, gocui.ModAlt)
+	if x, _ := view.Cursor(); x != 0 {
+		t.Fatalf("alt-left without spaces cursor = %d, want 0", x)
+	}
+	editor.Edit(view, gocui.KeyArrowRight, 0, gocui.ModAlt)
+	if x, _ := view.Cursor(); x != 3 {
+		t.Fatalf("alt-right without spaces cursor = %d, want 3", x)
+	}
+	editor.Edit(view, gocui.KeyArrowLeft, 0, 0)
+	if x, _ := view.Cursor(); x != 2 {
+		t.Fatalf("left cursor = %d, want 2", x)
+	}
+	editor.Edit(view, gocui.KeyArrowRight, 0, 0)
+	if x, _ := view.Cursor(); x != 3 {
+		t.Fatalf("right cursor = %d, want 3", x)
+	}
+
+	view.Clear()
+	_, _ = fmt.Fprint(view, "abc")
+	_ = view.SetCursor(1, 0)
+	editor.Edit(view, gocui.KeyDelete, 0, 0)
+	if got := strings.TrimSuffix(view.Buffer(), "\n"); got != "ac" {
+		t.Fatalf("delete buffer = %q, want ac", got)
+	}
+
+	app.journalsNotFilter = []Journal{{name: "xray.service"}}
+	listEditor := app.createFilterEditor("lists")
+	view.Clear()
+	listEditor.Edit(view, 0, 'x', 0)
+	if app.filterListText != "x" {
+		t.Fatalf("filterListText = %q, want x", app.filterListText)
+	}
+	if len(app.journals) != 1 {
+		t.Fatalf("list filter applied %d journals, want 1", len(app.journals))
+	}
+}
+
+func TestScheduleFilterDebounce(t *testing.T) {
+	app := newTestApp()
+	app.testMode = false
+	app.gui = newTestGui(t, "filter", "logs", "status")
+	app.colorModeDisable = true
+	app.filterDebounce = 5 * time.Millisecond
+	app.filterText = "alpha"
+	app.currentLogLines = []string{"alpha", "beta"}
+	app.autoScroll = true
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- app.gui.MainLoop() }()
+	select {
+	case err := <-errCh:
+		t.Fatalf("main loop exited early: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	done := make(chan struct{})
+	go func() {
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			app.logStateMutex.Lock()
+			applied := len(app.filteredLogLines) > 0
+			app.logStateMutex.Unlock()
+			if applied {
+				close(done)
+				app.gui.Update(func(g *gocui.Gui) error { return gocui.ErrQuit })
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+
+	app.scheduleFilterDebounce()
+	app.scheduleFilterDebounce()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("debounce did not apply the filter")
+	}
+	if err := <-errCh; err != nil && err != gocui.ErrQuit {
+		t.Fatalf("main loop: %v", err)
+	}
+}
+
+func TestTimestampFilterEditor(t *testing.T) {
+	app := newTestApp()
+	app.gui = newTestGui(t, "status", "logs", "sinceFilter", "untilFilter")
+	app.colorModeDisable = true
+	app.limitFilterDate = time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
+	app.sinceFilterDate = time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	app.sinceFilterText = "2026-01-05"
+	app.untilFilterDate = time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)
+	app.untilFilterText = "2026-01-20"
+
+	sinceView, _ := app.gui.View("sinceFilter")
+	sinceEditor := app.timestampFilterEditor("sinceFilter")
+	sinceEditor.Edit(sinceView, gocui.KeyArrowRight, 0, 0)
+	if !app.sinceDateFilterMode || app.sinceFilterText != "2026-01-06" {
+		t.Fatalf("since after right = %q, mode %t", app.sinceFilterText, app.sinceDateFilterMode)
+	}
+	if sinceView.FrameColor != app.selectedFrameColor {
+		t.Fatal("since frame must be selected after a valid change")
+	}
+	sinceEditor.Edit(sinceView, gocui.KeyArrowLeft, 0, 0)
+	if app.sinceFilterText != "2026-01-05" {
+		t.Fatalf("since after left = %q", app.sinceFilterText)
+	}
+	sinceEditor.Edit(sinceView, gocui.KeyDelete, 0, 0)
+	if app.sinceDateFilterMode || sinceView.FrameColor != app.errorColor {
+		t.Fatal("delete must disable the since filter")
+	}
+	sinceEditor.Edit(sinceView, gocui.KeyBackspace2, 0, 0)
+	if app.sinceDateFilterMode {
+		t.Fatal("backspace must disable the since filter")
+	}
+	sinceEditor.Edit(sinceView, 0, 'x', 0)
+
+	app.sinceFilterDate = app.limitFilterDate
+	app.sinceFilterText = "2026-01-10"
+	app.sinceDateFilterMode = false
+	sinceEditor.Edit(sinceView, gocui.KeyArrowRight, 0, 0)
+	if app.sinceFilterText != "2026-01-10" || app.sinceDateFilterMode {
+		t.Fatal("since filter must ignore dates after the limit")
+	}
+
+	oldRight := config.Hotkeys.Right
+	config.Hotkeys.Right = "l"
+	app.sinceFilterDate = time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	app.sinceFilterText = "2026-01-05"
+	sinceEditor.Edit(sinceView, 0, 'l', 0)
+	config.Hotkeys.Right = oldRight
+	if app.sinceFilterText != "2026-01-06" {
+		t.Fatalf("custom since hotkey did not switch date: %q", app.sinceFilterText)
+	}
+
+	untilView, _ := app.gui.View("untilFilter")
+	untilEditor := app.timestampFilterEditor("untilFilter")
+	app.untilFilterDate = time.Date(2026, 1, 8, 0, 0, 0, 0, time.UTC)
+	app.untilFilterText = "2026-01-08"
+	app.untilDateFilterMode = false
+	untilEditor.Edit(untilView, gocui.KeyArrowRight, 0, 0)
+	if !app.untilDateFilterMode || app.untilFilterText != "2026-01-09" {
+		t.Fatalf("until after right = %q, mode %t", app.untilFilterText, app.untilDateFilterMode)
+	}
+	untilEditor.Edit(untilView, gocui.KeyDelete, 0, 0)
+	if app.untilDateFilterMode || untilView.FrameColor != app.errorColor {
+		t.Fatal("delete must disable the until filter")
+	}
+
+	app.sinceFilterDate = time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	app.untilFilterDate = time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	app.untilFilterText = "2026-01-06"
+	app.untilDateFilterMode = false
+	untilEditor.Edit(untilView, gocui.KeyArrowLeft, 0, 0)
+	if app.untilFilterText != "2026-01-06" || app.untilDateFilterMode {
+		t.Fatal("until filter must ignore dates before since")
+	}
+	untilEditor.Edit(untilView, 0, 'x', 0)
+}
+
+func TestSwitchDate(t *testing.T) {
+	app := newTestApp()
+	input := time.Date(2026, 1, 5, 12, 30, 0, 0, time.UTC)
+	got, text := app.switchDate(input, true)
+	if !got.Equal(input.AddDate(0, 0, 1)) || text != "2026-01-06" {
+		t.Fatalf("switchDate up = %v, %q", got, text)
+	}
+	got, text = app.switchDate(input, false)
+	if !got.Equal(input.AddDate(0, 0, -1)) || text != "2026-01-04" {
+		t.Fatalf("switchDate down = %v, %q", got, text)
+	}
+}
+
+func TestDateFilterFrameColor(t *testing.T) {
+	app := newTestApp()
+	app.frameColor = gocui.ColorBlue
+	if got := app.dateFilterFrameColor(false, true); got != app.errorColor {
+		t.Fatalf("disabled frame color = %v, want error color", got)
+	}
+	if got := app.dateFilterFrameColor(true, true); got != app.selectedFrameColor {
+		t.Fatalf("selected frame color = %v, want selected color", got)
+	}
+	if got := app.dateFilterFrameColor(true, false); got != app.frameColor {
+		t.Fatalf("idle frame color = %v, want frame color", got)
+	}
+}
+
+func TestApplyFilterList(t *testing.T) {
+	app := newTestApp()
+	app.journalsNotFilter = []Journal{{name: "sshd.service"}, {name: "nginx.service"}}
+	app.logfilesNotFilter = []Logfile{{name: "auth.log"}, {name: "App.Log"}}
+	app.dockerContainersNotFilter = []DockerContainers{{name: "web"}, {name: "db"}}
+
+	app.filterListText = "SERVICE"
+	app.applyFilterList()
+	if len(app.journals) != 2 || len(app.logfiles) != 0 || len(app.dockerContainers) != 0 {
+		t.Fatalf("filter result = %d/%d/%d", len(app.journals), len(app.logfiles), len(app.dockerContainers))
+	}
+
+	app.filterListText = "APP"
+	app.applyFilterList()
+	if len(app.logfiles) != 1 {
+		t.Fatalf("case-insensitive list filter returned %d files, want 1", len(app.logfiles))
+	}
+
+	app.filterListText = "WEB"
+	app.applyFilterList()
+	if len(app.dockerContainers) != 1 || app.dockerContainers[0].name != "web" {
+		t.Fatalf("docker list filter = %v", app.dockerContainers)
+	}
+
+	app.filterListText = "zzz"
+	app.applyFilterList()
+	if len(app.journals) != 0 || len(app.logfiles) != 0 || len(app.dockerContainers) != 0 {
+		t.Fatal("list filter must return empty slices")
+	}
+	if app.selectedJournal != 0 || app.selectedFile != 0 || app.selectedDockerContainer != 0 {
+		t.Fatal("list filter must reset selected indices")
+	}
+
+	app.testMode = false
+	app.gui = newTestGui(t, "services", "varLogs", "docker")
+	app.maxVisibleServices = 10
+	app.maxVisibleFiles = 10
+	app.maxVisibleDockerContainers = 10
+	servicesView, _ := app.gui.View("services")
+	servicesView.Title = "SERVICES (9) >"
+	app.filterListText = "service"
+	app.applyFilterList()
+	assertContains(t, servicesView.Title, "(1/2) >")
+	app.filterListText = "zzz"
+	app.applyFilterList()
+	assertContains(t, servicesView.Title, "(0) >")
+
+	dockerView, _ := app.gui.View("docker")
+	dockerView.Title = "DOCKER (9) >"
+	app.filterListText = "web"
+	app.applyFilterList()
+	assertContains(t, dockerView.Title, "(1/1) >")
+
+	varLogsView, _ := app.gui.View("varLogs")
+	varLogsView.Title = "LOGS (9) >"
+	app.filterListText = "app"
+	app.applyFilterList()
+	assertContains(t, varLogsView.Title, "(1/1) >")
+}
+
+func TestApplyFilter(t *testing.T) {
+	app := newTestApp()
+	app.colorModeDisable = true
+	app.currentLogLines = []string{"alpha", "beta"}
+
+	app.filterText = ""
+	app.applyFilter(true)
+	if len(app.filteredLogLines) != 4 {
+		t.Fatalf("empty filter returned %d lines, want 4", len(app.filteredLogLines))
+	}
+
+	app.filterText = "."
+	app.selectFilterMode = "regex"
+	app.applyFilter(true)
+	if len(app.filteredLogLines) != 4 {
+		t.Fatal("regex dot filter must not filter the output")
+	}
+
+	app.minSymbolFilter = 3
+	app.filterText = "ab"
+	app.selectFilterMode = "exact"
+	app.applyFilter(true)
+	if len(app.filteredLogLines) != 4 {
+		t.Fatal("short filter must be ignored")
+	}
+
+	app.minSymbolFilter = 1
+	app.filterText = "alpha"
+	app.applyFilter(true)
+	if len(app.filteredLogLines) != 3 {
+		t.Fatalf("exact filter returned %d lines, want 3", len(app.filteredLogLines))
+	}
+
+	app.filterText = "zzz"
+	app.applyFilter(true)
+	if len(app.filteredLogLines) != 1 || app.filteredLogLines[0] != "" {
+		t.Fatalf("no-match filter must add one empty line: %v", app.filteredLogLines)
+	}
+
+	app.selectFilterMode = "fuzzy"
+	app.filterText = "ALPHA"
+	app.currentLogLines = []string{"alpha"}
+	app.applyFilter(true)
+	if len(app.filteredLogLines) != 3 {
+		t.Fatalf("fuzzy ignore case filter returned %d lines, want 3", len(app.filteredLogLines))
+	}
+
+	app.selectFilterMode = "regex"
+	app.filterText = `\D+`
+	app.currentLogLines = []string{"ABC"}
+	app.applyFilter(true)
+	if len(app.filteredLogLines) != 3 {
+		t.Fatalf("regex ignore case filter returned %d lines, want 3", len(app.filteredLogLines))
+	}
+
+	app.filterText = "["
+	app.filteredLogLines = []string{"sentinel"}
+	oldLogOutput := log.Writer()
+	log.SetOutput(io.Discard)
+	app.applyFilter(true)
+	log.SetOutput(oldLogOutput)
+	if len(app.filteredLogLines) != 1 || app.filteredLogLines[0] != "sentinel" {
+		t.Fatalf("invalid regex must keep the previous output: %v", app.filteredLogLines)
+	}
+
+	app.colorModeDisable = false
+	app.currentLogLines = []string{"error"}
+	app.filterText = ""
+	app.selectFilterMode = "exact"
+	app.applyFilter(true)
+	if !strings.Contains(app.coloredLogLines[0], "\x1b[31merror") {
+		t.Fatalf("coloring was not applied: %q", app.coloredLogLines[0])
+	}
+}
+
+func TestApplyFilterLockedGUI(t *testing.T) {
+	app := newTestApp()
+	app.testMode = false
+	app.gui = newTestGui(t, "filter", "logs", "status")
+	app.colorModeDisable = true
+	app.currentLogLines = []string{"alpha", "beta"}
+	app.filterText = "alpha"
+	app.selectFilterMode = "exact"
+	app.ignoreCaseFilter = false
+
+	app.applyFilterLocked(true)
+	filterView, _ := app.gui.View("filter")
+	if filterView.FrameColor != app.selectedFrameColor {
+		t.Fatal("valid filter must set the selected frame color")
+	}
+	if len(app.filteredLogLines) != 3 {
+		t.Fatalf("filter returned %d lines, want 3", len(app.filteredLogLines))
+	}
+	logsView, _ := app.gui.View("logs")
+	assertContains(t, removeANSI(logsView.ViewBuffer()), "alpha")
+
+	app.filteredLogLines = make([]string, 100)
+	app.filteredLogLines[0] = "sentinel"
+	app.lastFilterText = "alpha"
+	app.lastFilterMode = "exact"
+	app.logScrollPos = 0
+	app.applyFilterLocked(false)
+	if app.filteredLogLines[0] != "sentinel" {
+		t.Fatal("unchanged filter and scroll position must skip recalculation")
+	}
+
+	app.filterText = "["
+	app.selectFilterMode = "regex"
+	app.ignoreCaseFilter = true
+	app.applyFilterLocked(true)
+	if filterView.FrameColor != app.errorColor {
+		t.Fatal("invalid regex must set the error frame color")
+	}
+
+	app.logScrollPos = 50
+	app.filterText = ""
+	app.selectFilterMode = "exact"
+	app.currentLogLines = []string{"alpha"}
+	app.filteredLogLines = nil
+	app.applyFilterLocked(true)
+	if app.logScrollPos != 0 {
+		t.Fatalf("scroll position = %d, want 0", app.logScrollPos)
+	}
+
+	app.filterText = "alpha"
+	app.colorModeDisable = false
+	app.currentLogLines = []string{"alpha", "beta"}
+	app.filteredLogLines = nil
+	app.lastFilterText = ""
+	app.logScrollPos = 0
+	app.applyFilterLocked(true)
+	if !app.lazyColor || app.logColored == nil {
+		t.Fatal("lazy coloring must be enabled outside test mode")
+	}
+
+	app.disableAutoScroll = true
+	app.autoScroll = true
+	app.filterText = ""
+	app.lastFilterText = ""
+	app.currentLogLines = []string{"alpha"}
+	app.filteredLogLines = nil
+	app.applyFilterLocked(true)
+	if app.autoScroll {
+		t.Fatal("disabled auto scroll must stay disabled")
+	}
+
+	noView := newTestApp()
+	noView.testMode = false
+	noView.gui = newTestGui(t)
+	noView.applyFilterLocked(true)
+}
+
+func TestUpdateDebugLoadTime(t *testing.T) {
+	app := newTestApp()
+	app.debugStartTime = time.Now().Add(-time.Second)
+	app.updateDebugLoadTime()
+	if app.debugLoadTime == "" {
+		t.Fatal("debug load time was not updated")
+	}
+}
+
+func TestReadCommandLineBatches(t *testing.T) {
+	batchData := func(t *testing.T, data string, ctx context.Context) ([]string, []uint64, commandLineReadResult) {
+		t.Helper()
+		feedStdin(t, data)
+		jobs := make(chan commandLineBatch, 64)
+		resultCh := make(chan commandLineReadResult, 1)
+		go func() { resultCh <- readCommandLineBatches(ctx, jobs) }()
+		var lines []string
+		var sequences []uint64
+		for job := range jobs {
+			sequences = append(sequences, job.sequence)
+			lines = append(lines, job.lines...)
+		}
+		return lines, sequences, <-resultCh
+	}
+
+	cases := []struct {
+		name string
+		data string
+		want []string
+	}{
+		{"lf", "a\nb\n", []string{"a", "b"}},
+		{"crlf", "a\r\nb\r\n", []string{"a", "b"}},
+		{"no final newline", "a\nb", []string{"a", "b"}},
+		{"trailing cr", "a\r", []string{"a"}},
+		{"empty", "", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			lines, _, result := batchData(t, c.data, context.Background())
+			if result.err != nil {
+				t.Fatalf("read result: %v", result.err)
+			}
+			if !slices.Equal(lines, c.want) {
+				t.Fatalf("lines = %v, want %v", lines, c.want)
+			}
+			if result.lines != len(c.want) {
+				t.Fatalf("line count = %d, want %d", result.lines, len(c.want))
+			}
+		})
+	}
+
+	var builder strings.Builder
+	for i := 0; i < 600; i++ {
+		_, _ = fmt.Fprintf(&builder, "line-%d\n", i)
+	}
+	lines, sequences, result := batchData(t, builder.String(), context.Background())
+	if result.err != nil || len(lines) != 600 {
+		t.Fatalf("large batch = %d lines, %v", len(lines), result.err)
+	}
+	if len(sequences) < 2 {
+		t.Fatalf("expected multiple batches, got %d", len(sequences))
+	}
+	for i, sequence := range sequences {
+		if sequence != uint64(i) {
+			t.Fatalf("sequence[%d] = %d", i, sequence)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	feedStdin(t, "a\n")
+	jobs := make(chan commandLineBatch)
+	result = readCommandLineBatches(ctx, jobs)
+	if result.err == nil {
+		t.Fatal("canceled context must return an error")
+	}
+
+	ctx, cancel = context.WithCancel(context.Background())
+	cancel()
+	feedStdin(t, builder.String())
+	jobs = make(chan commandLineBatch)
+	result = readCommandLineBatches(ctx, jobs)
+	if result.err == nil {
+		t.Fatal("canceled context must stop a full batch")
+	}
+
+	ctx, cancel = context.WithCancel(context.Background())
+	cancel()
+	feedStdin(t, "a")
+	jobs = make(chan commandLineBatch)
+	result = readCommandLineBatches(ctx, jobs)
+	if result.err == nil {
+		t.Fatal("canceled context must stop a pending line")
+	}
+
+	closedStdin, err := os.CreateTemp(t.TempDir(), "stdin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := closedStdin.Close(); err != nil {
+		t.Fatal(err)
+	}
+	oldStdin := os.Stdin
+	os.Stdin = closedStdin
+	result = readCommandLineBatches(context.Background(), make(chan commandLineBatch, 1))
+	os.Stdin = oldStdin
+	if result.err == nil || errors.Is(result.err, io.EOF) {
+		t.Fatalf("closed stdin must return a read error, got %v", result.err)
+	}
+}
+
+func TestProcessCommandLine(t *testing.T) {
+	app := newTestApp()
+
+	feedStdin(t, "alpha\nbeta\n")
+	out := captureStdout(t, func() { app.processCommandLine(nil, false) })
+	if out != "alpha\nbeta\n" {
+		t.Fatalf("passthrough output = %q", out)
+	}
+
+	feedStdin(t, "alpha\nbeta\n")
+	out = captureStdout(t, func() {
+		app.processCommandLine(func(line string) string {
+			if strings.Contains(line, "alpha") {
+				return line
+			}
+			return ""
+		}, false)
+	})
+	if out != "alpha\n" {
+		t.Fatalf("filtered output = %q", out)
+	}
+
+	feedStdin(t, "ERROR\n")
+	out = captureStdout(t, func() { app.processCommandLine(nil, true) })
+	assertContains(t, out, "\x1b[41m")
+
+	feedStdin(t, "")
+	out = captureStdout(t, func() { app.processCommandLine(nil, false) })
+	if out != "" {
+		t.Fatalf("empty output = %q", out)
+	}
+}
+
+func TestProcessCommandLineInputErrors(t *testing.T) {
+	app := newTestApp()
+	oldStdin := os.Stdin
+
+	closedStdin, err := os.CreateTemp(t.TempDir(), "stdin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := closedStdin.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.Stdin = closedStdin
+	errOut := captureStderr(t, func() { app.processCommandLine(nil, false) })
+	os.Stdin = oldStdin
+	if errOut == "" {
+		t.Fatal("closed stdin must report an error")
+	}
+
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdin = devNull
+	errOut = captureStderr(t, func() { app.processCommandLine(nil, false) })
+	os.Stdin = oldStdin
+	_ = devNull.Close()
+	assertContains(t, errOut, "No data")
+}
+
+func TestProcessCommandLineOutputError(t *testing.T) {
+	app := newTestApp()
+	closedStdout, err := os.CreateTemp(t.TempDir(), "stdout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := closedStdout.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	oldStdout := os.Stdout
+	run := func(data string) string {
+		feedStdin(t, data)
+		os.Stdout = closedStdout
+		errOut := captureStderr(t, func() { app.processCommandLine(nil, false) })
+		os.Stdout = oldStdout
+		return errOut
+	}
+
+	var input strings.Builder
+	for i := 0; i < 600; i++ {
+		_, _ = fmt.Fprintf(&input, "line-%d\n", i)
+	}
+	if errOut := run(input.String()); errOut == "" {
+		t.Fatal("flush error must be reported")
+	}
+	if errOut := run(strings.Repeat("x", 2*1024*1024) + "\n"); errOut == "" {
+		t.Fatal("write error must be reported")
+	}
+}
+
+func TestCommandLineFilters(t *testing.T) {
+	app := newTestApp()
+	app.ignoreCaseFilter = true
+
+	feedStdin(t, "alpha\nbeta\n")
+	out := captureStdout(t, func() { app.commandLineExact("ALPHA", false) })
+	if removeANSI(out) != "alpha\n" {
+		t.Fatalf("exact output = %q", out)
+	}
+
+	feedStdin(t, "hello world\nhello\nworld\n")
+	out = captureStdout(t, func() { app.commandLineFuzzy("hello WORLD", false) })
+	if removeANSI(out) != "hello world\n" {
+		t.Fatalf("fuzzy output = %q", out)
+	}
+
+	feedStdin(t, "ABC\n")
+	regex, err := compileFilterRegex(`\S+`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out = captureStdout(t, func() { app.commandLineRegex(regex, false) })
+	if removeANSI(out) != "ABC\n" {
+		t.Fatalf("regex output = %q", out)
+	}
+
+	app.coloredLogLines = []string{"ERROR"}
+	out = captureStdout(t, func() { app.commandLineColor(true) })
+	assertContains(t, out, "\x1b[41m")
+
+	feedStdin(t, "ERROR\n")
+	out = captureStdout(t, func() { app.commandLineColor(false) })
+	assertContains(t, out, "\x1b[41m")
+}
+
+// ---------------------------------------- Color ----------------------------------------
+
+func TestWordColor(t *testing.T) {
+	cases := []struct {
+		name string
+		word string
+		code string
+	}{
+		{"GET len3", "GET", "\x1b[42m"},
+		{"PUT len3", "PUT", "\x1b[45m"},
+		{"INF len3", "INF", "\x1b[46m"},
+		{"WRN len3", "WRN", "\x1b[43m"},
+		{"ERR len3", "ERR", "\x1b[41m"},
+		{"status 200", "200", "\x1b[42m"},
+		{"status 304", "304", "\x1b[43m"},
+		{"status 404", "404", "\x1b[41m"},
+		{"status 500", "500", "\x1b[41m"},
+		{"status other", "600", "\x1b[34m"},
+		{"http", "http://example.com/a1", "\x1b[31mhttp"},
+		{"https", "https://example.com/a1", "\x1b[32mhttps"},
+		{"path", "/var/log/app.log", "\x1b[35m/"},
+		{"quoted path", "\"/var/log\"", "\x1b[35m/"},
+		{"home path", "~/logs/app.log", "\x1b[33m~"},
+		{"relative path", "./logs/app.log", "\x1b[33m."},
+		{"syslog unit", "sshd[123]:", "\x1b[36msshd"},
+		{"kernel", "kernel:", "\x1b[36mkernel"},
+		{"rsyslogd", "rsyslogd:", "\x1b[36mrsyslogd"},
+		{"sudo", "sudo:", "\x1b[36msudo"},
+		{"GET method", "GET,", "\x1b[42m"},
+		{"POST method", "POST,", "\x1b[43m"},
+		{"PUT method", "PUT,", "\x1b[45m"},
+		{"PATCH method", "PATCH,", "\x1b[45m"},
+		{"TRACE method", "TRACE,", "\x1b[45m"},
+		{"OPTIONS method", "OPTIONS,", "\x1b[45m"},
+		{"CONNECT method", "CONNECT,", "\x1b[42m"},
+		{"DELETE method", "DELETE,", "\x1b[41m"},
+		{"DONE status", "DONE!", "\x1b[42m"},
+		{"WARNING status", "WARNING!", "\x1b[43m"},
+		{"WARN status", "WARN!", "\x1b[43m"},
+		{"WRN status", "WRN!", "\x1b[43m"},
+		{"DEBUG status", "DEBUG!", "\x1b[46m"},
+		{"INFO status", "INFO!", "\x1b[46m"},
+		{"INF status", "INF!", "\x1b[46m"},
+		{"NOTICE status", "NOTICE!", "\x1b[46m"},
+		{"ERROR status", "ERROR!", "\x1b[41m"},
+		{"ERR status", "ERR!", "\x1b[41m"},
+		{"CRITICAL status", "CRITICAL!", "\x1b[41m"},
+		{"CRIT status", "CRIT!", "\x1b[41m"},
+		{"ALERT status", "ALERT!", "\x1b[41m"},
+		{"EMERGENCY status", "EMERGENCY!", "\x1b[41m"},
+		{"EMERG status", "EMERG!", "\x1b[41m"},
+		{"FAILURE status", "FAILURE!", "\x1b[41m"},
+		{"FAIL status", "FAIL!", "\x1b[41m"},
+		{"FATAL status", "FATAL!", "\x1b[41m"},
+		{"user", "testuser!", "\x1b[33m"},
+		{"warning", "warning!", "\x1b[33m"},
+		{"restart", "restarting!", "\x1b[33m"},
+		{"reconnect", "reconnecting!", "\x1b[33m"},
+		{"retry", "retrying!", "\x1b[33m"},
+		{"delimiter", "a⎯b", "\x1b[35m"},
+		{"unblock", "unblocking!", "\x1b[32m"},
+		{"stderr", "stderr!", "\x1b[31m"},
+		{"disconnected", "disconnected!", "\x1b[31m"},
+		{"crashed", "crashed!", "\x1b[31m"},
+		{"deleted", "deleted!", "\x1b[31m"},
+		{"removed", "removed!", "\x1b[31m"},
+		{"stopped", "stopped!", "\x1b[31m"},
+		{"invalid", "invalid!", "\x1b[31m"},
+		{"aborted", "aborted!", "\x1b[31m"},
+		{"blocked", "blocked!", "\x1b[31m"},
+		{"inactive", "inactive!", "\x1b[31m"},
+		{"exited", "exited!", "\x1b[31m"},
+		{"critical", "critical!", "\x1b[31m"},
+		{"failed", "failed!", "\x1b[31m"},
+		{"fatal", "fatal!", "\x1b[31m"},
+		{"closed", "closed!", "\x1b[31m"},
+		{"dropped", "dropped!", "\x1b[31m"},
+		{"panicked", "panicked!", "\x1b[31m"},
+		{"emergency", "emergency!", "\x1b[31m"},
+		{"rejected", "rejected!", "\x1b[31m"},
+		{"refused", "refused!", "\x1b[31m"},
+		{"unhealthy", "unhealth!", "\x1b[31m"},
+		{"unstable", "unstable!", "\x1b[31m"},
+		{"unavailable", "unavailable!", "\x1b[31m"},
+		{"unknown", "unknown!", "\x1b[31m"},
+		{"unsuccessful", "unsuccessful!", "\x1b[31m"},
+		{"unauthorized", "unauthorized!", "\x1b[31m"},
+		{"forbidden", "forbidden!", "\x1b[31m"},
+		{"conflict", "conflict!", "\x1b[31m"},
+		{"false", "false!", "\x1b[31m"},
+		{"null", "null!", "\x1b[31m"},
+		{"nil", "nil!", "\x1b[31m"},
+		{"none", "none!", "\x1b[31m"},
+		{"success", "successfully!", "\x1b[32m"},
+		{"completed", "completed!", "\x1b[32m"},
+		{"accepted", "accepted!", "\x1b[32m"},
+		{"connected", "connected!", "\x1b[32m"},
+		{"finished", "finished!", "\x1b[32m"},
+		{"started", "started!", "\x1b[32m"},
+		{"enabled", "enabled!", "\x1b[32m"},
+		{"allowed", "allowed!", "\x1b[32m"},
+		{"passed", "passed!", "\x1b[32m"},
+		{"ready", "ready!", "\x1b[32m"},
+		{"available", "available!", "\x1b[32m"},
+		{"running", "running!", "\x1b[32m"},
+		{"installed", "installed!", "\x1b[32m"},
+		{"true", "true!", "\x1b[32m"},
+		{"done", "done!", "\x1b[32m"},
+		{"hex", "0x1A", "\x1b[34m"},
+		{"datetime", "2026-01-01T12:00:00Z", "\x1b[34m"},
+		{"integers", "-12.5%", "\x1b[34m"},
+		{"session", "session!", "\x1b[36m"},
+		{"logged", "logged!", "\x1b[36m"},
+		{"registered", "registered!", "\x1b[36m"},
+		{"authenticating", "authenticating!", "\x1b[36m"},
+		{"returned", "returned!", "\x1b[36m"},
+		{"listening", "listening!", "\x1b[36m"},
+		{"opened", "opened!", "\x1b[36m"},
+		{"created", "created!", "\x1b[36m"},
+		{"booting", "booting!", "\x1b[36m"},
+		{"loading", "loading!", "\x1b[36m"},
+		{"updated", "updated!", "\x1b[36m"},
+		{"synchronization", "synchronization!", "\x1b[36m"},
+		{"launched", "launched!", "\x1b[36m"},
+		{"changed", "changed!", "\x1b[36m"},
+		{"cleared", "cleared!", "\x1b[36m"},
+		{"skipped", "skipped!", "\x1b[36m"},
+		{"missing", "missing!", "\x1b[36m"},
+		{"mounted", "mounted!", "\x1b[36m"},
+		{"configured", "configured!", "\x1b[36m"},
+		{"reading", "reading!", "\x1b[36m"},
+		{"writing", "writing!", "\x1b[36m"},
+		{"saved", "saved!", "\x1b[36m"},
+		{"paused", "paused!", "\x1b[36m"},
+		{"normal", "normal!", "\x1b[36m"},
+		{"alerting", "alerting!", "\x1b[36m"},
+		{"notifications", "notifications!", "\x1b[36m"},
+		{"timeout", "timeout!", "\x1b[36m"},
+		{"stdout", "stdout!", "\x1b[36m"},
+		{"debug", "debug!", "\x1b[36m"},
+		{"verbose", "verbose!", "\x1b[36m"},
+		{"level", "level!", "\x1b[36m"},
+		{"status", "status!", "\x1b[36m"},
+		{"shutdown", "shutdown!", "\x1b[36m"},
+		{"information", "information!", "\x1b[36m"},
+		{"initial", "initial!", "\x1b[36m"},
+		{"installing", "installing!", "\x1b[36m"},
+		{"installation", "installation!", "\x1b[36m"},
+	}
+	app := newTestApp()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := app.wordColor(c.word)
+			if got == c.word {
+				t.Fatalf("wordColor(%q) was not colored", c.word)
+			}
+			assertContains(t, got, c.code)
+		})
+	}
+}
+
+func TestWordColorHostAndUser(t *testing.T) {
+	app := newTestApp()
+
+	got := app.wordColor("testhost!")
+	if got == "testhost!" || !strings.Contains(got, "\033[0m") {
+		t.Fatalf("host was not colored: %q", got)
+	}
+	got = app.wordColor("testuser!")
+	if got == "testuser!" {
+		t.Fatalf("user was not colored: %q", got)
+	}
+	assertContains(t, got, "\x1b[33m")
+
+	app.userNameSet = map[string]struct{}{"alice": {}}
+	if !app.containsUser("alice") {
+		t.Fatal("containsUser must find a user in the set")
+	}
+	if app.containsUser("bob") {
+		t.Fatal("containsUser must not find a missing user")
+	}
+	assertContains(t, app.wordColor("alice"), "\x1b[33m")
+
+	app.userNameSet = nil
+	app.userNameArray = []string{"carol"}
+	if !app.containsUser("carol") {
+		t.Fatal("containsUser must fall back to the array")
+	}
+	if app.containsUser("dave") {
+		t.Fatal("containsUser must return false for an unknown array user")
+	}
+}
+
+func TestWordColorActionsDisable(t *testing.T) {
+	app := newTestApp()
+	app.colorActionsDisable = true
+
+	for _, word := range []string{"restarting!", "retrying!", "shutdown!"} {
+		if got := app.wordColor(word); got != word {
+			t.Fatalf("disabled action %q was colored: %q", word, got)
+		}
+	}
+	if got := app.wordColor("warning!"); got == "warning!" {
+		t.Fatal("warning coloring must stay enabled")
+	}
+}
+
+func TestLineColor(t *testing.T) {
+	app := newTestApp()
+
+	if got := app.lineColor(""); got != "" {
+		t.Fatalf("empty line = %q", got)
+	}
+	if got := app.lineColor("hello"); got != "hello" {
+		t.Fatalf("plain line = %q", got)
+	}
+
+	jsonLine := app.lineColor(`{"key":"value"}`)
+	assertContains(t, jsonLine, "\x1b[33m{")
+	assertContains(t, jsonLine, "\x1b[33m\"")
+
+	filtered := app.lineColor("a \x1b[0;44mERROR\x1b[0m b")
+	if strings.Contains(filtered, "\x1b[31mERROR") {
+		t.Fatalf("filter background must suppress word coloring: %q", filtered)
+	}
+
+	for _, phrase := range []string{"Not found", "not found", "Bad request", "bad request"} {
+		got := app.lineColor(phrase)
+		if !strings.Contains(got, "\x1b[31m"+phrase+"\x1b[0m") {
+			t.Fatalf("phrase %q was not colored: %q", phrase, got)
+		}
+	}
+
+	app.lastContainerizationSystem = "compose"
+	app.uniquePrefixColorMap["web"] = "\x1b[35m"
+	if got := app.lineColor("[web] hello"); got != "[\x1b[35mweb\x1b[0m] hello" {
+		t.Fatalf("compose container = %q", got)
+	}
+	if got := app.lineColor("[db] hello"); got != "[db] hello" {
+		t.Fatalf("compose container without color = %q", got)
+	}
+	if got := app.lineColor("⎯⎯⎯"); !strings.Contains(got, "\x1b[35m") {
+		t.Fatalf("compose divider was not colored: %q", got)
+	}
+	if got := app.lineColor("[web hello"); got != "[web hello" {
+		t.Fatalf("compose line without separator = %q", got)
+	}
+}
+
+func TestMainColor(t *testing.T) {
+	app := newTestApp()
+
+	if got := app.mainColor(nil); len(got) != 0 {
+		t.Fatalf("empty mainColor = %v", got)
+	}
+	if got := app.mainColor([]string{"hello"}); len(got) != 1 || got[0] != "hello" {
+		t.Fatalf("single mainColor = %v", got)
+	}
+
+	oldProcs := runtime.GOMAXPROCS(2)
+	defer runtime.GOMAXPROCS(oldProcs)
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line-%d", i)
+	}
+	got := app.mainColor(lines)
+	if len(got) != len(lines) {
+		t.Fatalf("mainColor returned %d lines, want %d", len(got), len(lines))
+	}
+	for i, line := range got {
+		if line != lines[i] {
+			t.Fatalf("mainColor order at %d = %q, want %q", i, line, lines[i])
+		}
+	}
+}
+
+func TestReplaceWordLower(t *testing.T) {
+	app := newTestApp()
+
+	got := app.replaceWordLower("hello hello", "hello", "\x1b[33m")
+	if strings.Count(got, "\x1b[33mhello\x1b[0m") != 2 {
+		t.Fatalf("replaceWordLower = %q", got)
+	}
+	got = app.replaceWordLower("hello", "hello", "\x1b[42m\x1b[30m")
+	if got != "\x1b[42m\x1b[30m hello \x1b[0m" {
+		t.Fatalf("background replaceWordLower = %q", got)
+	}
+	if got := app.replaceWordLower("shelloworld", "hello", "\x1b[33m"); got != "shelloworld" {
+		t.Fatalf("word boundary was ignored: %q", got)
+	}
+}
+
+func TestURLPathColor(t *testing.T) {
+	app := newTestApp()
+	got := app.urlPathColor("/a?b=1")
+	assertContains(t, got, "\x1b[35m/")
+	assertContains(t, got, "\x1b[35m?")
+	assertContains(t, got, "\x1b[34m1")
+}
+
+func TestIntColor(t *testing.T) {
+	app := newTestApp()
+
+	assertContains(t, app.intColor("abc123"), "\x1b[34m")
+	assertContains(t, app.intColor("1.2%"), "\x1b[35m")
+	assertContains(t, app.intColor("abc"), "\x1b[0m")
+	got := app.intColor("12")
+	if !strings.HasSuffix(got, "\x1b[0m") {
+		t.Fatalf("number color was not reset: %q", got)
+	}
+}
+
+func TestParseStringToInt(t *testing.T) {
+	cases := []struct {
+		input string
+		want  int
+		ok    bool
+	}{
+		{"", 0, false},
+		{"12a", 0, false},
+		{"-1", 0, false},
+		{"42", 42, true},
+		{"007", 7, true},
+		{"999999999999999999999999", 0, false},
+	}
+	for _, c := range cases {
+		got, ok := parseStringToInt(c.input)
+		if got != c.want || ok != c.ok {
+			t.Fatalf("parseStringToInt(%q) = %d, %t", c.input, got, ok)
+		}
 	}
 }
