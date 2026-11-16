@@ -5729,43 +5729,8 @@ func (app *App) filterLine(line, mode, filter, exactFilter string, regex *regexp
 		return app.fuzzyFilter(line, filter)
 	case "regex":
 		return app.regexFilter(line, regex)
-	// Точное совпадение (exact)
 	default:
-		// Регистронезависимый поиск и покраска всех вхождений (#94)
-		if app.ignoreCaseFilter {
-			filterLower := strings.ToLower(exactFilter)
-			lineLower := strings.ToLower(line)
-			if !strings.Contains(lineLower, filterLower) {
-				return ""
-			}
-			// Если смена регистра меняет длину строки (Unicode)
-			if len(lineLower) != len(line) || len(filterLower) != len(exactFilter) {
-				return strings.ReplaceAll(lineLower, filterLower, "\x1b[0;44m"+filterLower+"\033[0m")
-			}
-			var result strings.Builder
-			result.Grow(len(line))
-			last := 0
-			// Ищем все вхождения без учета регистра
-			for start := 0; ; {
-				idx := strings.Index(lineLower[start:], filterLower)
-				if idx == -1 {
-					break
-				}
-				start += idx
-				result.WriteString(line[last:start])
-				result.WriteString("\x1b[0;44m")
-				result.WriteString(line[start : start+len(exactFilter)])
-				result.WriteString("\033[0m")
-				last = start + len(exactFilter)
-				start = last
-			}
-			result.WriteString(line[last:])
-			return result.String()
-		}
-		if strings.Contains(line, exactFilter) {
-			return strings.ReplaceAll(line, exactFilter, "\x1b[0;44m"+exactFilter+"\033[0m")
-		}
-		return ""
+		return app.exactFilter(line, exactFilter)
 	}
 }
 
@@ -5924,6 +5889,46 @@ func (app *App) applyFilterLocked(color bool) {
 		app.logScrollPos = 0
 		app.updateLogsViewLocked(true)
 	}
+}
+
+// Функция фильтрации для точного поиска
+func (app *App) exactFilter(line, exactFilter string) string {
+	// Регистронезависимый поиск и покраска всех вхождений (#94)
+	if app.ignoreCaseFilter {
+		filterLower := strings.ToLower(exactFilter)
+		lineLower := strings.ToLower(line)
+		if !strings.Contains(lineLower, filterLower) {
+			return ""
+		}
+		// Если смена регистра меняет длину строки (Unicode)
+		if len(lineLower) != len(line) || len(filterLower) != len(exactFilter) {
+			return strings.ReplaceAll(lineLower, filterLower, "\x1b[0;44m"+filterLower+"\033[0m")
+		}
+		var result strings.Builder
+		result.Grow(len(line))
+		last := 0
+		// Ищем все вхождения без учета регистра
+		for start := 0; ; {
+			idx := strings.Index(lineLower[start:], filterLower)
+			if idx == -1 {
+				break
+			}
+			start += idx
+			result.WriteString(line[last:start])
+			result.WriteString("\x1b[0;44m")
+			result.WriteString(line[start : start+len(exactFilter)])
+			result.WriteString("\033[0m")
+			last = start + len(exactFilter)
+			start = last
+		}
+		result.WriteString(line[last:])
+		return result.String()
+	}
+	// Режим по умолчанию
+	if strings.Contains(line, exactFilter) {
+		return strings.ReplaceAll(line, exactFilter, "\x1b[0;44m"+exactFilter+"\033[0m")
+	}
+	return ""
 }
 
 // Функция фильтрации для неточного поиска (параметры: строка из цикла и текст фильтрации)
