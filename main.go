@@ -1052,7 +1052,7 @@ func (app *App) journalCheck(mode string) ([]string, error) {
 	}
 }
 
-// ---------------------------------------- ssh (#90) ----------------------------------------
+// ---------------------------------------- ssh ----------------------------------------
 
 // Экранирует аргумент для безопасной передачи в удаленную оболочку через ssh
 func shellQuote(arg string) string {
@@ -1819,13 +1819,8 @@ func runGoCui(mock bool) {
 		app.commandLineFuzzy(*commandFuzzy, *commandColor)
 		return
 	case *commandRegex != "":
-		filter := *commandRegex
-		if app.ignoreCaseFilter {
-			// Опускаем регистр (#94)
-			filter = "(?i)" + strings.ToLower(filter)
-		}
 		// Компилируем и проверяем регулярное выражение
-		regex, err := regexp.Compile(filter)
+		regex, err := compileFilterRegex(*commandRegex, app.ignoreCaseFilter)
 		if err != nil {
 			fmt.Println("Regular expression syntax error")
 			os.Exit(1)
@@ -5734,8 +5729,8 @@ func (app *App) filterLine(line, mode, filter, exactFilter string, regex *regexp
 		return app.fuzzyFilter(line, filter)
 	case "regex":
 		return app.regexFilter(line, regex)
+	// Точное совпадение (exact)
 	default:
-		// Точное совпадение (exact)
 		// Регистронезависимый поиск и покраска всех вхождений (#94)
 		if app.ignoreCaseFilter {
 			filterLower := strings.ToLower(exactFilter)
@@ -5785,7 +5780,6 @@ func (app *App) filterLines(input []string, mode, filter, exactFilter string, re
 		}
 		return output
 	}
-
 	parts := make([][]string, workers)
 	chunkSize := (len(input) + workers - 1) / workers
 	var workerGroup sync.WaitGroup
@@ -5805,7 +5799,6 @@ func (app *App) filterLines(input []string, mode, filter, exactFilter string, re
 		}()
 	}
 	workerGroup.Wait()
-
 	outputSize := 0
 	for _, part := range parts {
 		outputSize += len(part)
@@ -5865,19 +5858,11 @@ func (app *App) applyFilterLocked(color bool) {
 		if filter == "" || (filter == "." && app.selectFilterMode == "regex") || len(filter) < app.minSymbolFilter {
 			app.filteredLogLines = append([]string(nil), app.currentLogLines...)
 		} else {
-			// Опускаем регистр искомого текста для фильтра при включенном игнорировании регистра (#94)
-			if app.ignoreCaseFilter {
-				filter = strings.ToLower(filter)
-			}
 			// Проверка регулярного выражения
 			var regex *regexp.Regexp
 			if app.selectFilterMode == "regex" {
-				// Добавляем флаг для нечувствительности к регистру в режиме regex
-				if app.ignoreCaseFilter {
-					filter = "(?i)" + filter
-				}
-				// Компилируем регулярное выражение
-				regex, err = regexp.Compile(filter)
+				// Компилируем и проверяем регулярное выражение
+				regex, err = compileFilterRegex(filter, app.ignoreCaseFilter)
 				// В случае синтаксической ошибки регулярного выражения, красим окно красным цветом и завершаем цикл
 				if err != nil && !app.testMode {
 					v, _ := app.gui.View("filter")
@@ -5941,10 +5926,16 @@ func (app *App) applyFilterLocked(color bool) {
 	}
 }
 
-// Fyzzy: Функция для неточного поиска (параметры: строка из цикла и текст фильтрации)
+// Функция фильтрации для неточного поиска (параметры: строка из цикла и текст фильтрации)
 func (app *App) fuzzyFilter(inputLine, filter string) string {
 	// Разбиваем текст фильтра на массив из строк
 	filterWords := strings.Fields(filter)
+	// Опускаем регистр при фильтрации с использованием флага -i/--ignore-case-filter (#94)
+	if app.ignoreCaseFilter {
+		for i := range filterWords {
+			filterWords[i] = strings.ToLower(filterWords[i])
+		}
+	}
 	// Опускаем регистр текущей строки цикла при включенном игнорировании регистра (#94)
 	lineLower := inputLine
 	if app.ignoreCaseFilter {
@@ -5998,7 +5989,16 @@ func (app *App) fuzzyFilter(inputLine, filter string) string {
 	}
 }
 
-// Regex: Функция поиска с использованием регулярных выражений (параметры: строка из цикла и скомпилированное регулярное выражение)
+// Функция компиляции регулярного выражения для фильтрации в режиме regex
+func compileFilterRegex(filter string, ignoreCase bool) (*regexp.Regexp, error) {
+	// Добавляем флаг для игнорирования регистра (#94)
+	if ignoreCase {
+		filter = "(?i)" + filter
+	}
+	return regexp.Compile(filter)
+}
+
+// Функция фильтрации с использованием регулярных выражений (параметры: строка из цикла и скомпилированное регулярное выражение)
 func (app *App) regexFilter(inputLine string, regex *regexp.Regexp) string {
 	// Проверяем, что строка подходит под регулярное выражение
 	if regex.MatchString(inputLine) {
@@ -6120,6 +6120,8 @@ func readFromOffset(path string, offset int64) ([]byte, error) {
 	}
 	return buffer, nil
 }
+
+// ---------------------------------------- cli ----------------------------------------
 
 type commandLineBatch struct {
 	sequence uint64
@@ -6331,11 +6333,15 @@ func (app *App) processCommandLine(transform func(string) string, color bool) {
 	}
 }
 
+// -e/--command-exact
+func (app *App) commandLineExact(filter string, color bool) {
+	app.processCommandLine(func(line string) string {
+		return app.filterLine(line, "exact", filter, filter, nil)
+	}, color)
+}
+
 // -f/--command-fuzzy
 func (app *App) commandLineFuzzy(filter string, color bool) {
-	if app.ignoreCaseFilter {
-		filter = strings.ToLower(filter)
-	}
 	app.processCommandLine(func(line string) string {
 		return app.fuzzyFilter(line, filter)
 	}, color)
@@ -6348,14 +6354,7 @@ func (app *App) commandLineRegex(regex *regexp.Regexp, color bool) {
 	}, color)
 }
 
-// -e/--command-exact
-func (app *App) commandLineExact(filter string, color bool) {
-	app.processCommandLine(func(line string) string {
-		return app.filterLine(line, "exact", filter, filter, nil)
-	}, color)
-}
-
-// ---------------------------------------- Coloring/Highlighting ----------------------------------------
+// ---------------------------------------- Color/Highlight ----------------------------------------
 
 // Функция для покраски вывода в режиме командной строки
 func (app *App) commandLineColor(fromFilter bool) {
