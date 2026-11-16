@@ -21,7 +21,7 @@ settings:
   # Filter the log output by priority (available values: debug, info, notice, warning, err, crit, alert, emerg)
   journalPriority: debug
   # Filter the log output by system boot period (e.g. 0 current or -1 previous)
-  journalBoot: all
+  journalBootPeriod: all
   customPath: ""
   dockerStreamOnly: false
   dockerContext: default

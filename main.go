@@ -69,7 +69,7 @@ type Settings struct {
 	UnitType            string `yaml:"unitType"`
 	JournalField        string `yaml:"journalField"`
 	JournalPriority     string `yaml:"journalPriority"`
-	JournalBoot         string `yaml:"journalBoot"`
+	JournalBootPeriod   string `yaml:"journalBootPeriod"`
 	CustomPath          string `yaml:"customPath"`
 	ColorModeDisable    string `yaml:"colorModeDisable"`
 	ColorActionsDisable string `yaml:"colorActionsDisable"`
@@ -208,11 +208,13 @@ type App struct {
 	userNameSet   map[string]struct{}
 	wordRegexes   sync.Map // cached *regexp.Regexp values used by concurrent coloring
 
-	unitType        string // фильтрация списков системных и пользовательских юнитов по типу (#46)
-	journalField    string // фильтрация списка системных журналов по полю
-	journalPriority string // фильтрация вывода системных и пользовательских журналов по приоритету
-	journalBoot     string // фильтрация вывода системных и пользовательских журналов по порядковому номеру загрузки системы
-	customPath      string // пользовательский путь для поиска логов в файловой системе (#31)
+	unitType              string // фильтрация списков системных и пользовательских юнитов по типу (#46)
+	journalField          string // фильтрация списка системных журналов по полю
+	journalPriority       string // фильтрация вывода системных и пользовательских журналов по приоритету
+	journalBootPeriod     string // фильтрация вывода системных и пользовательских журналов по порядковому номеру загрузки системы
+	journalBootInitial    string // значение периода загрузки системы, переданное через флаг или конфигурацию
+	journalBootInitialSet bool   // признак наличия 4-го состояния периода загрузки системы
+	customPath            string // пользовательский путь для поиска логов в файловой системе (#31)
 
 	selectUnits                  string // название журнала (systemUnits/userUnits/systemJournals/kernelBoot/auditd)
 	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
@@ -446,7 +448,7 @@ func showConfig() {
 	fmt.Printf("  unitType:                 %s\n", config.Settings.UnitType)
 	fmt.Printf("  journalField:             %s\n", config.Settings.JournalField)
 	fmt.Printf("  journalPriority:          %s\n", config.Settings.JournalPriority)
-	fmt.Printf("  journalBoot:              %s\n", config.Settings.JournalBoot)
+	fmt.Printf("  journalBootPeriod:        %s\n", config.Settings.JournalBootPeriod)
 	fmt.Printf("  customPath:               %s\n", config.Settings.CustomPath)
 	fmt.Printf("  dockerStreamOnly:         %s\n", config.Settings.DockerStreamOnly)
 	fmt.Printf("  dockerContext:            %s\n", config.Settings.DockerContext)
@@ -654,7 +656,7 @@ func (app *App) showAudit() {
 		app.unitType = "service"
 		app.journalField = "SYSLOG_IDENTIFIER"
 		app.journalPriority = "debug"
-		app.journalBoot = "all"
+		app.journalBootPeriod = "all"
 		csCheck := exec.Command("journalctl", "--version")
 		_, err := csCheck.Output()
 		if err == nil {
@@ -1540,14 +1542,22 @@ func runGoCui(mock bool) {
 	}
 
 	// -b/--journal-boot
-	if config.Settings.JournalBoot != "" && *journalBootFlag == "all" {
-		app.journalBoot = config.Settings.JournalBoot
-	} else {
-		app.journalBoot = *journalBootFlag
-	}
+	// Приоритет у переданного флага, или берем значение из конфигурации
+	bootFlagPassed := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "journal-boot" || f.Name == "b" {
+			bootFlagPassed = true
+		}
+	})
+	app.journalBootPeriod = resolveJournalBoot(bootFlagPassed, *journalBootFlag, config.Settings.JournalBootPeriod)
+	// Запоминаем исходное значение для 4-го состояния цикла хоткея (без дублей all/0/-1)
+	app.journalBootInitial = app.journalBootPeriod
+	app.journalBootInitialSet = app.journalBootPeriod != "all" &&
+		app.journalBootPeriod != "0" &&
+		app.journalBootPeriod != "-1"
 
 	// Проверяем значение флага -b/--journal-boot на валидность и возвращяем список загрузок системы
-	if app.journalBoot != "all" {
+	if app.journalBootPeriod != "all" {
 		bootsList, bootsErr := app.journalCheck("boots")
 		if bootsErr == nil {
 			// Переварачиваем массив
@@ -1562,8 +1572,8 @@ func runGoCui(mock bool) {
 				bootNumber := fields[0]
 				bootNumbers = append(bootNumbers, bootNumber)
 			}
-			if !slices.Contains(bootNumbers, app.journalBoot) {
-				fmt.Println("Boot number " + app.journalBoot + " not found")
+			if !slices.Contains(bootNumbers, app.journalBootPeriod) {
+				fmt.Println("Boot number " + app.journalBootPeriod + " not found")
 				fmt.Println("Available list boots:")
 				for _, line := range bootsList {
 					fmt.Println(line)
@@ -2869,34 +2879,7 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 			serviceName = serviceNameNew[1]
 		}
 		var cmd *exec.Cmd
-		// #34 Используем массив для формирования аргументов команды
-		var args []string
-		// #46 Добавляем аргумент для пользовательских журналов
-		if app.selectUnits == "userUnits" {
-			args = append(args, "--user")
-		}
-		// Фильтрация по юниту (unit)
-		if serviceName != "_all" && selectUnits != "systemJournals" {
-			args = append(args, "--unit="+serviceName)
-		}
-		// Фильтрация по полю (field)
-		if serviceName != "_all" && selectUnits == "systemJournals" {
-			args = append(args, app.journalField+"="+serviceName)
-		}
-		// Фильтрация по порядковому номеру загрузки системы (boot)
-		args = append(args, "--boot="+app.journalBoot)
-		// Фильтрация по приоритету
-		args = append(args, "--priority="+app.journalPriority)
-		// Добавляем базовые аргументы
-		args = append(args, "--no-pager")
-		args = append(args, "--lines="+app.logViewCount)
-		// Добавляем аргументы для фильтрации по времени
-		if app.sinceDateFilterMode {
-			args = append(args, "--since", app.sinceFilterText)
-		}
-		if app.untilDateFilterMode {
-			args = append(args, "--until", app.untilFilterText)
-		}
+		args := app.buildJournaldArgs(selectUnits, serviceName)
 		// Проверяем режим работы и формируем команду для выполнения
 		cmd = app.sshExec(nil, "journalctl", args...)
 		if app.logging {
@@ -2935,6 +2918,39 @@ func (app *App) loadJournalLogs(serviceName string, newUpdate bool) {
 		app.applyFilterLocked(false)
 	}
 	app.logStateMutex.Unlock()
+}
+
+// Собираем аргументы для команды journalctl
+func (app *App) buildJournaldArgs(selectUnits, serviceName string) []string {
+	// #34 Используем массив для формирования аргументов команды
+	var args []string
+	// #46 Добавляем аргумент для пользовательских журналов
+	if selectUnits == "userUnits" {
+		args = append(args, "--user")
+	}
+	// Фильтрация по юниту (unit)
+	if serviceName != "_all" && selectUnits != "systemJournals" {
+		args = append(args, "--unit="+serviceName)
+	}
+	// Фильтрация по полю (field)
+	if serviceName != "_all" && selectUnits == "systemJournals" {
+		args = append(args, app.journalField+"="+serviceName)
+	}
+	// Фильтрация по порядковому номеру загрузки системы (boot period)
+	args = append(args, "--boot="+app.journalBootPeriod)
+	// Фильтрация по приоритету
+	args = append(args, "--priority="+app.journalPriority)
+	// Добавляем базовые аргументы
+	args = append(args, "--no-pager")
+	args = append(args, "--lines="+app.logViewCount)
+	// Добавляем аргументы для фильтрации по времени
+	if app.sinceDateFilterMode {
+		args = append(args, "--since", app.sinceFilterText)
+	}
+	if app.untilDateFilterMode {
+		args = append(args, "--until", app.untilFilterText)
+	}
+	return args
 }
 
 // Функция для чтения и парсинга содержимого события Windows через wevtutil
@@ -5502,20 +5518,20 @@ func (app *App) renderStatus(v *gocui.View) {
 			" \033[1mUpdate\033[0m %s"+
 			" \033[2m•\033[0m\033[1m Lines\033[0m \033[33m%s\033[0m"+
 			" \033[2m•\033[0m\033[1m Interval\033[0m \033[33m%ds\033[0m"+
+			" \033[2m•\033[0m\033[1m Color\033[0m %s"+
 			" \033[2m│\033[0m\033[1;36m FILTER\033[0m"+
 			" \033[1mIgnore case\033[0m %s"+
 			" \033[2m•\033[0m\033[1m Date\033[0m %s"+
 			" \033[2m•\033[0m\033[1m Priority\033[0m %s"+
-			" \033[2m•\033[0m\033[1m Boot\033[0m %s"+
-			" \033[2m│\033[0m\033[1;36m COLOR\033[0m %s\n",
+			" \033[2m•\033[0m\033[1m Boot\033[0m %s\n",
 		statusBool(app.autoScroll),
 		lines,
 		app.logUpdateSeconds,
+		statusBool(!app.colorModeDisable),
 		statusBool(app.ignoreCaseFilter),
 		statusString(app.filterByDateStatus),
 		statusString(app.journalPriority),
 		statusString(app.filterByBootStatus),
-		statusBool(!app.colorModeDisable),
 	)
 	line := fmt.Sprintf(
 		" \033[36m▌\033[0m\033[36m SSH\033[0m %s"+
@@ -5600,12 +5616,40 @@ func (app *App) setStatusDateFilter() {
 
 func (app *App) setStatusBootFilter() {
 	switch {
-	case app.journalBoot == "0":
+	case app.journalBootPeriod == "0":
 		app.filterByBootStatus = "current"
-	case app.journalBoot == "-1":
+	case app.journalBootPeriod == "-1":
 		app.filterByBootStatus = "previous"
 	default:
-		app.filterByBootStatus = app.journalBoot
+		app.filterByBootStatus = app.journalBootPeriod
+	}
+}
+
+// Определяет период загрузки системы: приоритет у явно переданного флага, иначе значение из конфигурации
+func resolveJournalBoot(flagPassed bool, flagValue, configValue string) string {
+	if flagPassed {
+		return flagValue
+	}
+	if configValue != "" {
+		return configValue
+	}
+	return flagValue
+}
+
+// Возвращает следующее значение периода загрузки системы для хоткея
+func nextJournalBoot(current, initial string, initialSet bool) string {
+	switch current {
+	case "all":
+		return "0"
+	case "0":
+		return "-1"
+	case "-1":
+		if initialSet {
+			return initial
+		}
+		return "all"
+	default:
+		return "all"
 	}
 }
 
@@ -8788,24 +8832,10 @@ func (app *App) setupKeybindings() error {
 	// Switch system boot period hotkey for journald (Ctrl+B) #97
 	customBoot, altMode := getHotkey(config.Hotkeys.SwitchSystemBootPeriod, "ctrl+b")
 	if err := app.gui.SetKeybinding("", customBoot, altMode, func(g *gocui.Gui, v *gocui.View) error {
-		switch app.journalBoot {
-		case "all":
-			app.journalBoot = "0"
-		case "0":
-			app.journalBoot = "-1"
-		case "-1":
-			app.journalBoot = "all"
-		}
+		app.journalBootPeriod = nextJournalBoot(app.journalBootPeriod, app.journalBootInitial, app.journalBootInitialSet)
 		app.setStatusBootFilter()
-		app.logStateMutex.Lock()
-		hasLogLines := len(app.currentLogLines) != 0
-		app.logStateMutex.Unlock()
-		if hasLogLines {
-			app.updateLogsView(true)
-			app.applyFilter(false)
-			app.updateLogOutput(false)
-		}
 		app.updateStatus()
+		app.updateLogOutput(false)
 		return nil
 	}); err != nil {
 		return err
