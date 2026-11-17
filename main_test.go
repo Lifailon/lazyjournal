@@ -2105,6 +2105,14 @@ func setFakeBinPath(t *testing.T, binDir string) {
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
+// Возвращает команду для вывода value буквально (экранирует | для sh и cmd)
+func fakeEcho(value string) string {
+	if runtime.GOOS == "windows" {
+		return "echo " + strings.ReplaceAll(value, "|", "^|")
+	}
+	return "echo '" + value + "'"
+}
+
 // Проверка remoteGetOS через заглушку ssh (без реального подключения)
 func TestRemoteGetOS(t *testing.T) {
 	t.Run("linux", func(t *testing.T) {
@@ -2147,15 +2155,9 @@ func TestStatFile(t *testing.T) {
 		}
 	})
 
-	// Пайп | экранируется по-разному в cmd и sh
-	pipe := "|"
-	if runtime.GOOS == "windows" {
-		pipe = "^|"
-	}
-
 	t.Run("ssh valid", func(t *testing.T) {
 		binDir := t.TempDir()
-		writeFakeBin(t, binDir, "ssh", "echo /var/log/syslog"+pipe+"8744995"+pipe+"1756116219")
+		writeFakeBin(t, binDir, "ssh", fakeEcho("/var/log/syslog|8744995|1756116219"))
 		setFakeBinPath(t, binDir)
 
 		app := &App{sshMode: true, sshOptions: []string{"user@host"}}
@@ -2181,7 +2183,7 @@ func TestStatFile(t *testing.T) {
 
 	t.Run("ssh bad size", func(t *testing.T) {
 		binDir := t.TempDir()
-		writeFakeBin(t, binDir, "ssh", "echo /var/log/syslog"+pipe+"notanumber"+pipe+"1756116219")
+		writeFakeBin(t, binDir, "ssh", fakeEcho("/var/log/syslog|notanumber|1756116219"))
 		setFakeBinPath(t, binDir)
 
 		app := &App{sshMode: true, sshOptions: []string{"user@host"}}
@@ -2204,19 +2206,14 @@ func TestStatFiles(t *testing.T) {
 		}
 	})
 
-	pipe := "|"
-	if runtime.GOOS == "windows" {
-		pipe = "^|"
-	}
-
 	t.Run("ssh valid", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("cmd echo adds \\r to multiline stat output")
 		}
 		binDir := t.TempDir()
 		writeFakeBin(t, binDir, "ssh",
-			"echo /a"+pipe+"1"+pipe+"1",
-			"echo /b"+pipe+"2"+pipe+"2",
+			fakeEcho("/a|1|1"),
+			fakeEcho("/b|2|2"),
 		)
 		setFakeBinPath(t, binDir)
 
