@@ -37,7 +37,7 @@ import (
 	"github.com/Lifailon/lazyjournal/internal/iouring"
 )
 
-var appVersion string = "0.8.7"
+var appVersion string = "0.8.8"
 
 // Структура конфигурации
 type Config struct {
