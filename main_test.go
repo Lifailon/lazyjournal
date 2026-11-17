@@ -1835,6 +1835,137 @@ func TestSSHManagerNavigation(t *testing.T) {
 	}
 }
 
+// ---------------------------------------- gocui ----------------------------------------
+
+func TestShowInterfaceInfo(t *testing.T) {
+	app := newTestApp()
+	g := newTestGui(t)
+
+	app.showInterfaceInfo(g, false, "hello info")
+	v, err := g.View("info")
+	if err != nil {
+		t.Fatalf("info view: %v", err)
+	}
+	if v.Title != " Info " {
+		t.Fatalf("info title = %q, want %q", v.Title, " Info ")
+	}
+	if !strings.Contains(v.ViewBuffer(), "hello info") {
+		t.Fatalf("info buffer = %q", v.ViewBuffer())
+	}
+
+	app.showInterfaceInfo(g, true, "boom")
+	if v.Title != " Error " {
+		t.Fatalf("error title = %q", v.Title)
+	}
+	if !strings.Contains(v.ViewBuffer(), "boom") {
+		t.Fatalf("error buffer = %q", v.ViewBuffer())
+	}
+}
+
+func TestCloseInfo(t *testing.T) {
+	app := newTestApp()
+	g := newTestGui(t)
+	app.showInterfaceInfo(g, false, "hello")
+	if _, err := g.View("info"); err != nil {
+		t.Fatalf("info view must exist: %v", err)
+	}
+	app.closeInfo(g)
+	if _, err := g.View("info"); err == nil {
+		t.Fatal("info view must be deleted")
+	}
+}
+
+func TestMoveCursorUp(t *testing.T) {
+	app := newTestApp()
+	g := newTestGui(t, "sshManager")
+	v, _ := g.View("sshManager")
+	fmt.Fprintln(v, "line0")
+	fmt.Fprintln(v, "line1")
+	_ = v.SetCursor(0, 1)
+	if err := app.moveCursorUp(g, v); err != nil {
+		t.Fatal(err)
+	}
+	if _, cy := v.Cursor(); cy != 0 {
+		t.Fatalf("moveCursorUp cursor y = %d, want 0", cy)
+	}
+	if err := app.moveCursorUp(g, v); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMoveCursorDown(t *testing.T) {
+	app := newTestApp()
+	g := newTestGui(t, "sshManager")
+	v, _ := g.View("sshManager")
+	fmt.Fprintln(v, "line0")
+	fmt.Fprintln(v, "line1")
+	_ = v.SetCursor(0, 0)
+
+	if err := app.moveCursorDown(g, v); err != nil {
+		t.Fatal(err)
+	}
+	if _, cy := v.Cursor(); cy != 1 {
+		t.Fatalf("moveCursorDown cursor y = %d, want 1", cy)
+	}
+}
+
+func TestNextViewManager(t *testing.T) {
+	app := newTestApp()
+	g := newTestGui(t, "a", "b", "c")
+	views := []string{"a", "b", "c"}
+
+	va, _ := g.View("a")
+	_, _ = g.SetCurrentView("a")
+	if err := app.nextViewManager(g, va, views); err != nil {
+		t.Fatal(err)
+	}
+	if got := g.CurrentView().Name(); got != "b" {
+		t.Fatalf("nextViewManager = %q, want b", got)
+	}
+
+	vb, _ := g.View("b")
+	_, _ = g.SetCurrentView("b")
+	if err := app.nextViewManager(g, vb, views); err != nil {
+		t.Fatal(err)
+	}
+	if got := g.CurrentView().Name(); got != "c" {
+		t.Fatalf("nextViewManager = %q, want c", got)
+	}
+
+	vc, _ := g.View("c")
+	_, _ = g.SetCurrentView("c")
+	if err := app.nextViewManager(g, vc, views); err != nil {
+		t.Fatal(err)
+	}
+	if got := g.CurrentView().Name(); got != "a" {
+		t.Fatalf("nextViewManager wrap = %q, want a", got)
+	}
+}
+
+func TestCloseManager(t *testing.T) {
+	app := newTestApp()
+	g := newTestGui(t, "manager", "sshManager", "dockerContextManager", "kubernetesContextManager", "kubernetesNamespaceManager")
+
+	app.closeManager(g)
+	for _, name := range []string{"manager", "sshManager", "dockerContextManager", "kubernetesContextManager", "kubernetesNamespaceManager"} {
+		if _, err := g.View(name); err == nil {
+			t.Fatalf("view %q must be deleted", name)
+		}
+	}
+}
+
+func TestCloseHelp(t *testing.T) {
+	app := newTestApp()
+	g := newTestGui(t, "help")
+	if _, err := g.View("help"); err != nil {
+		t.Fatalf("help view must exist: %v", err)
+	}
+	app.closeHelp(g)
+	if _, err := g.View("help"); err == nil {
+		t.Fatal("help view must be deleted")
+	}
+}
+
 // ---------------------------------------- ssh ----------------------------------------
 
 // Проверка POSIX-экранирования аргументов удаленной команды
@@ -1950,28 +2081,36 @@ func TestAppSSHExec(t *testing.T) {
 	})
 }
 
-// Проверка remoteGetOS через заглушку ssh (без реального подключения)
-func TestRemoteGetOS(t *testing.T) {
-	writeFakeSSH := func(t *testing.T, binDir, body string) {
-		t.Helper()
-		if runtime.GOOS == "windows" {
-			name := filepath.Join(binDir, "ssh.cmd")
-			if err := os.WriteFile(name, []byte("@echo off\r\n"+body+"\r\n"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-		} else {
-			name := filepath.Join(binDir, "ssh")
-			if err := os.WriteFile(name, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
-				t.Fatal(err)
-			}
+// Создает исполняемую заглушку с заданным именем в binDir (кросс-платформенно)
+func writeFakeBin(t *testing.T, binDir, name string, lines ...string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		path := filepath.Join(binDir, name+".cmd")
+		content := "@echo off\r\n" + strings.Join(lines, "\r\n") + "\r\n"
+		if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		path := filepath.Join(binDir, name)
+		content := "#!/bin/sh\n" + strings.Join(lines, "\n") + "\n"
+		if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+			t.Fatal(err)
 		}
 	}
+}
 
+// Добавляет binDir в начало PATH, чтобы exec.Command находил заглушку
+func setFakeBinPath(t *testing.T, binDir string) {
+	t.Helper()
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// Проверка remoteGetOS через заглушку ssh (без реального подключения)
+func TestRemoteGetOS(t *testing.T) {
 	t.Run("linux", func(t *testing.T) {
 		binDir := t.TempDir()
-		writeFakeSSH(t, binDir, "echo Linux")
-		t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
+		writeFakeBin(t, binDir, "ssh", "echo Linux")
+		setFakeBinPath(t, binDir)
 		got, err := remoteGetOS([]string{"user@host"})
 		if err != nil {
 			t.Fatalf("remoteGetOS returned error: %v", err)
@@ -1983,11 +2122,160 @@ func TestRemoteGetOS(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		binDir := t.TempDir()
-		writeFakeSSH(t, binDir, "echo connection refused >&2\nexit 1")
-		t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
+		writeFakeBin(t, binDir, "ssh", "echo connection refused >&2", "exit 1")
+		setFakeBinPath(t, binDir)
 		if _, err := remoteGetOS([]string{"user@host"}); err == nil {
 			t.Fatal("remoteGetOS expected an error, got nil")
+		}
+	})
+}
+
+// Проверка statFile в локальном и ssh-режимах
+func TestStatFile(t *testing.T) {
+	t.Run("local", func(t *testing.T) {
+		app := &App{}
+		path := filepath.Join(t.TempDir(), "test.log")
+		if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		fi, err := app.statFile(path)
+		if err != nil {
+			t.Fatalf("statFile local: %v", err)
+		}
+		if fi.Name() != "test.log" || fi.Size() != 5 {
+			t.Fatalf("statFile local = %q/%d, want test.log/5", fi.Name(), fi.Size())
+		}
+	})
+
+	// Пайп | экранируется по-разному в cmd и sh
+	pipe := "|"
+	if runtime.GOOS == "windows" {
+		pipe = "^|"
+	}
+
+	t.Run("ssh valid", func(t *testing.T) {
+		binDir := t.TempDir()
+		writeFakeBin(t, binDir, "ssh", "echo /var/log/syslog"+pipe+"8744995"+pipe+"1756116219")
+		setFakeBinPath(t, binDir)
+
+		app := &App{sshMode: true, sshOptions: []string{"user@host"}}
+		fi, err := app.statFile("/var/log/syslog")
+		if err != nil {
+			t.Fatalf("statFile ssh: %v", err)
+		}
+		if fi.Name() != "/var/log/syslog" || fi.Size() != 8744995 {
+			t.Fatalf("statFile ssh = %q/%d", fi.Name(), fi.Size())
+		}
+	})
+
+	t.Run("ssh invalid fields", func(t *testing.T) {
+		binDir := t.TempDir()
+		writeFakeBin(t, binDir, "ssh", "echo only-two")
+		setFakeBinPath(t, binDir)
+
+		app := &App{sshMode: true, sshOptions: []string{"user@host"}}
+		if _, err := app.statFile("/var/log/syslog"); !errors.Is(err, ErrInvalidStat) {
+			t.Fatalf("statFile ssh expected ErrInvalidStat, got %v", err)
+		}
+	})
+
+	t.Run("ssh bad size", func(t *testing.T) {
+		binDir := t.TempDir()
+		writeFakeBin(t, binDir, "ssh", "echo /var/log/syslog"+pipe+"notanumber"+pipe+"1756116219")
+		setFakeBinPath(t, binDir)
+
+		app := &App{sshMode: true, sshOptions: []string{"user@host"}}
+		if _, err := app.statFile("/var/log/syslog"); err == nil {
+			t.Fatal("statFile ssh expected ParseInt error, got nil")
+		}
+	})
+}
+
+// Проверка statFiles (пустой список и парсинг ssh-вывода)
+func TestStatFiles(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		app := &App{}
+		got, err := app.statFiles(nil)
+		if err != nil {
+			t.Fatalf("statFiles empty: %v", err)
+		}
+		if len(got) != 0 {
+			t.Fatalf("statFiles empty = %v, want empty map", got)
+		}
+	})
+
+	pipe := "|"
+	if runtime.GOOS == "windows" {
+		pipe = "^|"
+	}
+
+	t.Run("ssh valid", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("cmd echo adds \\r to multiline stat output")
+		}
+		binDir := t.TempDir()
+		writeFakeBin(t, binDir, "ssh",
+			"echo /a"+pipe+"1"+pipe+"1",
+			"echo /b"+pipe+"2"+pipe+"2",
+		)
+		setFakeBinPath(t, binDir)
+
+		app := &App{sshMode: true, sshOptions: []string{"user@host"}}
+		got, err := app.statFiles([]string{"/a", "/b"})
+		if err != nil {
+			t.Fatalf("statFiles ssh: %v", err)
+		}
+		if len(got) != 2 || got["/a"].Size() != 1 || got["/b"].Size() != 2 {
+			t.Fatalf("statFiles ssh = %v", got)
+		}
+	})
+
+	t.Run("ssh invalid", func(t *testing.T) {
+		binDir := t.TempDir()
+		writeFakeBin(t, binDir, "ssh", "echo broken-line")
+		setFakeBinPath(t, binDir)
+
+		app := &App{sshMode: true, sshOptions: []string{"user@host"}}
+		if _, err := app.statFiles([]string{"/a"}); !errors.Is(err, ErrInvalidStat) {
+			t.Fatalf("statFiles ssh expected ErrInvalidStat, got %v", err)
+		}
+	})
+}
+
+// Проверка getContainersFromCompose через заглушку docker/docker-compose
+func TestGetContainersFromCompose(t *testing.T) {
+	t.Run("docker success", func(t *testing.T) {
+		binDir := t.TempDir()
+		writeFakeBin(t, binDir, "docker", "echo web", "echo db")
+		setFakeBinPath(t, binDir)
+
+		app := &App{dockerCompose: "docker", dockerContext: "default"}
+		got := app.getContainersFromCompose("proj")
+		if len(got) != 2 || strings.TrimSpace(got[0]) != "web" || strings.TrimSpace(got[1]) != "db" {
+			t.Fatalf("getContainersFromCompose docker = %v", got)
+		}
+	})
+
+	t.Run("docker-compose success", func(t *testing.T) {
+		binDir := t.TempDir()
+		writeFakeBin(t, binDir, "docker-compose", "echo web")
+		setFakeBinPath(t, binDir)
+
+		app := &App{dockerCompose: "docker-compose", dockerContext: "default"}
+		got := app.getContainersFromCompose("proj")
+		if len(got) != 1 || strings.TrimSpace(got[0]) != "web" {
+			t.Fatalf("getContainersFromCompose docker-compose = %v", got)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		binDir := t.TempDir()
+		writeFakeBin(t, binDir, "docker", "exit 1")
+		setFakeBinPath(t, binDir)
+
+		app := &App{dockerCompose: "docker", dockerContext: "default"}
+		if got := app.getContainersFromCompose("proj"); len(got) != 0 {
+			t.Fatalf("getContainersFromCompose error = %v, want empty", got)
 		}
 	})
 }
@@ -3793,4 +4081,213 @@ func TestParseStringToInt(t *testing.T) {
 			t.Fatalf("parseStringToInt(%q) = %d, %t", c.input, got, ok)
 		}
 	}
+}
+
+func TestCommandLineColor(t *testing.T) {
+	app := newTestApp()
+	app.coloredLogLines = []string{"alpha", "beta"}
+	out := captureStdout(t, func() { app.commandLineColor(true) })
+	assertContains(t, out, "alpha")
+	assertContains(t, out, "beta")
+}
+
+// ---------------------------------------- Helpers ----------------------------------------
+
+// Методы-обертки os.Stat
+func TestFileInfo(t *testing.T) {
+	mod := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	fi := &fileInfo{name: "a.log", size: 123, modTime: mod}
+	if fi.Name() != "a.log" {
+		t.Fatalf("Name = %q", fi.Name())
+	}
+	if fi.Size() != 123 {
+		t.Fatalf("Size = %d", fi.Size())
+	}
+	if !fi.ModTime().Equal(mod) {
+		t.Fatalf("ModTime = %v", fi.ModTime())
+	}
+	if fi.Mode() != 0o644 {
+		t.Fatalf("Mode = %v", fi.Mode())
+	}
+	if fi.IsDir() {
+		t.Fatal("IsDir must be false for files")
+	}
+	if fi.Sys() != nil {
+		t.Fatal("Sys must be nil")
+	}
+}
+
+// Удаление timestamp для разных систем контейнеризации
+func TestRemoveTimestamp(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		sys  string
+		want string
+	}{
+		{"docker with space", "2024-01-01T00:00:00Z message", "docker", "message"},
+		{"podman with space", "2024-01-01T00:00:00Z message", "podman", "message"},
+		{"docker no space", "nodatestamp", "docker", "nodatestamp"},
+		{"compose three fields", "web 2024-01-01T00:00:00Z message", "compose", "web message"},
+		{"compose short", "only two", "compose", "only two"},
+		{"kubectl three fields", "pod namespace message", "kubectl", "pod message"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := removeTimestamp(tt.line, tt.sys); got != tt.want {
+				t.Fatalf("removeTimestamp(%q, %q) = %q, want %q", tt.line, tt.sys, got, tt.want)
+			}
+		})
+	}
+}
+
+// Поиск пользователей по map или слайсу
+func TestContainsUser(t *testing.T) {
+	app := newTestApp()
+
+	app.userNameArray = []string{"alice", "bob"}
+	if !app.containsUser("alice") || !app.containsUser("bob") {
+		t.Fatal("containsUser must find slice users")
+	}
+	if app.containsUser("carol") {
+		t.Fatal("containsUser must not find missing user")
+	}
+
+	app.userNameSet = map[string]struct{}{"root": {}}
+	if !app.containsUser("root") {
+		t.Fatal("containsUser must find set user")
+	}
+	if app.containsUser("alice") {
+		t.Fatal("containsUser must prefer userNameSet over slice")
+	}
+}
+
+// Рразбор сочетаний клавиш из конфигурации
+func TestGetHotkey(t *testing.T) {
+	tests := []struct {
+		name       string
+		configKey  string
+		defaultKey string
+		want       any
+		wantMod    gocui.Modifier
+	}{
+		{"single letter", "a", "", 'a', gocui.ModNone},
+		{"f1", "f1", "", gocui.KeyF1, gocui.ModNone},
+		{"ctrl+a", "ctrl+a", "", gocui.KeyCtrlA, gocui.ModNone},
+		{"alt+f1", "alt+f1", "", gocui.KeyF1, gocui.ModAlt},
+		{"shift+a", "shift+a", "", 'A', gocui.ModNone},
+		{"tab", "tab", "", gocui.KeyTab, gocui.ModNone},
+		{"unknown with default key", "zzz", "f2", gocui.KeyF2, gocui.ModNone},
+		{"unknown with default letter", "zzz", "b", 'b', gocui.ModNone},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, mod := getHotkey(tt.configKey, tt.defaultKey)
+			if got != tt.want || mod != tt.wantMod {
+				t.Fatalf("getHotkey(%q, %q) = %v/%v, want %v/%v", tt.configKey, tt.defaultKey, got, mod, tt.want, tt.wantMod)
+			}
+		})
+	}
+}
+
+// ---------------------------------------- Сonfig ----------------------------------------
+
+func TestParseConfig(t *testing.T) {
+	c := &Config{}
+	path, err := c.parseConfig([]byte("settings:\n  loggingType: \"json\"\n"), "test.yml")
+	if err != nil {
+		t.Fatalf("parseConfig: %v", err)
+	}
+	if path != "test.yml" {
+		t.Fatalf("parseConfig path = %q", path)
+	}
+	if c.Settings.LoggingType != "json" {
+		t.Fatalf("parseConfig loggingType = %q", c.Settings.LoggingType)
+	}
+
+	if _, err := c.parseConfig([]byte("settings: ["), "bad.yml"); !errors.Is(err, ErrYamlSyntax) {
+		t.Fatalf("parseConfig expected ErrYamlSyntax, got %v", err)
+	}
+}
+
+func TestGetConfig(t *testing.T) {
+	dir := t.TempDir()
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(old) }()
+
+	if err := os.WriteFile(filepath.Join(dir, "config.yml"), []byte("settings:\n  loggingType: \"json\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Config{}
+	path, err := c.getConfig()
+	if err != nil {
+		t.Fatalf("getConfig: %v", err)
+	}
+	if path != filepath.Join(dir, "config.yml") {
+		t.Fatalf("getConfig path = %q", path)
+	}
+	if c.Settings.LoggingType != "json" {
+		t.Fatalf("getConfig loggingType = %q", c.Settings.LoggingType)
+	}
+
+	// Битый YAML в cwd должен вернуть ErrYamlSyntax
+	if err := os.WriteFile(filepath.Join(dir, "config.yml"), []byte("settings: ["), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Config{}).getConfig(); !errors.Is(err, ErrYamlSyntax) {
+		t.Fatalf("getConfig expected ErrYamlSyntax, got %v", err)
+	}
+}
+
+// ---------------------------------------- Logging ----------------------------------------
+
+func TestSetupLogging(t *testing.T) {
+	old := slog.Default()
+	defer slog.SetDefault(old)
+
+	t.Run("text", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "app.log")
+		app := &App{loggingPath: path, loggingType: "text"}
+		app.setupLogging()
+		if app.loggingFile == nil {
+			t.Fatal("setupLogging text did not open log file")
+		}
+		defer func() { _ = app.loggingFile.Close() }()
+		slog.Info("hello-log")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertContains(t, string(data), "hello-log")
+	})
+
+	t.Run("json", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "app.log")
+		app := &App{loggingPath: path, loggingType: "json"}
+		app.setupLogging()
+		if app.loggingFile == nil {
+			t.Fatal("setupLogging json did not open log file")
+		}
+		defer func() { _ = app.loggingFile.Close() }()
+		slog.Info("hello-log")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertContains(t, string(data), `"msg":"hello-log"`)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		app := &App{loggingPath: filepath.Join(t.TempDir(), "missing", "dir", "app.log"), loggingType: "text"}
+		app.setupLogging()
+		if app.loggingFile != nil {
+			t.Fatal("setupLogging error must leave loggingFile nil")
+		}
+	})
 }
