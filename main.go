@@ -219,7 +219,7 @@ type App struct {
 	customPath            string // пользовательский путь для поиска логов в файловой системе (#31)
 
 	selectUnits                  string // название журнала (systemUnits/userUnits/systemJournals/kernelBoot/auditd)
-	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
+	selectPath                   string // путь к логам (varlog/customPath/descriptor)
 	selectContainerizationSystem string // название системы контейнеризации (docker/compose/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (exact/fuzzy/regex/timestamp)
 
@@ -365,7 +365,7 @@ var (
 	journalFieldDescription      = "Filter the list of system journals by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)"
 	journalPriorityDescription   = "Filter the log output by priority (available values: debug, info, notice, warning, err, crit, alert, emerg)"
 	journalBootDescription       = "Filter the log output by system boot period, e.g. 0 current or -1 previous (default: all)"
-	pathDescription              = "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)"
+	pathDescription              = "Custom the file system path for searching logs (the current user's home directory is used by default)"
 	colorDisableDescription      = "Disable log highlighting (ANSI coloring)"
 	commandColorDescription      = "Log highlighting (ANSI coloring) in command-line mode"
 	commandExactDescription      = "Filtering using exact match in command-line mode"
@@ -521,14 +521,22 @@ func showConfig() {
 	}
 }
 
-func winHomeDocsDir() string {
+func homeDir() string {
 	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+	if err == nil && homeDir != "" {
+		// if runtime.GOOS == "windows" {
+		// 	return homeDir + "\\Documents"
+		// }
+		return homeDir
 	}
-	docsDir := filepath.Join(homeDir, "Documents")
-	docsDir = strings.ReplaceAll(docsDir, "\\", "/")
-	return docsDir
+	switch runtime.GOOS {
+	case "windows":
+		return "C:\\Users"
+	case "darwin":
+		return "/Users"
+	default:
+		return "/home"
+	}
 }
 
 // Audit (#18)
@@ -615,7 +623,7 @@ func (app *App) showAudit() {
 				{"/AppData/Roaming", "AppDataRoaming"},
 				{"Custom Path", "WinCustomPath"},
 			}
-			app.customPath = winHomeDocsDir()
+			app.customPath = homeDir()
 			// Создаем группу для ожидания выполнения всех горутин
 			var wg sync.WaitGroup
 			// Мьютекс для безопасного доступа к переменной auditText
@@ -724,20 +732,17 @@ func (app *App) showAudit() {
 		}{
 			{"System var logs", "varlog"},
 			{"Custom path", "customPath"},
-			{"Users home logs", "home"},
 			{"Process descriptor logs", "descriptor"},
 		}
 		for _, path := range paths {
-			app.customPath = "/opt/"
+			app.customPath = homeDir()
 			app.loadFiles(path.path)
 			lenLogFiles := strconv.Itoa(len(app.logfiles))
 			switch path.path {
 			case "varlog":
 				path.path = "/var/log/"
 			case "customPath":
-				path.path = "/opt/"
-			case "home":
-				path.path = "/home/"
+				path.path = homeDir()
 			}
 			auditText = append(auditText,
 				"  - name: "+path.name,
@@ -1604,11 +1609,7 @@ func runGoCui(mock bool) {
 			fmt.Println("Invalid custom path for " + app.getOS + ": " + *pathFlag)
 			os.Exit(1)
 		} else {
-			if app.getOS == "windows" {
-				app.customPath = winHomeDocsDir()
-			} else {
-				app.customPath = "/opt"
-			}
+			app.customPath = homeDir()
 		}
 	}
 
@@ -1689,7 +1690,7 @@ func runGoCui(mock bool) {
 	}
 
 	switch config.Interface.FileLogList {
-	case "customPath", "home", "descriptor":
+	case "customPath", "descriptor":
 		app.selectPath = config.Interface.FileLogList
 	default:
 		app.selectPath = "varlog"
@@ -2026,8 +2027,6 @@ func (app *App) layout(g *gocui.Gui) error {
 			v.Title = " < System var logs (0) > "
 		case "customPath":
 			v.Title = " < Custom path - " + app.customPath + " (0) > "
-		case "home":
-			v.Title = " < Users home logs (0) > "
 		case "descriptor":
 			v.Title = " < Process descriptor logs (0) > "
 		}
@@ -3307,77 +3306,6 @@ func (app *App) loadFiles(logPath string) {
 				log.Print("Error: files not found in ", logPath)
 			}
 		}
-	default:
-		// Определяем домашний каталог в Linux
-		logPath = "/home/"
-		// Домашний каталог в macOS
-		if app.getOS == "darwin" {
-			logPath = "/Users/"
-		}
-		// Ищем файлы с помощью системной утилиты find
-		args := []string{
-			logPath,
-			"-type", "f",
-			"-name", "*.log", "-o",
-			"-name", "*.asl", "-o",
-			"-name", "*.pcap", "-o",
-			"-name", "*.pcap.gz", "-o",
-			"-name", "*.pcapng", "-o",
-			"-name", "*.pcapng.gz",
-		}
-		cmd := app.sshExec(nil, "find", args...)
-		if app.logging {
-			slog.Info(cmd.String(), "action", "Loading the log files from users home")
-		}
-		output, _ = cmd.Output()
-		files := strings.Split(strings.TrimSpace(string(output)), "\n")
-		if !app.testMode {
-			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
-				vError, _ := app.gui.View("varLogs")
-				vError.Clear()
-				vError.Highlight = false
-				_, _ = fmt.Fprintln(vError, "\033[32mFiles not found\033[0m")
-				return
-			} else {
-				vError, _ := app.gui.View("varLogs")
-				app.fileSystemFrameColor = app.frameColor
-				if vError.FrameColor != app.frameColor {
-					vError.FrameColor = app.selectedFrameColor
-				}
-				vError.Highlight = true
-			}
-		} else {
-			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
-				log.Print("Error: files not found in home directories")
-			}
-		}
-		// Получаем содержимое файлов из домашнего каталога пользователя root
-		args = []string{
-			"/root/",
-			"-type", "f",
-			"-name", "*.log", "-o",
-			"-name", "*.pcap", "-o",
-			"-name", "*.pcap.gz", "-o",
-			"-name", "*.pcapng", "-o",
-			"-name", "*.pcapng.gz",
-		}
-		cmdRootDir := app.sshExec(nil, "find", args...)
-		if app.logging {
-			slog.Info(cmdRootDir.String(), "action", "Loading the log files from users home")
-		}
-		outputRootDir, err := cmdRootDir.Output()
-		// Добавляем содержимое директории /root/ в общий массив, если есть доступ
-		if err == nil {
-			output = append(output, outputRootDir...)
-		}
-		if app.fileSystemFrameColor == app.errorColor && !app.testMode {
-			vError, _ := app.gui.View("varLogs")
-			app.fileSystemFrameColor = app.frameColor
-			if vError.FrameColor != app.frameColor {
-				vError.FrameColor = app.selectedFrameColor
-			}
-			vError.Highlight = true
-		}
 	}
 	// Формируем массив путей
 	logFullPaths := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -3403,17 +3331,6 @@ func (app *App) loadFiles(logPath string) {
 		logName = strings.ReplaceAll(logName, "/", " ")
 		logName = strings.ReplaceAll(logName, ".log.", ".")
 		logName = strings.TrimPrefix(logName, " ")
-		if logPath == "/home/" || logPath == "/Users/" {
-			// Разбиваем строку на слова
-			words := strings.Fields(logName)
-			if len(words) == 0 {
-				continue
-			}
-			// Берем первое и последнее слово
-			firstWord := words[0]
-			lastWord := words[len(words)-1]
-			logName = "\x1b[0;33m" + firstWord + "\033[0m" + ": " + lastWord
-		}
 		// Получаем информацию о файле
 		var fileInfo os.FileInfo
 		var exists bool
@@ -9957,10 +9874,6 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
 				app.loadFiles(app.selectPath)
 			case "customPath":
-				app.selectPath = "home"
-				selectedVarLog.Title = " < Users home logs (0) > "
-				app.loadFiles(app.selectPath)
-			case "home":
 				app.selectPath = "descriptor"
 				selectedVarLog.Title = " < Process descriptor logs (0) > "
 				app.loadFiles(app.selectPath)
@@ -10039,10 +9952,6 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.Title = " < Process descriptor logs (0) > "
 				app.loadFiles(app.selectPath)
 			case "descriptor":
-				app.selectPath = "home"
-				selectedVarLog.Title = " < Users home logs (0) > "
-				app.loadFiles(app.selectPath)
-			case "home":
 				app.selectPath = "customPath"
 				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
 				app.loadFiles(app.selectPath)

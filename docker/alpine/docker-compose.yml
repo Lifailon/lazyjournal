@@ -8,9 +8,6 @@ services:
     stdin_open: true
     volumes:
       - /var/log:/var/log:ro
-      - /opt:/opt:ro
-      - /home:/home:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - $HOME/.kube/config:/root/.kube/config:ro
-      # - ./config.yml:/lazyjournal/config.yml:ro

@@ -189,7 +189,6 @@ func TestUnixFiles(t *testing.T) {
 	}{
 		{"System var logs", "varlog"},
 		{"Optional package logs", "customPath"},
-		{"Users home logs", "home"},
 		{"Process descriptor logs", "descriptor"},
 	}
 
@@ -210,7 +209,7 @@ func TestUnixFiles(t *testing.T) {
 				dateTimeRegex:      dateTimeRegex,
 				integersInputRegex: integersInputRegex,
 				syslogUnitRegex:    syslogUnitRegex,
-				customPath:         "/opt",
+				customPath:         homeDir(),
 			}
 
 			// Пропускаем тесты в macOS/BSD
@@ -393,7 +392,8 @@ func TestColor(t *testing.T) {
 		testMode:           true,
 		logViewCount:       "10000",
 		logUpdateSeconds:   5,
-		selectPath:         "home",
+		selectPath:         "customPath",
+		customPath:         homeDir(),
 		filterListText:     "color",
 		trimHttpRegex:      trimHttpRegex,
 		trimHttpsRegex:     trimHttpsRegex,
@@ -466,7 +466,8 @@ func TestFilter(t *testing.T) {
 				testMode:           true,
 				logViewCount:       "10000",
 				logUpdateSeconds:   5,
-				selectPath:         "home",
+				selectPath:         "customPath",
+				customPath:         homeDir(),
 				filterListText:     "color",
 				selectFilterMode:   tc.selectFilterMode,
 				filterText:         "true",
@@ -1152,14 +1153,7 @@ func TestMockInterface(t *testing.T) {
 			_ = app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				textLog := "Optional package logs and custom path"
-				t.Log(passLog + textLog)
-				slog.Debug(textLog)
-			}
-			_ = app.setLogFilesListRight(g, v)
-			time.Sleep(10 * time.Second)
-			if debug {
-				textLog := "Users home logs"
+				textLog := "Custom path"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
@@ -1193,14 +1187,7 @@ func TestMockInterface(t *testing.T) {
 			_ = app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				textLog := "Users home logs"
-				t.Log(passLog + textLog)
-				slog.Debug(textLog)
-			}
-			_ = app.setLogFilesListLeft(g, v)
-			time.Sleep(10 * time.Second)
-			if debug {
-				textLog := "Optional package logs and custom path"
+				textLog := "Custom path"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
