@@ -2531,6 +2531,7 @@ func TestRenderStatus(t *testing.T) {
 		dockerStreamLogsStatus:    "stream",
 		kubernetesContext:         "default",
 		kubernetesNamespaceStatus: "all",
+		kubernetesPreviousPods:    "current",
 		timestampDocker:           false,
 	}
 
@@ -2591,6 +2592,7 @@ func TestRenderStatus(t *testing.T) {
 		"Timestamp off",
 		"K8S Context default",
 		"Namespace all",
+		"Pod current",
 	} {
 		if !strings.Contains(second, want) {
 			t.Fatalf("second status line missing %q: %q", want, second)

@@ -88,6 +88,7 @@ hotkeys:
   switchSystemBootPeriod: ctrl+b
   switchDockerMode: ctrl+d
   switchStreamMode: ctrl+s
+  switchKubePreviousPods: ctrl+o
   timestampShow: ctrl+t
   copyToClipboard: shift+c
   exit: ctrl+c
