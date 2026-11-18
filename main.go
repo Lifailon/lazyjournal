@@ -3121,11 +3121,14 @@ func (app *App) statFiles(paths []string) (map[string]os.FileInfo, error) {
 }
 
 func (app *App) loadFiles(logPath string) {
-	app.logfiles = nil // сбрасываем (очищаем) массив перед загрузкой новых журналов
+	// Очищаем массив перед загрузкой новых журналов
+	app.logfiles = nil
 	var output []byte
+	var descriptorCommands map[string]string
 	switch logPath {
 	case "descriptor":
-		cmd := app.sshExec(nil, "lsof", "-Fn")
+		// Получаем pid, команду и имя файла (#99)
+		cmd := app.sshExec(nil, "lsof", "-F", "pcn")
 		// Подавить вывод ошибок при отсутствиее прав доступа (opendir: Permission denied)
 		cmd.Stderr = nil
 		if app.logging {
@@ -3161,11 +3164,24 @@ func (app *App) loadFiles(logPath string) {
 		}
 		// Очищаем массив перед добавлением отфильтрованных файлов
 		output = []byte{}
-		// Фильтруем строки, которые заканчиваются на ".log" и удаляем префикс (имя файла)
+		descriptorCommands = make(map[string]string)
+		var currentCommand string
+		// Фильтруем строки с расширением ".log" и собираем имя процесса для каждого файла
 		for _, file := range files {
-			if strings.HasSuffix(file, ".log") {
-				file = strings.TrimPrefix(file, "n")
-				output = append(output, []byte(file+"\n")...)
+			if file == "" {
+				continue
+			}
+			switch file[0] {
+			case 'c':
+				currentCommand = file[1:]
+			case 'n':
+				name := file[1:]
+				if strings.HasSuffix(name, ".log") {
+					if _, ok := descriptorCommands[name]; !ok {
+						descriptorCommands[name] = currentCommand
+						output = append(output, []byte(name+"\n")...)
+					}
+				}
 			}
 		}
 	case "varlog":
@@ -3363,23 +3379,11 @@ func (app *App) loadFiles(logPath string) {
 		if logName != "" && !serviceMap[logFullPath] {
 			// Добавляем путь в массив для проверки уникальных путей
 			serviceMap[logFullPath] = true
-			// Получаем имя процесса для файла дескриптора
+			// Извлекаем имя процесса для файлового дескриптора из собранной карты
 			if logPath == "descriptor" {
-				cmd := app.sshExec(nil, "lsof", "-Fc", logFullPath)
-				cmd.Stderr = nil
-				if app.logging {
-					slog.Info(cmd.String(), "action", "Loading the log files for process descriptor")
-				}
-				outputLsof, _ := cmd.Output()
-				processLines := strings.Split(strings.TrimSpace(string(outputLsof)), "\n")
-				// Ищем строку, которая содержит имя процесса (только первый процесс)
-				for _, line := range processLines {
-					if strings.HasPrefix(line, "c") {
-						// Удаляем префикс
-						processName := line[1:]
-						logName = "\x1b[0;33m" + processName + "\033[0m" + ": " + logName
-						break
-					}
+				processName, ok := descriptorCommands[logFullPath]
+				if ok && processName != "" {
+					logName = "\x1b[0;33m" + processName + "\033[0m" + ": " + logName
 				}
 			}
 			// Выделение цветом подов и контейнеров k3s из файловой системы
