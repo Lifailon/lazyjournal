@@ -127,6 +127,7 @@ type Hotkeys struct {
 	SwitchSystemBootPeriod string `yaml:"switchSystemBootPeriod"`
 	SwitchDockerMode       string `yaml:"switchDockerMode"`
 	SwitchStreamMode       string `yaml:"switchStreamMode"`
+	SwitchKubePreviousPods string `yaml:"switchKubePreviousPods"`
 	TimestampShow          string `yaml:"timestampShow"`
 	CopyToClipboard        string `yaml:"copyToClipboard"`
 	Exit                   string `yaml:"exit"`
@@ -198,6 +199,7 @@ type App struct {
 	kubernetesContext         string
 	kubernetesNamespace       string
 	kubernetesNamespaceStatus string
+	kubernetesPreviousPods    string
 
 	getOS         string   // название ОС
 	getArch       string   // архитектура процессора
@@ -505,6 +507,7 @@ func showConfig() {
 	fmt.Printf("  switchSystemBootPeriod:   %s\n", config.Hotkeys.SwitchSystemBootPeriod)
 	fmt.Printf("  switchDockerMode:         %s\n", config.Hotkeys.SwitchDockerMode)
 	fmt.Printf("  switchStreamMode:         %s\n", config.Hotkeys.SwitchStreamMode)
+	fmt.Printf("  switchKubePreviousPods:   %s\n", config.Hotkeys.SwitchKubePreviousPods)
 	fmt.Printf("  timestampShow:            %s\n", config.Hotkeys.TimestampShow)
 	fmt.Printf("  copyToClipboard:          %s\n", config.Hotkeys.CopyToClipboard)
 	fmt.Printf("  exit:                     %s\n", config.Hotkeys.Exit)
@@ -1121,6 +1124,7 @@ func runGoCui(mock bool) {
 		podmanContext:           "nil",
 		kubernetesContext:       "default",
 		kubernetesNamespace:     "all",
+		kubernetesPreviousPods:  "current",
 		startServices:           0, // начальная позиция списка юнитов
 		selectedJournal:         0, // начальный индекс выбранного журнала
 		startFiles:              0,
@@ -4894,23 +4898,33 @@ func (app *App) loadDockerLogs(containerName string, newUpdate bool) {
 		case "kubectl":
 			// Собираем timezone с учетом смещения UTC
 			sinceTimestamp := app.sinceFilterText + "T00:00:00" + app.timezoneFilter
-			// Формируем команду kubectl с нужными ключами и предварительно извлеченным namespace при выборе пода
-			if app.sinceDateFilterMode {
-				cmd = app.sshExec(ctx,
-					containerizationSystem, "logs",
-					"--since-time", sinceTimestamp,
-					"--context", app.kubernetesContext, "-n", namespace,
-					"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
-					"--all-containers=true", "--prefix=true",
-					"--timestamps=true", "--tail", app.logViewCount, containerId)
-			} else {
-				cmd = app.sshExec(ctx,
-					containerizationSystem, "logs",
-					"--context", app.kubernetesContext, "-n", namespace,
-					"--ignore-errors=true", "--insecure-skip-tls-verify-backend=true",
-					"--all-containers=true", "--prefix=true",
-					"--timestamps=true", "--tail", app.logViewCount, containerId)
+			// Формируем флаги для команды kubectl с предварительно извлеченным namespace при выборе пода
+			args := []string{
+				containerizationSystem, "logs",
+				"--context", app.kubernetesContext,
+				"-n", namespace,
+				"--tail", app.logViewCount,
+				"--all-containers=true",
+				"--prefix=true",
+				"--ignore-errors=true",
+				"--insecure-skip-tls-verify-backend=true",
+				"--timestamps=true",
 			}
+			// Добавляем фильтрацию по дате
+			if app.sinceDateFilterMode {
+				args = append([]string{
+					containerizationSystem,
+					"logs",
+					"--since-time",
+					sinceTimestamp,
+				}, args[2:]...)
+			}
+			// Добавляем флаг для отображения логов предыдущего инстанса контейнеров пода (#98)
+			if app.kubernetesPreviousPods == "previous" {
+				args = append(args, "--previous")
+			}
+			args = append(args, containerId)
+			cmd = app.sshExec(ctx, args[0], args[1:]...)
 		case "compose":
 			// Сначала получаем список контейнеров в стеке Compose
 			if newUpdate {
@@ -5536,13 +5550,15 @@ func (app *App) renderStatus(v *gocui.View) {
 			" \033[2m•\033[0m\033[1m Timestamp\033[0m %s"+
 			" \033[2m│\033[0m\033[36m K8S\033[0m"+
 			" \033[1mContext\033[0m %s"+
-			" \033[2m•\033[0m\033[1m Namespace\033[0m %s",
+			" \033[2m•\033[0m\033[1m Namespace\033[0m %s"+
+			" \033[2m•\033[0m\033[1m Pod\033[0m %s",
 		statusString(app.sshStatus),
 		statusString(app.dockerContext),
 		statusString(app.dockerStreamLogsStatus),
 		statusBool(app.timestampDocker),
 		statusString(app.kubernetesContext),
 		statusString(app.kubernetesNamespaceStatus),
+		statusString(app.kubernetesPreviousPods),
 	)
 	if help == "" {
 		_, _ = fmt.Fprintln(v, line)
@@ -8881,6 +8897,22 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
+	// Kubernetes pods mode (Ctrl+O)
+	// Переключение режима чтения логов подов между current и previous (#98)
+	customPreviousPods, altMode := getHotkey(config.Hotkeys.SwitchKubePreviousPods, "ctrl+o")
+	if err := app.gui.SetKeybinding("", customPreviousPods, altMode, func(g *gocui.Gui, v *gocui.View) error {
+		if app.kubernetesPreviousPods == "previous" {
+			app.kubernetesPreviousPods = "current"
+		} else {
+			app.kubernetesPreviousPods = "previous"
+		}
+		app.updateStatus()
+		app.updateLogOutput(false)
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	// Docker timestamp (Ctrl+T)
 	// Переключение режима вывода timestamp и названия потока
 	customTimestamp, altMode := getHotkey(config.Hotkeys.TimestampShow, "ctrl+t")
@@ -9134,7 +9166,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	// Получаем размеры терминала
 	maxX, maxY := g.Size()
 	// Размеры окна help (ширина, высота)
-	width, height := 108, 47
+	width, height := 108, 48
 	// Вычисляем координаты для центрального расположения
 	x0 := (maxX - width) / 2
 	y0 := (maxY - height) / 2
@@ -9187,6 +9219,7 @@ func (app *App) showInterfaceHelp(g *gocui.Gui) {
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mD\033[0m - change the Docker log reading mode (sources: stream or json file).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mS\033[0m - change the Docker log stream display mode (all, stdout or stderr only).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mT\033[0m - enable or disable built-in timestamp for Docker and Kubernetes logs.")
+	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mO\033[0m - change the Kubernetes pods log mode (current or previous).")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mShift\033[0m+\033[32mC\033[0m - copy the visible text from the log window to the clipboard.")
 	_, _ = fmt.Fprintln(helpView, "      \033[32mCtrl\033[0m+\033[32mC\033[0m - clear input text in the filter window or exit.")
 	_, _ = fmt.Fprintln(helpView, "\n    Source code: "+app.wordColor("https://github.com/Lifailon/lazyjournal"))
