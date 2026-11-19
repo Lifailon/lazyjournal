@@ -1941,6 +1941,28 @@ func TestCloseManager(t *testing.T) {
 	}
 }
 
+func TestRestoreMainFocusAfterManager(t *testing.T) {
+	app := newTestApp()
+	g := newTestGui(t, "filterList", "services", "varLogs", "docker", "logs", "sshManager")
+	app.globalCurrentView = "varLogs"
+	if _, err := g.SetCurrentView("sshManager"); err != nil {
+		t.Fatal(err)
+	}
+
+	app.closeManager(g)
+	app.restoreMainFocus(g)
+
+	if g.CurrentView() == nil {
+		t.Fatal("focus was not restored (nil)")
+	}
+	if got := g.CurrentView().Name(); got != "varLogs" {
+		t.Fatalf("focus = %q, want varLogs", got)
+	}
+	if app.globalCurrentView != "varLogs" {
+		t.Fatalf("globalCurrentView = %q, want varLogs", app.globalCurrentView)
+	}
+}
+
 func TestCloseHelp(t *testing.T) {
 	app := newTestApp()
 	g := newTestGui(t, "help")

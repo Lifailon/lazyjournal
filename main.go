@@ -7932,6 +7932,7 @@ func (app *App) setupKeybindings() error {
 			if err := app.setupKeybindings(); err != nil {
 				log.Panicln("Error key bindings", err)
 			}
+			app.restoreMainFocus(g)
 			return nil
 		}); err != nil {
 			return err
@@ -9296,6 +9297,24 @@ func (app *App) closeManager(g *gocui.Gui) {
 		return
 	}
 	if err := g.DeleteView("kubernetesNamespaceManager"); err != nil {
+		return
+	}
+}
+
+// Возвращает фокус на основное окно после закрытия менеджера ssh/контектов (Esc)
+func (app *App) restoreMainFocus(g *gocui.Gui) {
+	candidates := []string{app.globalCurrentView, "logs", "docker", "varLogs", "services", "filterList"}
+	for _, name := range candidates {
+		if name == "" {
+			continue
+		}
+		restoredView, err := g.SetCurrentView(name)
+		if err != nil {
+			continue
+		}
+		restoredView.FrameColor = app.selectedFrameColor
+		restoredView.TitleColor = app.selectedTitleColor
+		app.globalCurrentView = name
 		return
 	}
 }
