@@ -3137,31 +3137,8 @@ func (app *App) loadFiles(logPath string) {
 		output, _ = cmd.Output()
 		// Разбиваем вывод на строки
 		files := strings.Split(strings.TrimSpace(string(output)), "\n")
-		// Если список файлов пустой, возвращаем ошибку Permission denied
-		if !app.testMode {
-			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
-				vError, _ := app.gui.View("varLogs")
-				vError.Clear()
-				// Меняем цвет окна на красный
-				app.fileSystemFrameColor = app.errorColor
-				vError.FrameColor = app.fileSystemFrameColor
-				// Отключаем курсор и выводим сообщение об ошибке
-				vError.Highlight = false
-				_, _ = fmt.Fprintln(vError, "\033[31mPermission denied (files not found)\033[0m")
-				return
-			} else {
-				vError, _ := app.gui.View("varLogs")
-				app.fileSystemFrameColor = app.frameColor
-				if vError.FrameColor != app.frameColor {
-					vError.FrameColor = app.selectedFrameColor
-				}
-				vError.Highlight = true
-			}
-		} else {
-			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
-				log.Print("Error: permission denied (files not found from descriptor)")
-			}
-		}
+		// Проверяем, пустой ли вывод lsof (бинарь недоступен или вернул ошибку доступа)
+		rawEmpty := len(files) == 0 || (len(files) == 1 && files[0] == "")
 		// Очищаем массив перед добавлением отфильтрованных файлов
 		output = []byte{}
 		descriptorCommands = make(map[string]string)
@@ -3182,6 +3159,31 @@ func (app *App) loadFiles(logPath string) {
 						output = append(output, []byte(name+"\n")...)
 					}
 				}
+			}
+		}
+		// Если после фильтрации не осталось ".log" файлов, возвращаем ошибку Permission denied
+		if !app.testMode {
+			if rawEmpty || len(descriptorCommands) == 0 {
+				vError, _ := app.gui.View("varLogs")
+				vError.Clear()
+				// Меняем цвет окна на красный
+				app.fileSystemFrameColor = app.errorColor
+				vError.FrameColor = app.fileSystemFrameColor
+				// Отключаем курсор и выводим сообщение об ошибке
+				vError.Highlight = false
+				_, _ = fmt.Fprintln(vError, "\033[31mPermission denied (files not found)\033[0m")
+				return
+			} else {
+				vError, _ := app.gui.View("varLogs")
+				app.fileSystemFrameColor = app.frameColor
+				if vError.FrameColor != app.frameColor {
+					vError.FrameColor = app.selectedFrameColor
+				}
+				vError.Highlight = true
+			}
+		} else {
+			if rawEmpty || len(descriptorCommands) == 0 {
+				log.Print("Error: permission denied (files not found from descriptor)")
 			}
 		}
 	case "varlog":
