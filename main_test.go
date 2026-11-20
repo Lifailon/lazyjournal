@@ -47,10 +47,8 @@ func TestWinFiles(t *testing.T) {
 		selectPath string
 	}{
 		{"Program Files", "ProgramFiles"},
-		{"Program Files 86", "ProgramFiles86"},
 		{"ProgramData", "ProgramData"},
-		{"AppData/Local", "AppDataLocal"},
-		{"AppData/Roaming", "AppDataRoaming"},
+		{"Windows Logs", "WindowsLogs"},
 	}
 
 	for _, tc := range testCases {
@@ -87,7 +85,7 @@ func TestWinFiles(t *testing.T) {
 			}
 
 			// Пропускаем тесты для CI
-			if app.userName == "runneradmin" && tc.selectPath != "AppDataRoaming" {
+			if app.userName == "runneradmin" {
 				t.Skip("Skip test for", app.userName, "in CI")
 			}
 

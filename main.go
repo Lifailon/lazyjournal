@@ -619,8 +619,7 @@ func (app *App) showAudit() {
 				{"Program Files", "ProgramFiles"},
 				{"Program Files (x86)", "ProgramFiles86"},
 				{"ProgramData", "ProgramData"},
-				{"/AppData/Local", "AppDataLocal"},
-				{"/AppData/Roaming", "AppDataRoaming"},
+				{"Windows Logs", "WindowsLogs"},
 				{"Custom Path", "WinCustomPath"},
 			}
 			app.customPath = homeDir()
@@ -640,6 +639,8 @@ func (app *App) showAudit() {
 						fullPath = "\"" + app.customPath + "\""
 					case strings.HasPrefix(path.fullPath, "Program"):
 						fullPath = "\"" + app.systemDisk + ":/" + path.fullPath + "\""
+					case path.fullPath == "Windows Logs":
+						fullPath = "\"" + app.systemDisk + ":/Windows/Logs\""
 					default:
 						fullPath = "\"" + app.systemDisk + ":/Users/" + app.userName + path.fullPath + "\""
 					}
@@ -3433,10 +3434,8 @@ func (app *App) loadWinFiles(logPath string) {
 		logPath = app.systemDisk + ":\\Program Files (x86)"
 	case "ProgramData":
 		logPath = app.systemDisk + ":\\ProgramData"
-	case "AppDataLocal":
-		logPath = app.systemDisk + ":\\Users\\" + app.userName + "\\AppData\\Local"
-	case "AppDataRoaming":
-		logPath = app.systemDisk + ":\\Users\\" + app.userName + "\\AppData\\Roaming"
+	case "WindowsLogs":
+		logPath = app.systemDisk + ":\\Windows\\Logs"
 	case "WinCustomPath":
 		logPath = app.customPath
 	}
@@ -9866,17 +9865,13 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 				app.loadWinFiles(app.selectPath)
 			case "ProgramFiles86":
 				app.selectPath = "ProgramData"
-				selectedVarLog.Title = " < ProgramData (0) > "
+				selectedVarLog.Title = " < Program Data (0) > "
 				app.loadWinFiles(app.selectPath)
 			case "ProgramData":
-				app.selectPath = "AppDataLocal"
-				selectedVarLog.Title = " < AppData Local (0) > "
+				app.selectPath = "WindowsLogs"
+				selectedVarLog.Title = " < Windows Logs (0) > "
 				app.loadWinFiles(app.selectPath)
-			case "AppDataLocal":
-				app.selectPath = "AppDataRoaming"
-				selectedVarLog.Title = " < AppData Roaming (0) > "
-				app.loadWinFiles(app.selectPath)
-			case "AppDataRoaming":
+			case "WindowsLogs":
 				app.selectPath = "WinCustomPath"
 				selectedVarLog.Title = " < Custom Path (0) > "
 				app.loadWinFiles(app.selectPath)
@@ -9888,7 +9883,7 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 			// Включаем переключение списков
 			app.keybindingsEnabled = true
 			if err := app.setupKeybindings(); err != nil {
-				log.Panicln("Error key bindings", err)
+				log.Panicln(err)
 			}
 		}()
 	} else {
@@ -9944,16 +9939,12 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.Title = " < Custom Path (0) > "
 				app.loadWinFiles(app.selectPath)
 			case "WinCustomPath":
-				app.selectPath = "AppDataRoaming"
-				selectedVarLog.Title = " < AppData Roaming (0) > "
+				app.selectPath = "WindowsLogs"
+				selectedVarLog.Title = " < Windows Logs (0) > "
 				app.loadWinFiles(app.selectPath)
-			case "AppDataRoaming":
-				app.selectPath = "AppDataLocal"
-				selectedVarLog.Title = " < AppData Local (0) > "
-				app.loadWinFiles(app.selectPath)
-			case "AppDataLocal":
+			case "WindowsLogs":
 				app.selectPath = "ProgramData"
-				selectedVarLog.Title = " < ProgramData (0) > "
+				selectedVarLog.Title = " < Program Data (0) > "
 				app.loadWinFiles(app.selectPath)
 			case "ProgramData":
 				app.selectPath = "ProgramFiles86"
