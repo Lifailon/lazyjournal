@@ -617,7 +617,6 @@ func (app *App) showAudit() {
 				path     string
 			}{
 				{"Program Files", "ProgramFiles"},
-				{"Program Files (x86)", "ProgramFiles86"},
 				{"ProgramData", "ProgramData"},
 				{"Windows Logs", "WindowsLogs"},
 				{"Custom Path", "WinCustomPath"},
@@ -3429,9 +3428,7 @@ func (app *App) loadWinFiles(logPath string) {
 	// Определяем путь по параметру
 	switch logPath {
 	case "ProgramFiles":
-		logPath = app.systemDisk + ":\\Program Files"
-	case "ProgramFiles86":
-		logPath = app.systemDisk + ":\\Program Files (x86)"
+		logPath = app.systemDisk + ":\\"
 	case "ProgramData":
 		logPath = app.systemDisk + ":\\ProgramData"
 	case "WindowsLogs":
@@ -3443,6 +3440,16 @@ func (app *App) loadWinFiles(logPath string) {
 	var files []string
 	// Получаем список корневых директорий
 	rootDirs, _ := os.ReadDir(logPath)
+	// Для Program Files обходим оба каталога
+	if logPath == app.systemDisk+":\\" {
+		var dirs []os.DirEntry
+		for _, d := range rootDirs {
+			if d.Name() == "Program Files" || d.Name() == "Program Files (x86)" {
+				dirs = append(dirs, d)
+			}
+		}
+		rootDirs = dirs
+	}
 	// Проверяем файлы внутри customPath
 	if logPath == app.customPath {
 		for _, rootFile := range rootDirs {
@@ -3523,7 +3530,7 @@ func (app *App) loadWinFiles(logPath string) {
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
 		// Формируем полный путь к файлу
-		logFullPath := logPath + "\\" + scanner.Text()
+		logFullPath := filepath.Join(logPath, scanner.Text())
 		// Формируем имя файла для списка
 		logName := scanner.Text()
 		logName = strings.TrimSuffix(logName, ".log")
@@ -9860,10 +9867,6 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 		go func() {
 			switch app.selectPath {
 			case "ProgramFiles":
-				app.selectPath = "ProgramFiles86"
-				selectedVarLog.Title = " < Program Files x86 (0) > "
-				app.loadWinFiles(app.selectPath)
-			case "ProgramFiles86":
 				app.selectPath = "ProgramData"
 				selectedVarLog.Title = " < Program Data (0) > "
 				app.loadWinFiles(app.selectPath)
@@ -9947,10 +9950,6 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.Title = " < Program Data (0) > "
 				app.loadWinFiles(app.selectPath)
 			case "ProgramData":
-				app.selectPath = "ProgramFiles86"
-				selectedVarLog.Title = " < Program Files x86 (0) > "
-				app.loadWinFiles(app.selectPath)
-			case "ProgramFiles86":
 				app.selectPath = "ProgramFiles"
 				selectedVarLog.Title = " < Program Files (0) > "
 				app.loadWinFiles(app.selectPath)
