@@ -3466,6 +3466,11 @@ func (app *App) loadWinFiles(logPath string) {
 		if err == nil && fileInfo.Size() > 0 {
 			logName := strings.TrimSuffix(relPath, ".log")
 			logName = strings.ReplaceAll(logName, "\\", " ")
+			if strings.HasPrefix(logName, "Program Files (x86) ") {
+				logName = "(x86) " + strings.TrimPrefix(logName, "Program Files (x86) ")
+			} else if strings.HasPrefix(logName, "Program Files ") {
+				logName = strings.TrimPrefix(logName, "Program Files ")
+			}
 			if logName != "" {
 				formattedDate := fileInfo.ModTime().Format("02.01.2006 15:04")
 				logfiles = append(logfiles, Logfile{
