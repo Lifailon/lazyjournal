@@ -3436,8 +3436,6 @@ func (app *App) loadWinFiles(logPath string) {
 	case "WinCustomPath":
 		logPath = app.customPath
 	}
-	// Массив для хранений списка файлов
-	var files []string
 	// Получаем список корневых директорий
 	rootDirs, _ := os.ReadDir(logPath)
 	// Для Program Files обходим оба каталога
@@ -3450,62 +3448,92 @@ func (app *App) loadWinFiles(logPath string) {
 		}
 		rootDirs = dirs
 	}
+	// Ограниченный пул воркеров для параллельного обхода
+	maxWorkers := min(runtime.NumCPU(), 16)
+	sem := make(chan struct{}, maxWorkers)
+	// Доступ к найденным файлам из нескольких горутин
+	var mu sync.Mutex
+	// Группа ожидания для отслеживания завершения всех горутин
+	var wg sync.WaitGroup
+	// Список найденных логов и счетчик найденных файлов
+	var logfiles []Logfile
+	found := 0
+	// Получаем статистику и добавляем файл в список
+	addFile := func(fullPath, relPath string) {
+		fileInfo, err := os.Stat(fullPath)
+		mu.Lock()
+		found++
+		if err == nil && fileInfo.Size() > 0 {
+			logName := strings.TrimSuffix(relPath, ".log")
+			logName = strings.ReplaceAll(logName, "\\", " ")
+			if logName != "" {
+				formattedDate := fileInfo.ModTime().Format("02.01.2006 15:04")
+				logfiles = append(logfiles, Logfile{
+					name: "[" + "\033[34m" + formattedDate + "\033[0m" + "] " + logName,
+					path: fullPath,
+				})
+			}
+		}
+		mu.Unlock()
+	}
 	// Проверяем файлы внутри customPath
 	if logPath == app.customPath {
 		for _, rootFile := range rootDirs {
 			if !rootFile.IsDir() {
 				if strings.HasSuffix(strings.ToLower(rootFile.Name()), ".log") {
-					files = append(files, rootFile.Name())
+					addFile(filepath.Join(logPath, rootFile.Name()), rootFile.Name())
 				}
 			}
 		}
 	}
-	// Доступ к срезу files из нескольких горутин
-	var mu sync.Mutex
-	// Группа ожидания для отслеживания завершения всех горутин
-	var wg sync.WaitGroup
-	// Ищем файлы с помощью WalkDir в Windows
+	// Рекурсивно обходим каталог, параллеля обход через семафор
+	var walk func(dir string)
+	walk = func(dir string) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, entry := range entries {
+			fullPath := filepath.Join(dir, entry.Name())
+			if entry.IsDir() {
+				// Не спускаемся в символические ссылки и reparse points
+				if entry.Type()&os.ModeSymlink != 0 {
+					continue
+				}
+				select {
+				case sem <- struct{}{}:
+					wg.Add(1)
+					go func(path string) {
+						defer wg.Done()
+						defer func() { <-sem }()
+						walk(path)
+					}(fullPath)
+				default:
+					// Пул занят, обходим синхронно
+					walk(fullPath)
+				}
+			} else if strings.HasSuffix(strings.ToLower(entry.Name()), ".log") {
+				relPath, _ := filepath.Rel(logPath, fullPath)
+				addFile(fullPath, relPath)
+			}
+		}
+	}
+	// Запускаем обход корневых директорий
 	for _, rootDir := range rootDirs {
-		// Проверяем, является ли текущий элемент директорией
 		if rootDir.IsDir() {
-			// Увеличиваем счетчик ожидаемых горутин
 			wg.Add(1)
 			go func(dir string) {
-				// Уменьшаем счетчик горутин после завершения выполнения текущей функции
 				defer wg.Done()
-				// Рекурсивно обходим все файлы и подкаталоги в текущей директории
-				err := filepath.WalkDir(filepath.Join(logPath, dir), func(path string, d os.DirEntry, err error) error {
-					if err != nil {
-						// Игнорируем ошибки, чтобы не прерывать поиск
-						return nil
-					}
-					// Проверяем, что текущий элемент не является директорией и имеет расширение .log
-					if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".log") {
-						// Получаем относительный путь (без корневого пути logPath)
-						relPath, _ := filepath.Rel(logPath, path)
-						// Используем мьютекс для добавления файла в срез
-						mu.Lock()
-						files = append(files, relPath)
-						mu.Unlock()
-					}
-					return nil
-				})
-				if err != nil {
-					return
-				}
-			}(
-				// Передаем имя текущей директории в горутину
-				rootDir.Name(),
-			)
+				walk(dir)
+			}(filepath.Join(logPath, rootDir.Name()))
 		}
 	}
 	// Ждем завершения всех запущенных горутин
 	wg.Wait()
-	// Объединяем все пути в одну строку, разделенную символом новой строки
-	output := strings.Join(files, "\n")
+	app.logfiles = logfiles
 	if !app.testMode {
 		// Если список файлов пустой, возвращаем ошибку
-		if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+		if found == 0 {
 			vError, _ := app.gui.View("varLogs")
 			vError.Clear()
 			app.fileSystemFrameColor = app.errorColor
@@ -3522,42 +3550,8 @@ func (app *App) loadWinFiles(logPath string) {
 			vError.Highlight = true
 		}
 	} else {
-		if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+		if found == 0 {
 			log.Print("Error: files not found in ", logPath)
-		}
-	}
-	serviceMap := make(map[string]bool)
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	for scanner.Scan() {
-		// Формируем полный путь к файлу
-		logFullPath := filepath.Join(logPath, scanner.Text())
-		// Формируем имя файла для списка
-		logName := scanner.Text()
-		logName = strings.TrimSuffix(logName, ".log")
-		logName = strings.ReplaceAll(logName, "\\", " ")
-		// Получаем информацию о файле
-		fileInfo, err := os.Stat(logFullPath)
-		// Пропускаем файлы, к которым нет доступа
-		if err != nil {
-			continue
-		}
-		// Пропускаем пустые файлы
-		if fileInfo.Size() == 0 {
-			continue
-		}
-		// Получаем дату изменения
-		modTime := fileInfo.ModTime()
-		// Форматирование даты в формат DD.MM.YYYY HH:MM
-		formattedDate := modTime.Format("02.01.2006 15:04")
-		// Проверяем, что полного пути до файла еще нет в списке
-		if logName != "" && !serviceMap[logFullPath] {
-			// Добавляем путь в массив для проверки уникальных путей
-			serviceMap[logFullPath] = true
-			// Добавляем в список
-			app.logfiles = append(app.logfiles, Logfile{
-				name: "[" + "\033[34m" + formattedDate + "\033[0m" + "] " + logName,
-				path: logFullPath,
-			})
 		}
 	}
 	// Сортируем по дате
