@@ -524,9 +524,6 @@ func showConfig() {
 func homeDir() string {
 	homeDir, err := os.UserHomeDir()
 	if err == nil && homeDir != "" {
-		// if runtime.GOOS == "windows" {
-		// 	return homeDir + "\\Documents"
-		// }
 		return homeDir
 	}
 	switch runtime.GOOS {
@@ -635,7 +632,7 @@ func (app *App) showAudit() {
 					var fullPath string
 					switch {
 					case path.fullPath == "Custom Path":
-						fullPath = "\"" + app.customPath + "\""
+						fullPath = "\"" + strings.ReplaceAll(app.customPath, "\\", "/") + "\""
 					case strings.HasPrefix(path.fullPath, "Program"):
 						fullPath = "\"" + app.systemDisk + ":/" + path.fullPath + "\""
 					case path.fullPath == "Windows Logs":
@@ -3466,13 +3463,16 @@ func (app *App) loadWinFiles(logPath string) {
 		if err == nil && fileInfo.Size() > 0 {
 			logName := strings.TrimSuffix(relPath, ".log")
 			logName = strings.ReplaceAll(logName, "\\", " ")
+			// Переопределяем префикс в название пути для списка Program Files (x86)
 			if strings.HasPrefix(logName, "Program Files (x86) ") {
 				logName = "(x86) " + strings.TrimPrefix(logName, "Program Files (x86) ")
 			} else if strings.HasPrefix(logName, "Program Files ") {
 				logName = strings.TrimPrefix(logName, "Program Files ")
 			}
 			if logName != "" {
+				// Форматирование даты в формат DD.MM.YYYY HH:MM
 				formattedDate := fileInfo.ModTime().Format("02.01.2006 15:04")
+				// Добавляем в список
 				logfiles = append(logfiles, Logfile{
 					name: "[" + "\033[34m" + formattedDate + "\033[0m" + "] " + logName,
 					path: fullPath,

@@ -47,8 +47,9 @@ func TestWinFiles(t *testing.T) {
 		selectPath string
 	}{
 		{"Program Files", "ProgramFiles"},
-		{"ProgramData", "ProgramData"},
+		{"Program Data", "ProgramData"},
 		{"Windows Logs", "WindowsLogs"},
+		{"Custom Path", "WinCustomPath"},
 	}
 
 	for _, tc := range testCases {
@@ -83,6 +84,7 @@ func TestWinFiles(t *testing.T) {
 			} else {
 				app.systemDisk = "C"
 			}
+			app.customPath = homeDir()
 
 			// Пропускаем тесты для CI
 			if app.userName == "runneradmin" {
@@ -4196,6 +4198,17 @@ func TestGetHotkey(t *testing.T) {
 	}
 }
 
+// Проверяем, что homeDir возвращает непустую строку
+func TestHomeDir(t *testing.T) {
+	dir := homeDir()
+	if dir == "" {
+		t.Fatal("homeDir returned empty string")
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Logf("homeDir path: %s, stat error: %v", dir, err)
+	}
+}
+
 // ---------------------------------------- Сonfig ----------------------------------------
 
 func TestParseConfig(t *testing.T) {
@@ -4296,4 +4309,25 @@ func TestSetupLogging(t *testing.T) {
 			t.Fatal("setupLogging error must leave loggingFile nil")
 		}
 	})
+}
+
+// ---------------------------------------- Audit ----------------------------------------
+
+func TestShowAudit(t *testing.T) {
+	app := newTestApp()
+	app.testMode = true
+	app.systemDisk = "C"
+
+	output := captureStdout(t, func() {
+		app.showAudit()
+	})
+
+	assertContains(t, output, "system:")
+	assertContains(t, output, "containerizationSystem:")
+	if runtime.GOOS == "windows" {
+		assertContains(t, output, "winEvent:")
+	} else {
+		assertContains(t, output, "journald:")
+		assertContains(t, output, "auditd:")
+	}
 }
