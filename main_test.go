@@ -47,10 +47,9 @@ func TestWinFiles(t *testing.T) {
 		selectPath string
 	}{
 		{"Program Files", "ProgramFiles"},
-		{"Program Files 86", "ProgramFiles86"},
-		{"ProgramData", "ProgramData"},
-		{"AppData/Local", "AppDataLocal"},
-		{"AppData/Roaming", "AppDataRoaming"},
+		{"Program Data", "ProgramData"},
+		{"Windows Logs", "WindowsLogs"},
+		{"Custom Path", "WinCustomPath"},
 	}
 
 	for _, tc := range testCases {
@@ -85,9 +84,10 @@ func TestWinFiles(t *testing.T) {
 			} else {
 				app.systemDisk = "C"
 			}
+			app.customPath = homeDir()
 
 			// Пропускаем тесты для CI
-			if app.userName == "runneradmin" && tc.selectPath != "AppDataRoaming" {
+			if app.userName == "runneradmin" {
 				t.Skip("Skip test for", app.userName, "in CI")
 			}
 
@@ -189,7 +189,6 @@ func TestUnixFiles(t *testing.T) {
 	}{
 		{"System var logs", "varlog"},
 		{"Optional package logs", "customPath"},
-		{"Users home logs", "home"},
 		{"Process descriptor logs", "descriptor"},
 	}
 
@@ -210,7 +209,7 @@ func TestUnixFiles(t *testing.T) {
 				dateTimeRegex:      dateTimeRegex,
 				integersInputRegex: integersInputRegex,
 				syslogUnitRegex:    syslogUnitRegex,
-				customPath:         "/opt",
+				customPath:         homeDir(),
 			}
 
 			// Пропускаем тесты в macOS/BSD
@@ -384,16 +383,32 @@ func TestDockerContainer(t *testing.T) {
 	}
 }
 
+func setColorLogHome(t *testing.T) {
+	t.Helper()
+	testHome := t.TempDir()
+	logData, err := os.ReadFile("color.log")
+	if err != nil {
+		t.Fatalf("read color.log: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(testHome, "color.log"), logData, 0600); err != nil {
+		t.Fatalf("write color.log fixture: %v", err)
+	}
+	t.Setenv("HOME", testHome)
+}
+
 func TestColor(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skip unix test")
 	}
 
+	setColorLogHome(t)
+
 	app := &App{
 		testMode:           true,
 		logViewCount:       "10000",
 		logUpdateSeconds:   5,
-		selectPath:         "home",
+		selectPath:         "customPath",
+		customPath:         homeDir(),
 		filterListText:     "color",
 		trimHttpRegex:      trimHttpRegex,
 		trimHttpsRegex:     trimHttpsRegex,
@@ -429,7 +444,7 @@ func TestColor(t *testing.T) {
 	app.applyFilterList()
 
 	if len(app.logfiles) == 0 {
-		t.Errorf("File list is null")
+		t.Fatalf("File list is null")
 	} else {
 		t.Log("Log files count:", len(app.logfiles))
 	}
@@ -462,11 +477,14 @@ func TestFilter(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			setColorLogHome(t)
+
 			app := &App{
 				testMode:           true,
 				logViewCount:       "10000",
 				logUpdateSeconds:   5,
-				selectPath:         "home",
+				selectPath:         "customPath",
+				customPath:         homeDir(),
 				filterListText:     "color",
 				selectFilterMode:   tc.selectFilterMode,
 				filterText:         "true",
@@ -506,7 +524,7 @@ func TestFilter(t *testing.T) {
 			app.applyFilterList()
 
 			if len(app.logfiles) == 0 {
-				t.Errorf("File list is null")
+				t.Fatalf("File list is null")
 			} else {
 				t.Log("Log files count:", len(app.logfiles))
 			}
@@ -1152,14 +1170,7 @@ func TestMockInterface(t *testing.T) {
 			_ = app.setLogFilesListRight(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				textLog := "Optional package logs and custom path"
-				t.Log(passLog + textLog)
-				slog.Debug(textLog)
-			}
-			_ = app.setLogFilesListRight(g, v)
-			time.Sleep(10 * time.Second)
-			if debug {
-				textLog := "Users home logs"
+				textLog := "Custom path"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
@@ -1193,14 +1204,7 @@ func TestMockInterface(t *testing.T) {
 			_ = app.setLogFilesListLeft(g, v)
 			time.Sleep(10 * time.Second)
 			if debug {
-				textLog := "Users home logs"
-				t.Log(passLog + textLog)
-				slog.Debug(textLog)
-			}
-			_ = app.setLogFilesListLeft(g, v)
-			time.Sleep(10 * time.Second)
-			if debug {
-				textLog := "Optional package logs and custom path"
+				textLog := "Custom path"
 				t.Log(passLog + textLog)
 				slog.Debug(textLog)
 			}
@@ -1951,6 +1955,28 @@ func TestCloseManager(t *testing.T) {
 		if _, err := g.View(name); err == nil {
 			t.Fatalf("view %q must be deleted", name)
 		}
+	}
+}
+
+func TestRestoreMainFocusAfterManager(t *testing.T) {
+	app := newTestApp()
+	g := newTestGui(t, "filterList", "services", "varLogs", "docker", "logs", "sshManager")
+	app.globalCurrentView = "varLogs"
+	if _, err := g.SetCurrentView("sshManager"); err != nil {
+		t.Fatal(err)
+	}
+
+	app.closeManager(g)
+	app.restoreMainFocus(g)
+
+	if g.CurrentView() == nil {
+		t.Fatal("focus was not restored (nil)")
+	}
+	if got := g.CurrentView().Name(); got != "varLogs" {
+		t.Fatalf("focus = %q, want varLogs", got)
+	}
+	if app.globalCurrentView != "varLogs" {
+		t.Fatalf("globalCurrentView = %q, want varLogs", app.globalCurrentView)
 	}
 }
 
@@ -4186,6 +4212,17 @@ func TestGetHotkey(t *testing.T) {
 				t.Fatalf("getHotkey(%q, %q) = %v/%v, want %v/%v", tt.configKey, tt.defaultKey, got, mod, tt.want, tt.wantMod)
 			}
 		})
+	}
+}
+
+// Проверяем, что homeDir возвращает непустую строку
+func TestHomeDir(t *testing.T) {
+	dir := homeDir()
+	if dir == "" {
+		t.Fatal("homeDir returned empty string")
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Logf("homeDir path: %s, stat error: %v", dir, err)
 	}
 }
 

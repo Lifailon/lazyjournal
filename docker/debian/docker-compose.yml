@@ -4,6 +4,21 @@ services:
     container_name: lazyjournal
     restart: unless-stopped
     privileged: true
+    # TUI mode
+    tty: true
+    stdin_open: true
+    # Web mode
+    ports:
+      - 5555:5555
+    environment:
+      # Enable Web mode
+      - TTYD=false
+      - PORT=5555
+      # Credentials for accessing via Web browser (optional)
+      - USERNAME=
+      - PASSWORD=
+      # Flags for passing to lazyjournal (optional)
+      - OPTIONS=
     volumes:
       # Systemd
       - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
@@ -13,8 +28,6 @@ services:
       - /etc/machine-id:/etc/machine-id:ro
       # Filesystem
       - /var/log:/var/log:ro
-      - /opt:/opt:ro
-      - /home:/home:ro
       # Docker socket
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Read docker logs from filesystem
@@ -23,18 +36,5 @@ services:
       - $HOME/.kube/config:/root/.kube/config:ro
       # Custom lazyjournal configuration (optional)
       # - ./config.yml:/lazyjournal/config.yml:ro
-    environment:
-      # Enable Web mode
-      - TTYD=false
-      - PORT=5555
-      # Credentials for accessing via Web browser (optional)
-      - USERNAME=
-      - PASSWORD=
-      # Flags used (optional)
-      - OPTIONS=
-    # Web mode
-    ports:
-      - 5555:5555
-    # TUI mode
-    tty: true
-    stdin_open: true
+      # Custom path with logs (optional)
+      # - /opt:/opt:ro

@@ -20,7 +20,7 @@ settings:
   journalField: SYSLOG_IDENTIFIER
   # Filter the log output by priority (available values: debug, info, notice, warning, err, crit, alert, emerg)
   journalPriority: debug
-  # Filter the log output by system boot period (e.g. 0 current or -1 previous)
+  # Filter the log output by system boot period (e.g., 0 for the current boot, -1 for the previous one, etc.)
   journalBootPeriod: all
   customPath: ""
   dockerStreamOnly: false
@@ -34,7 +34,7 @@ interface:
   # Lists in panels when the interface is started
   # Available system log lists: systemUnits, userUnits, systemJournals, kernelBoot, auditd
   systemLogList: systemUnits
-  # Available file log lists: varlog, customPath, home, descriptor
+  # Available file log lists: varlog, customPath, descriptor
   fileLogList: varlog
   # Available container log lists: docker, compose, podman, kubernetes
   containerLogList: docker

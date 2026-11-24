@@ -219,7 +219,7 @@ type App struct {
 	customPath            string // пользовательский путь для поиска логов в файловой системе (#31)
 
 	selectUnits                  string // название журнала (systemUnits/userUnits/systemJournals/kernelBoot/auditd)
-	selectPath                   string // путь к логам (varlog/customPath/home/descriptor)
+	selectPath                   string // путь к логам (varlog/customPath/descriptor)
 	selectContainerizationSystem string // название системы контейнеризации (docker/compose/podman/kubernetes)
 	selectFilterMode             string // режим фильтрации (exact/fuzzy/regex/timestamp)
 
@@ -365,7 +365,7 @@ var (
 	journalFieldDescription      = "Filter the list of system journals by field, e.g. _UID/_PID/_COMM/_EXE/_CMDLINE (default: SYSLOG_IDENTIFIER)"
 	journalPriorityDescription   = "Filter the log output by priority (available values: debug, info, notice, warning, err, crit, alert, emerg)"
 	journalBootDescription       = "Filter the log output by system boot period, e.g. 0 current or -1 previous (default: all)"
-	pathDescription              = "Custom the path in the file system to search for logs (\"/opt\" in Linux and \"$HOME/Documents\" in Windows by default)"
+	pathDescription              = "Custom the file system path for searching logs (the current user's home directory is used by default)"
 	colorDisableDescription      = "Disable log highlighting (ANSI coloring)"
 	commandColorDescription      = "Log highlighting (ANSI coloring) in command-line mode"
 	commandExactDescription      = "Filtering using exact match in command-line mode"
@@ -521,14 +521,19 @@ func showConfig() {
 	}
 }
 
-func winHomeDocsDir() string {
+func homeDir() string {
 	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+	if err == nil && homeDir != "" {
+		return homeDir
 	}
-	docsDir := filepath.Join(homeDir, "Documents")
-	docsDir = strings.ReplaceAll(docsDir, "\\", "/")
-	return docsDir
+	switch runtime.GOOS {
+	case "windows":
+		return "C:\\Users"
+	case "darwin":
+		return "/Users"
+	default:
+		return "/home"
+	}
 }
 
 // Audit (#18)
@@ -609,13 +614,11 @@ func (app *App) showAudit() {
 				path     string
 			}{
 				{"Program Files", "ProgramFiles"},
-				{"Program Files (x86)", "ProgramFiles86"},
 				{"ProgramData", "ProgramData"},
-				{"/AppData/Local", "AppDataLocal"},
-				{"/AppData/Roaming", "AppDataRoaming"},
+				{"Windows Logs", "WindowsLogs"},
 				{"Custom Path", "WinCustomPath"},
 			}
-			app.customPath = winHomeDocsDir()
+			app.customPath = homeDir()
 			// Создаем группу для ожидания выполнения всех горутин
 			var wg sync.WaitGroup
 			// Мьютекс для безопасного доступа к переменной auditText
@@ -629,9 +632,11 @@ func (app *App) showAudit() {
 					var fullPath string
 					switch {
 					case path.fullPath == "Custom Path":
-						fullPath = "\"" + app.customPath + "\""
+						fullPath = "\"" + strings.ReplaceAll(app.customPath, "\\", "/") + "\""
 					case strings.HasPrefix(path.fullPath, "Program"):
 						fullPath = "\"" + app.systemDisk + ":/" + path.fullPath + "\""
+					case path.fullPath == "Windows Logs":
+						fullPath = "\"" + app.systemDisk + ":/Windows/Logs\""
 					default:
 						fullPath = "\"" + app.systemDisk + ":/Users/" + app.userName + path.fullPath + "\""
 					}
@@ -724,20 +729,17 @@ func (app *App) showAudit() {
 		}{
 			{"System var logs", "varlog"},
 			{"Custom path", "customPath"},
-			{"Users home logs", "home"},
 			{"Process descriptor logs", "descriptor"},
 		}
 		for _, path := range paths {
-			app.customPath = "/opt/"
+			app.customPath = homeDir()
 			app.loadFiles(path.path)
 			lenLogFiles := strconv.Itoa(len(app.logfiles))
 			switch path.path {
 			case "varlog":
 				path.path = "/var/log/"
 			case "customPath":
-				path.path = "/opt/"
-			case "home":
-				path.path = "/home/"
+				path.path = homeDir()
 			}
 			auditText = append(auditText,
 				"  - name: "+path.name,
@@ -1604,11 +1606,7 @@ func runGoCui(mock bool) {
 			fmt.Println("Invalid custom path for " + app.getOS + ": " + *pathFlag)
 			os.Exit(1)
 		} else {
-			if app.getOS == "windows" {
-				app.customPath = winHomeDocsDir()
-			} else {
-				app.customPath = "/opt"
-			}
+			app.customPath = homeDir()
 		}
 	}
 
@@ -1689,7 +1687,7 @@ func runGoCui(mock bool) {
 	}
 
 	switch config.Interface.FileLogList {
-	case "customPath", "home", "descriptor":
+	case "customPath", "descriptor":
 		app.selectPath = config.Interface.FileLogList
 	default:
 		app.selectPath = "varlog"
@@ -2026,8 +2024,6 @@ func (app *App) layout(g *gocui.Gui) error {
 			v.Title = " < System var logs (0) > "
 		case "customPath":
 			v.Title = " < Custom path - " + app.customPath + " (0) > "
-		case "home":
-			v.Title = " < Users home logs (0) > "
 		case "descriptor":
 			v.Title = " < Process descriptor logs (0) > "
 		}
@@ -3122,11 +3118,14 @@ func (app *App) statFiles(paths []string) (map[string]os.FileInfo, error) {
 }
 
 func (app *App) loadFiles(logPath string) {
-	app.logfiles = nil // сбрасываем (очищаем) массив перед загрузкой новых журналов
+	// Очищаем массив перед загрузкой новых журналов
+	app.logfiles = nil
 	var output []byte
+	var descriptorCommands map[string]string
 	switch logPath {
 	case "descriptor":
-		cmd := app.sshExec(nil, "lsof", "-Fn")
+		// Получаем pid, команду и имя файла (#99)
+		cmd := app.sshExec(nil, "lsof", "-F", "pcn")
 		// Подавить вывод ошибок при отсутствиее прав доступа (opendir: Permission denied)
 		cmd.Stderr = nil
 		if app.logging {
@@ -3135,9 +3134,33 @@ func (app *App) loadFiles(logPath string) {
 		output, _ = cmd.Output()
 		// Разбиваем вывод на строки
 		files := strings.Split(strings.TrimSpace(string(output)), "\n")
-		// Если список файлов пустой, возвращаем ошибку Permission denied
+		// Проверяем, пустой ли вывод lsof (бинарь недоступен или вернул ошибку доступа)
+		rawEmpty := len(files) == 0 || (len(files) == 1 && files[0] == "")
+		// Очищаем массив перед добавлением отфильтрованных файлов
+		output = []byte{}
+		descriptorCommands = make(map[string]string)
+		var currentCommand string
+		// Фильтруем строки с расширением ".log" и собираем имя процесса для каждого файла
+		for _, file := range files {
+			if file == "" {
+				continue
+			}
+			switch file[0] {
+			case 'c':
+				currentCommand = file[1:]
+			case 'n':
+				name := file[1:]
+				if strings.HasSuffix(name, ".log") {
+					if _, ok := descriptorCommands[name]; !ok {
+						descriptorCommands[name] = currentCommand
+						output = append(output, []byte(name+"\n")...)
+					}
+				}
+			}
+		}
+		// Если после фильтрации не осталось ".log" файлов, возвращаем ошибку Permission denied
 		if !app.testMode {
-			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+			if rawEmpty || len(descriptorCommands) == 0 {
 				vError, _ := app.gui.View("varLogs")
 				vError.Clear()
 				// Меняем цвет окна на красный
@@ -3156,17 +3179,8 @@ func (app *App) loadFiles(logPath string) {
 				vError.Highlight = true
 			}
 		} else {
-			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+			if rawEmpty || len(descriptorCommands) == 0 {
 				log.Print("Error: permission denied (files not found from descriptor)")
-			}
-		}
-		// Очищаем массив перед добавлением отфильтрованных файлов
-		output = []byte{}
-		// Фильтруем строки, которые заканчиваются на ".log" и удаляем префикс (имя файла)
-		for _, file := range files {
-			if strings.HasSuffix(file, ".log") {
-				file = strings.TrimPrefix(file, "n")
-				output = append(output, []byte(file+"\n")...)
 			}
 		}
 	case "varlog":
@@ -3307,77 +3321,6 @@ func (app *App) loadFiles(logPath string) {
 				log.Print("Error: files not found in ", logPath)
 			}
 		}
-	default:
-		// Определяем домашний каталог в Linux
-		logPath = "/home/"
-		// Домашний каталог в macOS
-		if app.getOS == "darwin" {
-			logPath = "/Users/"
-		}
-		// Ищем файлы с помощью системной утилиты find
-		args := []string{
-			logPath,
-			"-type", "f",
-			"-name", "*.log", "-o",
-			"-name", "*.asl", "-o",
-			"-name", "*.pcap", "-o",
-			"-name", "*.pcap.gz", "-o",
-			"-name", "*.pcapng", "-o",
-			"-name", "*.pcapng.gz",
-		}
-		cmd := app.sshExec(nil, "find", args...)
-		if app.logging {
-			slog.Info(cmd.String(), "action", "Loading the log files from users home")
-		}
-		output, _ = cmd.Output()
-		files := strings.Split(strings.TrimSpace(string(output)), "\n")
-		if !app.testMode {
-			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
-				vError, _ := app.gui.View("varLogs")
-				vError.Clear()
-				vError.Highlight = false
-				_, _ = fmt.Fprintln(vError, "\033[32mFiles not found\033[0m")
-				return
-			} else {
-				vError, _ := app.gui.View("varLogs")
-				app.fileSystemFrameColor = app.frameColor
-				if vError.FrameColor != app.frameColor {
-					vError.FrameColor = app.selectedFrameColor
-				}
-				vError.Highlight = true
-			}
-		} else {
-			if len(files) == 0 || (len(files) == 1 && files[0] == "") {
-				log.Print("Error: files not found in home directories")
-			}
-		}
-		// Получаем содержимое файлов из домашнего каталога пользователя root
-		args = []string{
-			"/root/",
-			"-type", "f",
-			"-name", "*.log", "-o",
-			"-name", "*.pcap", "-o",
-			"-name", "*.pcap.gz", "-o",
-			"-name", "*.pcapng", "-o",
-			"-name", "*.pcapng.gz",
-		}
-		cmdRootDir := app.sshExec(nil, "find", args...)
-		if app.logging {
-			slog.Info(cmdRootDir.String(), "action", "Loading the log files from users home")
-		}
-		outputRootDir, err := cmdRootDir.Output()
-		// Добавляем содержимое директории /root/ в общий массив, если есть доступ
-		if err == nil {
-			output = append(output, outputRootDir...)
-		}
-		if app.fileSystemFrameColor == app.errorColor && !app.testMode {
-			vError, _ := app.gui.View("varLogs")
-			app.fileSystemFrameColor = app.frameColor
-			if vError.FrameColor != app.frameColor {
-				vError.FrameColor = app.selectedFrameColor
-			}
-			vError.Highlight = true
-		}
 	}
 	// Формируем массив путей
 	logFullPaths := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -3403,17 +3346,6 @@ func (app *App) loadFiles(logPath string) {
 		logName = strings.ReplaceAll(logName, "/", " ")
 		logName = strings.ReplaceAll(logName, ".log.", ".")
 		logName = strings.TrimPrefix(logName, " ")
-		if logPath == "/home/" || logPath == "/Users/" {
-			// Разбиваем строку на слова
-			words := strings.Fields(logName)
-			if len(words) == 0 {
-				continue
-			}
-			// Берем первое и последнее слово
-			firstWord := words[0]
-			lastWord := words[len(words)-1]
-			logName = "\x1b[0;33m" + firstWord + "\033[0m" + ": " + lastWord
-		}
 		// Получаем информацию о файле
 		var fileInfo os.FileInfo
 		var exists bool
@@ -3446,23 +3378,11 @@ func (app *App) loadFiles(logPath string) {
 		if logName != "" && !serviceMap[logFullPath] {
 			// Добавляем путь в массив для проверки уникальных путей
 			serviceMap[logFullPath] = true
-			// Получаем имя процесса для файла дескриптора
+			// Извлекаем имя процесса для файлового дескриптора из собранной карты
 			if logPath == "descriptor" {
-				cmd := app.sshExec(nil, "lsof", "-Fc", logFullPath)
-				cmd.Stderr = nil
-				if app.logging {
-					slog.Info(cmd.String(), "action", "Loading the log files for process descriptor")
-				}
-				outputLsof, _ := cmd.Output()
-				processLines := strings.Split(strings.TrimSpace(string(outputLsof)), "\n")
-				// Ищем строку, которая содержит имя процесса (только первый процесс)
-				for _, line := range processLines {
-					if strings.HasPrefix(line, "c") {
-						// Удаляем префикс
-						processName := line[1:]
-						logName = "\x1b[0;33m" + processName + "\033[0m" + ": " + logName
-						break
-					}
+				processName, ok := descriptorCommands[logFullPath]
+				if ok && processName != "" {
+					logName = "\x1b[0;33m" + processName + "\033[0m" + ": " + logName
 				}
 			}
 			// Выделение цветом подов и контейнеров k3s из файловой системы
@@ -3505,78 +3425,120 @@ func (app *App) loadWinFiles(logPath string) {
 	// Определяем путь по параметру
 	switch logPath {
 	case "ProgramFiles":
-		logPath = app.systemDisk + ":\\Program Files"
-	case "ProgramFiles86":
-		logPath = app.systemDisk + ":\\Program Files (x86)"
+		logPath = app.systemDisk + ":\\"
 	case "ProgramData":
 		logPath = app.systemDisk + ":\\ProgramData"
-	case "AppDataLocal":
-		logPath = app.systemDisk + ":\\Users\\" + app.userName + "\\AppData\\Local"
-	case "AppDataRoaming":
-		logPath = app.systemDisk + ":\\Users\\" + app.userName + "\\AppData\\Roaming"
+	case "WindowsLogs":
+		logPath = app.systemDisk + ":\\Windows\\Logs"
 	case "WinCustomPath":
 		logPath = app.customPath
 	}
-	// Массив для хранений списка файлов
-	var files []string
 	// Получаем список корневых директорий
 	rootDirs, _ := os.ReadDir(logPath)
+	// Для Program Files обходим оба каталога
+	if logPath == app.systemDisk+":\\" {
+		var dirs []os.DirEntry
+		for _, d := range rootDirs {
+			if d.Name() == "Program Files" || d.Name() == "Program Files (x86)" {
+				dirs = append(dirs, d)
+			}
+		}
+		rootDirs = dirs
+	}
+	// Ограниченный пул воркеров для параллельного обхода
+	maxWorkers := min(runtime.NumCPU(), 16)
+	sem := make(chan struct{}, maxWorkers)
+	// Доступ к найденным файлам из нескольких горутин
+	var mu sync.Mutex
+	// Группа ожидания для отслеживания завершения всех горутин
+	var wg sync.WaitGroup
+	// Список найденных логов и счетчик найденных файлов
+	var logfiles []Logfile
+	found := 0
+	// Получаем статистику и добавляем файл в список
+	addFile := func(fullPath, relPath string) {
+		fileInfo, err := os.Stat(fullPath)
+		mu.Lock()
+		found++
+		if err == nil && fileInfo.Size() > 0 {
+			logName := strings.TrimSuffix(relPath, ".log")
+			logName = strings.ReplaceAll(logName, "\\", " ")
+			// Переопределяем префикс в название пути для списка Program Files (x86)
+			if strings.HasPrefix(logName, "Program Files (x86) ") {
+				logName = "(x86) " + strings.TrimPrefix(logName, "Program Files (x86) ")
+			} else if strings.HasPrefix(logName, "Program Files ") {
+				logName = strings.TrimPrefix(logName, "Program Files ")
+			}
+			if logName != "" {
+				// Форматирование даты в формат DD.MM.YYYY HH:MM
+				formattedDate := fileInfo.ModTime().Format("02.01.2006 15:04")
+				// Добавляем в список
+				logfiles = append(logfiles, Logfile{
+					name: "[" + "\033[34m" + formattedDate + "\033[0m" + "] " + logName,
+					path: fullPath,
+				})
+			}
+		}
+		mu.Unlock()
+	}
 	// Проверяем файлы внутри customPath
 	if logPath == app.customPath {
 		for _, rootFile := range rootDirs {
 			if !rootFile.IsDir() {
 				if strings.HasSuffix(strings.ToLower(rootFile.Name()), ".log") {
-					files = append(files, rootFile.Name())
+					addFile(filepath.Join(logPath, rootFile.Name()), rootFile.Name())
 				}
 			}
 		}
 	}
-	// Доступ к срезу files из нескольких горутин
-	var mu sync.Mutex
-	// Группа ожидания для отслеживания завершения всех горутин
-	var wg sync.WaitGroup
-	// Ищем файлы с помощью WalkDir в Windows
+	// Рекурсивно обходим каталог, параллеля обход через семафор
+	var walk func(dir string)
+	walk = func(dir string) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, entry := range entries {
+			fullPath := filepath.Join(dir, entry.Name())
+			if entry.IsDir() {
+				// Не спускаемся в символические ссылки и reparse points
+				if entry.Type()&os.ModeSymlink != 0 {
+					continue
+				}
+				select {
+				case sem <- struct{}{}:
+					wg.Add(1)
+					go func(path string) {
+						defer wg.Done()
+						defer func() { <-sem }()
+						walk(path)
+					}(fullPath)
+				default:
+					// Пул занят, обходим синхронно
+					walk(fullPath)
+				}
+			} else if strings.HasSuffix(strings.ToLower(entry.Name()), ".log") {
+				relPath, _ := filepath.Rel(logPath, fullPath)
+				addFile(fullPath, relPath)
+			}
+		}
+	}
+	// Запускаем обход корневых директорий
 	for _, rootDir := range rootDirs {
-		// Проверяем, является ли текущий элемент директорией
 		if rootDir.IsDir() {
-			// Увеличиваем счетчик ожидаемых горутин
 			wg.Add(1)
 			go func(dir string) {
-				// Уменьшаем счетчик горутин после завершения выполнения текущей функции
 				defer wg.Done()
-				// Рекурсивно обходим все файлы и подкаталоги в текущей директории
-				err := filepath.WalkDir(filepath.Join(logPath, dir), func(path string, d os.DirEntry, err error) error {
-					if err != nil {
-						// Игнорируем ошибки, чтобы не прерывать поиск
-						return nil
-					}
-					// Проверяем, что текущий элемент не является директорией и имеет расширение .log
-					if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".log") {
-						// Получаем относительный путь (без корневого пути logPath)
-						relPath, _ := filepath.Rel(logPath, path)
-						// Используем мьютекс для добавления файла в срез
-						mu.Lock()
-						files = append(files, relPath)
-						mu.Unlock()
-					}
-					return nil
-				})
-				if err != nil {
-					return
-				}
-			}(
-				// Передаем имя текущей директории в горутину
-				rootDir.Name(),
-			)
+				walk(dir)
+			}(filepath.Join(logPath, rootDir.Name()))
 		}
 	}
 	// Ждем завершения всех запущенных горутин
 	wg.Wait()
-	// Объединяем все пути в одну строку, разделенную символом новой строки
-	output := strings.Join(files, "\n")
+	app.logfiles = logfiles
 	if !app.testMode {
 		// Если список файлов пустой, возвращаем ошибку
-		if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+		if found == 0 {
 			vError, _ := app.gui.View("varLogs")
 			vError.Clear()
 			app.fileSystemFrameColor = app.errorColor
@@ -3593,42 +3555,8 @@ func (app *App) loadWinFiles(logPath string) {
 			vError.Highlight = true
 		}
 	} else {
-		if len(files) == 0 || (len(files) == 1 && files[0] == "") {
+		if found == 0 {
 			log.Print("Error: files not found in ", logPath)
-		}
-	}
-	serviceMap := make(map[string]bool)
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	for scanner.Scan() {
-		// Формируем полный путь к файлу
-		logFullPath := logPath + "\\" + scanner.Text()
-		// Формируем имя файла для списка
-		logName := scanner.Text()
-		logName = strings.TrimSuffix(logName, ".log")
-		logName = strings.ReplaceAll(logName, "\\", " ")
-		// Получаем информацию о файле
-		fileInfo, err := os.Stat(logFullPath)
-		// Пропускаем файлы, к которым нет доступа
-		if err != nil {
-			continue
-		}
-		// Пропускаем пустые файлы
-		if fileInfo.Size() == 0 {
-			continue
-		}
-		// Получаем дату изменения
-		modTime := fileInfo.ModTime()
-		// Форматирование даты в формат DD.MM.YYYY HH:MM
-		formattedDate := modTime.Format("02.01.2006 15:04")
-		// Проверяем, что полного пути до файла еще нет в списке
-		if logName != "" && !serviceMap[logFullPath] {
-			// Добавляем путь в массив для проверки уникальных путей
-			serviceMap[logFullPath] = true
-			// Добавляем в список
-			app.logfiles = append(app.logfiles, Logfile{
-				name: "[" + "\033[34m" + formattedDate + "\033[0m" + "] " + logName,
-				path: logFullPath,
-			})
 		}
 	}
 	// Сортируем по дате
@@ -8011,6 +7939,7 @@ func (app *App) setupKeybindings() error {
 			if err := app.setupKeybindings(); err != nil {
 				log.Panicln("Error key bindings", err)
 			}
+			app.restoreMainFocus(g)
 			return nil
 		}); err != nil {
 			return err
@@ -9379,6 +9308,24 @@ func (app *App) closeManager(g *gocui.Gui) {
 	}
 }
 
+// Возвращает фокус на основное окно после закрытия менеджера ssh/контектов (Esc)
+func (app *App) restoreMainFocus(g *gocui.Gui) {
+	candidates := []string{app.globalCurrentView, "logs", "docker", "varLogs", "services", "filterList"}
+	for _, name := range candidates {
+		if name == "" {
+			continue
+		}
+		restoredView, err := g.SetCurrentView(name)
+		if err != nil {
+			continue
+		}
+		restoredView.FrameColor = app.selectedFrameColor
+		restoredView.TitleColor = app.selectedTitleColor
+		app.globalCurrentView = name
+		return
+	}
+}
+
 // Функция для перемещения курсора вверх в менеджере ssh/контектов
 func (app *App) moveCursorUp(g *gocui.Gui, v *gocui.View) error {
 	if v == nil {
@@ -9919,22 +9866,14 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 		go func() {
 			switch app.selectPath {
 			case "ProgramFiles":
-				app.selectPath = "ProgramFiles86"
-				selectedVarLog.Title = " < Program Files x86 (0) > "
-				app.loadWinFiles(app.selectPath)
-			case "ProgramFiles86":
 				app.selectPath = "ProgramData"
-				selectedVarLog.Title = " < ProgramData (0) > "
+				selectedVarLog.Title = " < Program Data (0) > "
 				app.loadWinFiles(app.selectPath)
 			case "ProgramData":
-				app.selectPath = "AppDataLocal"
-				selectedVarLog.Title = " < AppData Local (0) > "
+				app.selectPath = "WindowsLogs"
+				selectedVarLog.Title = " < Windows Logs (0) > "
 				app.loadWinFiles(app.selectPath)
-			case "AppDataLocal":
-				app.selectPath = "AppDataRoaming"
-				selectedVarLog.Title = " < AppData Roaming (0) > "
-				app.loadWinFiles(app.selectPath)
-			case "AppDataRoaming":
+			case "WindowsLogs":
 				app.selectPath = "WinCustomPath"
 				selectedVarLog.Title = " < Custom Path (0) > "
 				app.loadWinFiles(app.selectPath)
@@ -9946,7 +9885,7 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 			// Включаем переключение списков
 			app.keybindingsEnabled = true
 			if err := app.setupKeybindings(); err != nil {
-				log.Panicln("Error key bindings", err)
+				log.Panicln(err)
 			}
 		}()
 	} else {
@@ -9957,10 +9896,6 @@ func (app *App) setLogFilesListRight(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
 				app.loadFiles(app.selectPath)
 			case "customPath":
-				app.selectPath = "home"
-				selectedVarLog.Title = " < Users home logs (0) > "
-				app.loadFiles(app.selectPath)
-			case "home":
 				app.selectPath = "descriptor"
 				selectedVarLog.Title = " < Process descriptor logs (0) > "
 				app.loadFiles(app.selectPath)
@@ -10006,22 +9941,14 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.Title = " < Custom Path (0) > "
 				app.loadWinFiles(app.selectPath)
 			case "WinCustomPath":
-				app.selectPath = "AppDataRoaming"
-				selectedVarLog.Title = " < AppData Roaming (0) > "
+				app.selectPath = "WindowsLogs"
+				selectedVarLog.Title = " < Windows Logs (0) > "
 				app.loadWinFiles(app.selectPath)
-			case "AppDataRoaming":
-				app.selectPath = "AppDataLocal"
-				selectedVarLog.Title = " < AppData Local (0) > "
-				app.loadWinFiles(app.selectPath)
-			case "AppDataLocal":
+			case "WindowsLogs":
 				app.selectPath = "ProgramData"
-				selectedVarLog.Title = " < ProgramData (0) > "
+				selectedVarLog.Title = " < Program Data (0) > "
 				app.loadWinFiles(app.selectPath)
 			case "ProgramData":
-				app.selectPath = "ProgramFiles86"
-				selectedVarLog.Title = " < Program Files x86 (0) > "
-				app.loadWinFiles(app.selectPath)
-			case "ProgramFiles86":
 				app.selectPath = "ProgramFiles"
 				selectedVarLog.Title = " < Program Files (0) > "
 				app.loadWinFiles(app.selectPath)
@@ -10039,10 +9966,6 @@ func (app *App) setLogFilesListLeft(g *gocui.Gui, v *gocui.View) error {
 				selectedVarLog.Title = " < Process descriptor logs (0) > "
 				app.loadFiles(app.selectPath)
 			case "descriptor":
-				app.selectPath = "home"
-				selectedVarLog.Title = " < Users home logs (0) > "
-				app.loadFiles(app.selectPath)
-			case "home":
 				app.selectPath = "customPath"
 				selectedVarLog.Title = " < Custom path - " + app.customPath + " (0) > "
 				app.loadFiles(app.selectPath)
