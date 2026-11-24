@@ -383,10 +383,25 @@ func TestDockerContainer(t *testing.T) {
 	}
 }
 
+func setColorLogHome(t *testing.T) {
+	t.Helper()
+	testHome := t.TempDir()
+	logData, err := os.ReadFile("color.log")
+	if err != nil {
+		t.Fatalf("read color.log: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(testHome, "color.log"), logData, 0600); err != nil {
+		t.Fatalf("write color.log fixture: %v", err)
+	}
+	t.Setenv("HOME", testHome)
+}
+
 func TestColor(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skip unix test")
 	}
+
+	setColorLogHome(t)
 
 	app := &App{
 		testMode:           true,
@@ -429,7 +444,7 @@ func TestColor(t *testing.T) {
 	app.applyFilterList()
 
 	if len(app.logfiles) == 0 {
-		t.Errorf("File list is null")
+		t.Fatalf("File list is null")
 	} else {
 		t.Log("Log files count:", len(app.logfiles))
 	}
@@ -462,6 +477,8 @@ func TestFilter(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			setColorLogHome(t)
+
 			app := &App{
 				testMode:           true,
 				logViewCount:       "10000",
@@ -507,7 +524,7 @@ func TestFilter(t *testing.T) {
 			app.applyFilterList()
 
 			if len(app.logfiles) == 0 {
-				t.Errorf("File list is null")
+				t.Fatalf("File list is null")
 			} else {
 				t.Log("Log files count:", len(app.logfiles))
 			}
