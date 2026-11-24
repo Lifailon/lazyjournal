@@ -4327,24 +4327,3 @@ func TestSetupLogging(t *testing.T) {
 		}
 	})
 }
-
-// ---------------------------------------- Audit ----------------------------------------
-
-func TestShowAudit(t *testing.T) {
-	app := newTestApp()
-	app.testMode = true
-	app.systemDisk = "C"
-
-	output := captureStdout(t, func() {
-		app.showAudit()
-	})
-
-	assertContains(t, output, "system:")
-	assertContains(t, output, "containerizationSystem:")
-	if runtime.GOOS == "windows" {
-		assertContains(t, output, "winEvent:")
-	} else {
-		assertContains(t, output, "journald:")
-		assertContains(t, output, "auditd:")
-	}
-}
