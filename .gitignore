@@ -1,3 +1,6 @@
+# Dev
+.vscode
+
 # Build
 /bin/
 *.exe
@@ -23,6 +26,7 @@ results.md
 *.out
 test.log
 interface.log
+test.json
 
 # Profiling
 *.pprof
