@@ -11,6 +11,10 @@ on:
         description: 'Advanced summary report from tests'
         default: true
         type: boolean
+      Tparse:
+        description: 'Add tparse report'
+        default: true
+        type: boolean
       Linter:
         description: 'Check linters for final report'
         default: false
@@ -82,7 +86,7 @@ jobs:
 
       - name: Run all unit test in Linux
         run: |
-          sudo go test -v -cover -coverprofile linux-coverage.out
+          sudo go test -json -cover -coverprofile linux-coverage.out ./... > test.json
           cat lazyjournal.log
           echo "\`\`\`bash" > lazyjournal-log.md
           cat lazyjournal.log >> lazyjournal-log.md
@@ -112,6 +116,13 @@ jobs:
         with:
           name: linux-coverage
           path: linux-coverage.out
+
+      - name: Upload test json report
+        if: ${{ github.event.inputs.Tparse == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-json
+          path: test.json
 
       - name: Upload lazyjournal log file
         uses: actions/upload-artifact@v7
@@ -300,7 +311,7 @@ jobs:
           name: lazyjournal-log
           path: .
 
-      - name: Download coverage report for Docker without root
+      - name: Download coverage report for Docker (without root)
         uses: actions/download-artifact@v8
         with:
           name: docker-coverage
@@ -318,11 +329,12 @@ jobs:
           name: windows-coverage
           path: .
 
-      - name: Check coverage report for all tests on Linux with root
+      - name: Check coverage report for all tests on Linux (with root)
         run: |
           out=$(go tool cover -func linux-coverage.out)
           echo "# 🧪 Unit test coverage" >> $GITHUB_STEP_SUMMARY
-          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          echo "![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg)" >> $GITHUB_STEP_SUMMARY
+          coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
           echo "LINUX_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "Linux coverage: $coverTotal"
           echo "- 🐧 **Linux**: $coverTotal" >> $GITHUB_STEP_SUMMARY
@@ -331,7 +343,7 @@ jobs:
       - name: Check coverage report for Docker without root
         run: |
           out=$(go tool cover -func docker-coverage.out)
-          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
           echo "DOCKER_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "Docker coverage: $coverTotal"
           echo "- 🐳 **Docker**: $coverTotal" >> $GITHUB_STEP_SUMMARY
@@ -340,7 +352,7 @@ jobs:
       - name: Check coverage report for macOS
         run: |
           out=$(go tool cover -func macos-coverage.out)
-          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
           echo "MAC_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "macOS coverage: $coverTotal"
           echo "- 🍏 **macOS**: $coverTotal" >> $GITHUB_STEP_SUMMARY
@@ -349,7 +361,7 @@ jobs:
       - name: Check coverage report for Windows
         run: |
           out=$(go tool cover -func windows-coverage.out)
-          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
           echo "WIN_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "Windows coverage: $coverTotal"
           echo "- 💻 **Windows**: $coverTotal" >> $GITHUB_STEP_SUMMARY
@@ -364,18 +376,36 @@ jobs:
         run: |
           gocovmerge linux-coverage.out docker-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
           out=$(go tool cover -func merge-coverage.out)
-          coverTotal=$(echo "$out" | tail -n 1 | sed -E "s/.+\)\s+//")
+          coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
           echo "TOTAL_COVERAGE=$coverTotal" >> $GITHUB_ENV
           echo "Total after merge coverage: $coverTotal"
-          echo "- **Total after merge**: $coverTotal" >> $GITHUB_STEP_SUMMARY
-          mdReport=$(echo "$out" | sed -E 's/.+\///' | sed "s/:/ /g" | head -n -1)
-          title="File Line Function Coverage"
-          separator="- - - -"
+          echo -e "\n**Total**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           echo "# 📚 Functions coverage" >> $GITHUB_STEP_SUMMARY
-          echo "Test coverage results for all functions:" >> $GITHUB_STEP_SUMMARY
-          mdReport=$(echo -e "$title\n$separator\n$mdReport")
-          echo "$mdReport" | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "File Line Function Coverage"
+            echo "- - - -"
+            echo "$out" | \
+              sed -E 's/^.+\///' | \
+              sed "s/:/ /g" | \
+              head -n -1
+          } | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
           cat "$GITHUB_STEP_SUMMARY" >> all-report.md
+
+      - name: Download test json report
+        if: ${{ github.event.inputs.Tparse == 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: test-json
+          path: .
+
+      - name: Install tparse
+        if: ${{ github.event.inputs.Tparse == 'true' }}
+        run: go install github.com/mfridman/tparse@latest
+
+      - name: Generate test markdown report using tparse
+        if: ${{ github.event.inputs.Tparse == 'true' }}
+        run: |
+          tparse -all -format=markdown -file test.json >> all-report.md
 
       - name: Linters reports
         if: ${{ github.event.inputs.Linter == 'true' }}
