@@ -13,7 +13,7 @@ if [ "$TTYD_MODE" = "true" ]; then
     fi
     # Theme and font size
     TTYD_OPTIONS="$TTYD_OPTIONS -t theme={\"background\":\"${BACKGROUND:-#1e1e2e}\",\"foreground\":\"${FOREGROUND:-#cdd6f4}\"} -t fontSize=${FONT_SIZE:-14}"
-    exec ttyd $TTYD_OPTIONS lazyjournal $OPTIONS
+    exec ttyd $TTYD_OPTIONS lazyjournal "$@"
 else
-    exec lazyjournal $OPTIONS
+    exec lazyjournal "$@"
 fi

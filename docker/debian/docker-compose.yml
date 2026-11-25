@@ -6,12 +6,12 @@ services:
     privileged: true
     tty: true
     stdin_open: true
+    # Flags for passing to lazyjournal
+    command: -p /opt
     # Forwarding a port in web mode
     # ports:
     #   - 5555:5555
     environment:
-      # Flags for passing to lazyjournal
-      - OPTIONS=-p /opt
       # Enable web mode
       - TTYD=false
       - PORT=5555
