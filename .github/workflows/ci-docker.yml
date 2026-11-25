@@ -11,10 +11,6 @@ on:
         description: "Commit sha for git checkout"
         required: false
         default: ''
-      Tag:
-        description: "Custom tag for docker image"
-        required: false
-        default: ''
       Lint:
         description: 'Dockerfile basic linters check'
         default: false
@@ -31,12 +27,16 @@ on:
         description: 'Check run container'
         default: false
         type: boolean
-      Latest:
-        description: 'Push latest tag on Docker Hub'
-        default: false
-        type: boolean
       Push:
         description: 'Push custom tag on Docker Hub'
+        default: false
+        type: boolean
+      Tag:
+        description: "Custom tag (current version by default)"
+        required: false
+        default: ''
+      Latest:
+        description: 'Push latest tag on Docker Hub'
         default: false
         type: boolean
 
@@ -145,16 +145,6 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Docker image build and push on Docker Hub using latest tag
-        id: latestPush
-        if: ${{ github.event.inputs.Push == 'true' && github.event.inputs.Latest == 'true' }}
-        run: |
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            -t lifailon/lazyjournal:latest \
-            --push \
-            -f ${{ github.event.inputs.Dockerfile }} .
-
       - name: Docker image build and push on Docker Hub using current version or custom tag
         id: customPush
         if: ${{ github.event.inputs.Push == 'true' && env.VERSION != '' }}
@@ -162,6 +152,16 @@ jobs:
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             -t lifailon/lazyjournal:$VERSION \
+            --push \
+            -f ${{ github.event.inputs.Dockerfile }} .
+
+      - name: Docker image build and push on Docker Hub using latest tag
+        id: latestPush
+        if: ${{ github.event.inputs.Push == 'true' && github.event.inputs.Latest == 'true' }}
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t lifailon/lazyjournal:latest \
             --push \
             -f ${{ github.event.inputs.Dockerfile }} .
 
@@ -195,5 +195,5 @@ jobs:
             ${{ steps.hadolint.outcome == 'success' && '✅' || (steps.hadolint.outcome == 'skipped' && '➖' || '❌') }} **Dockerfile hadolint check**: ${{ steps.hadolint.outcome }}
             ${{ steps.buildCheck.outcome == 'success' && '✅' || (steps.buildCheck.outcome == 'skipped' && '➖' || '❌') }} **Docker build only check**: ${{ steps.buildCheck.outcome }}
             ${{ steps.runContainerCheck.outcome == 'success' && '✅' || (steps.runContainerCheck.outcome == 'skipped' && '➖' || '❌') }} **Docker run container check**: ${{ steps.runContainerCheck.outcome }}
+            ${{ steps.customPush.outcome == 'success' && '✅' || (steps.customPush.outcome == 'skipped' && '➖' || '❌') }} **Docker image build and push using ${{ env.VERSION }} tag**: ${{ steps.customPush.outcome }}
             ${{ steps.latestPush.outcome == 'success' && '✅' || (steps.latestPush.outcome == 'skipped' && '➖' || '❌') }} **Docker image build and push using latest tag**: ${{ steps.latestPush.outcome }}
-            ${{ steps.customPush.outcome == 'success' && '✅' || (steps.customPush.outcome == 'skipped' && '➖' || '❌') }} **Docker image build and push using custom tag**: ${{ steps.customPush.outcome }}
