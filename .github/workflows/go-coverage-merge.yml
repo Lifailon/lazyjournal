@@ -12,15 +12,15 @@ on:
         default: true
         type: boolean
       Tparse:
-        description: 'Add tparse report'
+        description: 'Add report from tparse'
         default: true
         type: boolean
-      Linter:
-        description: 'Check linters for final report'
+      Golangci:
+        description: 'Add linters report from golangci'
         default: false
         type: boolean
       Shield:
-        description: 'Update HTML and coverage history reports to Wiki'
+        description: 'Update coverage report to Wiki'
         default: false
         type: boolean
       Wiki:
@@ -94,7 +94,7 @@ jobs:
           echo "\`\`\`bash" > lazyjournal-log.md
           cat lazyjournal.log >> lazyjournal-log.md
           echo "\`\`\`" >> lazyjournal-log.md
-          if [[ "${{ inputs.Debug }}" == "true" ]]; then
+          if [[ "${{ github.event.inputs.Debug }}" == "true" ]]; then
               cat lazyjournal-log.md >> $GITHUB_STEP_SUMMARY
           fi
         continue-on-error: true
@@ -103,7 +103,7 @@ jobs:
       - name: Create markdown report for Linux
         run: |
           mv test-report.md test-linux-report.md
-          if [[ "${{ inputs.Debug }}" == "true" ]]; then
+          if [[ "${{ github.event.inputs.Debug }}" == "true" ]]; then
               cat test-linux-report.md >> $GITHUB_STEP_SUMMARY
           fi
         continue-on-error: true
@@ -120,7 +120,7 @@ jobs:
           name: linux-coverage
           path: linux-coverage.out
 
-      - name: Upload test json report
+      - name: Upload test json report for tparse
         if: ${{ github.event.inputs.Tparse == 'true' }}
         uses: actions/upload-artifact@v7
         with:
@@ -210,7 +210,7 @@ jobs:
       - name: Create markdown report for macOS
         run: |
           mv test-report.md test-macos-report.md
-          if [[ "${{ inputs.Debug }}" == "true" ]]; then
+          if [[ "${{ github.event.inputs.Debug }}" == "true" ]]; then
               cat test-macos-report.md >> $GITHUB_STEP_SUMMARY
           fi
         continue-on-error: true
@@ -229,6 +229,7 @@ jobs:
 
   Windows:
     runs-on: windows-2022
+
     steps:
       - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
         uses: actions/checkout@v7
@@ -269,7 +270,7 @@ jobs:
         shell: pwsh
         continue-on-error: true
         env:
-          DEBUG: ${{ inputs.Debug }}
+          DEBUG: ${{ github.event.inputs.Debug }}
 
       - name: Upload test summary report
         uses: actions/upload-artifact@v7
@@ -283,17 +284,78 @@ jobs:
           name: windows-coverage
           path: windows-coverage.out
 
+  Lint:
+    runs-on: ubuntu-24.04
+    if: ${{ github.event.inputs.Golangci == 'true' }}
+
+    steps:
+      - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.Branch }}
+
+      - name: Install Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: 1.27.0
+
+      - name: Code verify and check build
+        run: |
+          go vet ./...
+          go build -v -o /dev/null ./...
+
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+          golangci-lint --version
+
+      - name: Golangci verify config
+        id: verifyConfig
+        run: golangci-lint config verify --verbose
+
+      - name: Get used linter lists from config
+        run: |
+          version=$(golangci-lint --version | grep -Eo "[0-9.]+" | head -n 1)
+          echo "## Configuration" > lint-report.md
+          echo "Golangci version: $version" >> lint-report.md
+          echo "Verify config: ${{ steps.verifyConfig.outcome }}" >> lint-report.md
+          golangci-lint linters --color=never > lint-list.md
+          sed -i 's/Enabled by your configuration linters:/## Enabled linters/' lint-list.md
+          sed -i 's/Disabled by your configuration linters:/## Disabled linters/' lint-list.md
+          sed -i 's/ \[deprecated\]//g' lint-list.md
+          sed -i -E 's/\.? \[([^]]+)\]/ (**\1**)./g' lint-list.md
+          awk -F ': ' '/: / {
+              print "- [" $1 "](https://golangci-lint.run/docs/linters/configuration/#" $1 ") — " $2;
+              next
+          } { print $0 }' lint-list.md > linters.tmp && mv linters.tmp lint-list.md
+          echo "lint-list.md" >> lint-report.md
+
+      - name: Golangci linters check for get issue list
+        continue-on-error: true
+        run: |
+          echo "## Issues" >> lint-report.md
+          golangci-lint run ./... > lint-results.md || true
+          sed -n '/issues:/,$p' -i lint-results.md
+          cat "lint-results.md" >> lint-report.md
+          if [[ "${{ github.event.inputs.Debug }}" == "true" ]]; then
+              cat "lint-report.md" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload lint report
+        uses: actions/upload-artifact@v7
+        with:
+          name: lint-report
+          path: lint-report.md
+
   Merge:
     runs-on: ubuntu-latest
-
-    needs: [Linux, Docker, macOS, Windows]
-
-    env:
-      LINUX_COVERAGE: "n/a"
-      DOCKER_COVERAGE: "n/a"
-      MAC_COVERAGE: "n/a"
-      WIN_COVERAGE: "n/a"
-      TOTAL_COVERAGE: "n/a"
+    needs: [Linux, Docker, macOS, Windows, Lint]
+    outputs:
+      LINUX_COVERAGE:   ${{ steps.linux.outputs.COVERAGE }}
+      DOCKER_COVERAGE:  ${{ steps.docker.outputs.COVERAGE }}
+      MACOS_COVERAGE:   ${{ steps.macos.outputs.COVERAGE }}
+      WIN_COVERAGE:     ${{ steps.win.outputs.COVERAGE }}
+      MERGE_COVERAGE:   ${{ steps.merge.outputs.COVERAGE }}
 
     steps:
       - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
@@ -342,42 +404,46 @@ jobs:
           path: .
 
       - name: Check coverage report for all tests on Linux (with root)
+        id: linux
         run: |
           out=$(go tool cover -func linux-coverage.out)
           echo "# 🧪 Unit test coverage" >> $GITHUB_STEP_SUMMARY
           echo "![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.svg)" >> $GITHUB_STEP_SUMMARY
           coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
-          echo "LINUX_COVERAGE=$coverTotal" >> $GITHUB_ENV
+          echo "COVERAGE=$coverTotal" >> $GITHUB_OUTPUT
           echo "Linux coverage: $coverTotal"
           echo "- 🐧 **Linux**: $coverTotal" >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" > all-report.md
+          cat "$GITHUB_STEP_SUMMARY" > final-report.md
 
       - name: Check coverage report for Docker without root
+        id: docker
         run: |
           out=$(go tool cover -func docker-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
-          echo "DOCKER_COVERAGE=$coverTotal" >> $GITHUB_ENV
+          echo "COVERAGE=$coverTotal" >> $GITHUB_OUTPUT
           echo "Docker coverage: $coverTotal"
           echo "- 🐳 **Docker**: $coverTotal" >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
+          cat "$GITHUB_STEP_SUMMARY" >> final-report.md
 
       - name: Check coverage report for macOS
+        id: macos
         run: |
           out=$(go tool cover -func macos-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
-          echo "MAC_COVERAGE=$coverTotal" >> $GITHUB_ENV
+          echo "COVERAGE=$coverTotal" >> $GITHUB_OUTPUT
           echo "macOS coverage: $coverTotal"
           echo "- 🍏 **macOS**: $coverTotal" >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
+          cat "$GITHUB_STEP_SUMMARY" >> final-report.md
 
       - name: Check coverage report for Windows
+        id: win
         run: |
           out=$(go tool cover -func windows-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
-          echo "WIN_COVERAGE=$coverTotal" >> $GITHUB_ENV
+          echo "COVERAGE=$coverTotal" >> $GITHUB_OUTPUT
           echo "Windows coverage: $coverTotal"
           echo "- 💻 **Windows**: $coverTotal" >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
+          cat "$GITHUB_STEP_SUMMARY" >> final-report.md
 
       - name: Install gocovmerge and add go bin to PATH
         run: |
@@ -385,11 +451,12 @@ jobs:
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
       - name: Merge coverage reports
+        id: merge
         run: |
           gocovmerge linux-coverage.out docker-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
           out=$(go tool cover -func merge-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
-          echo "TOTAL_COVERAGE=$coverTotal" >> $GITHUB_ENV
+          echo "COVERAGE=$coverTotal" >> $GITHUB_OUTPUT
           echo "Total after merge coverage: $coverTotal"
           echo -e "\n**Total**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           echo "# 📚 Functions coverage" >> $GITHUB_STEP_SUMMARY
@@ -401,9 +468,9 @@ jobs:
               sed "s/:/ /g" | \
               head -n -1
           } | awk '{print "|" $1 "|" $2 "|" $3 "|" $4 "|"}' >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
+          cat "$GITHUB_STEP_SUMMARY" >> final-report.md
 
-      - name: Download test json report
+      - name: Download test json report for tparse
         if: ${{ github.event.inputs.Tparse == 'true' }}
         uses: actions/download-artifact@v8
         with:
@@ -417,30 +484,12 @@ jobs:
       - name: Generate test markdown report using tparse
         if: ${{ github.event.inputs.Tparse == 'true' }}
         run: |
-          tparse -all -format=markdown -file test.json >> all-report.md
+          echo "# 📰 Unit test result"
+          tparse -all -format=markdown -file test.json >> final-report.md
+          tparse -all -format=markdown -file test.json >> $GITHUB_STEP_SUMMARY
 
-      - name: Linters reports
-        if: ${{ github.event.inputs.Linter == 'true' }}
-        run: |
-          echo "# 👮‍♂️ Linters check" >> $GITHUB_STEP_SUMMARY
-          echo "## Golangci lint" >> $GITHUB_STEP_SUMMARY
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          golangci-lint run -v ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          # echo "## Go Critic" >> $GITHUB_STEP_SUMMARY
-          # go install github.com/go-critic/go-critic/cmd/gocritic@latest
-          # echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          # gocritic check -v -enableAll ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
-          # echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          # echo "## Go Security" >> $GITHUB_STEP_SUMMARY
-          # go install github.com/securego/gosec/v2/cmd/gosec@latest
-          # echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          # gosec -severity=high ./... 2>&1 | tee -a $GITHUB_STEP_SUMMARY
-          # echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          cat "$GITHUB_STEP_SUMMARY" >> all-report.md
-
-      - name: Upload merge coverage report
+      - name: Upload merge coverage report for Codecov
+        if: ${{ github.event.inputs.Codecov == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: merge-coverage
@@ -474,72 +523,70 @@ jobs:
           name: windows-report
           path: .
 
+      - name: Download lint report
+        if: ${{ github.event.inputs.Golangci == 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: lint-report
+          path: .
+
+      - name: Add golangci lint report
+        if: ${{ github.event.inputs.Golangci == 'true' }}
+        run: |
+          echo "# 👮‍♂️ Linters check" >> final-report.md
+          cat "lint-report.md" >> final-report.md
+
       - name: Merge all reports
         run: |
-          echo "# 🐧 Linux" >> all-report.md
-          echo "Log reading and coloring performance results when testing on Linux." >> all-report.md
-          cat "test-linux-report.md" >> all-report.md
-          echo "# 🍏 macOS" >> all-report.md
-          echo "Log reading and coloring performance results when testing on macOS." >> all-report.md
-          cat "test-macos-report.md" >> all-report.md
-          echo "# 💻 Windows" >> all-report.md
-          echo "Log reading and coloring performance results when testing on Windows." >> all-report.md
-          cat "test-windows-report.md" >> all-report.md
-          echo "# 📄 Executed commands logs" >> all-report.md
-          echo "Log of executed commands during interface testing on Linux." >> all-report.md
-          cat "lazyjournal-log.md" >> all-report.md
+          echo "# 🐧 Linux" >> final-report.md
+          echo "Log reading and coloring performance results when testing on Linux." >> final-report.md
+          cat "test-linux-report.md" >> final-report.md
+          echo "# 🍏 macOS" >> final-report.md
+          echo "Log reading and coloring performance results when testing on macOS." >> final-report.md
+          cat "test-macos-report.md" >> final-report.md
+          echo "# 🪟 Windows" >> final-report.md
+          echo "Log reading and coloring performance results when testing on Windows." >> final-report.md
+          cat "test-windows-report.md" >> final-report.md
+          echo "# 📄 Logs" >> final-report.md
+          echo "Log of executed commands during interface testing on Linux." >> final-report.md
+          cat "lazyjournal-log.md" >> final-report.md
 
       - name: Check flags for report
         run: |
-          echo "# 🚩 Flags" >> all-report.md
-          echo "## Help" >> all-report.md
-          echo "\`lazyjournal -h\`" >> all-report.md
-          echo "\`\`\`bash" >> all-report.md
-          go run main.go -h >> all-report.md
-          echo "\`\`\`" >> all-report.md
-          echo "## Configuration" >> all-report.md
-          echo "\`lazyjournal -g\`" >> all-report.md
-          echo "\`\`\`yaml" >> all-report.md
-          go run main.go -g >> all-report.md
-          echo "\`\`\`" >> all-report.md
-          echo "## Audit" >> all-report.md
-          echo "\`lazyjournal -a\`" >> all-report.md
-          echo "\`\`\`yaml" >> all-report.md
-          go run main.go -a >> all-report.md
-          echo "\`\`\`" >> all-report.md
+          echo "# 🚩 Flags" >> final-report.md
+          echo "## Help" >> final-report.md
+          echo "\`lazyjournal -h\`" >> final-report.md
+          echo "\`\`\`bash" >> final-report.md
+          go run main.go -h >> final-report.md
+          echo "\`\`\`" >> final-report.md
+          echo "## Configuration" >> final-report.md
+          echo "\`lazyjournal -g\`" >> final-report.md
+          echo "\`\`\`yaml" >> final-report.md
+          go run main.go -g >> final-report.md
+          echo "\`\`\`" >> final-report.md
+          echo "## Audit" >> final-report.md
+          echo "\`lazyjournal -a\`" >> final-report.md
+          echo "\`\`\`yaml" >> final-report.md
+          go run main.go -a >> final-report.md
+          echo "\`\`\`" >> final-report.md
 
       - name: Upload final report
         uses: actions/upload-artifact@v7
         with:
-          name: all-report
-          path: all-report.md
+          name: final-report
+          path: final-report.md
 
-      - name: Checkout Wiki repository
-        if: ${{ github.event.inputs.Wiki == 'true' }}
-        run: git clone https://github.com/Lifailon/lazyjournal.wiki wiki
+  Telegram:
+    runs-on: ubuntu-latest
+    needs: [Merge]
+    env:
+      LINUX_COVERAGE:   ${{ needs.Merge.outputs.LINUX_COVERAGE  || 'n/a' }}
+      DOCKER_COVERAGE:  ${{ needs.Merge.outputs.DOCKER_COVERAGE || 'n/a' }}
+      MACOS_COVERAGE:   ${{ needs.Merge.outputs.MACOS_COVERAGE  || 'n/a' }}
+      WIN_COVERAGE:     ${{ needs.Merge.outputs.WIN_COVERAGE    || 'n/a' }}
+      MERGE_COVERAGE:   ${{ needs.Merge.outputs.MERGE_COVERAGE  || 'n/a' }}
 
-      - name: Update markdown report to Wiki
-        if: ${{ github.event.inputs.Wiki == 'true' }}
-        run: |
-          echo -e "# Report for $(go run main.go -v) release\n" > wiki/home.md
-          echo -e 'The test coverage report in `html` format using [go-coverage-report](https://github.com/marketplace/actions/go-coverage-report) is available [here](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.html).\n' >> wiki/home.md
-          echo -e 'During testing, the interface operation is checked in the disabled `tcell` mode, as well as the reading and coloring time of all available logs in Linux, macOS and Windows systems.\n' >> wiki/home.md
-          echo -e 'To combine test results from different systems [gosovmerge](https://github.com/wadey/gocovmerge) is used.\n' >> wiki/home.md
-          echo -e '# 📈 Coverage history\n' >> wiki/home.md
-          echo -e '![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage-chart.svg)\n' >> wiki/home.md
-          cat all-report.md >> wiki/home.md
-          cd wiki
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git add home.md
-          if ! git diff --staged --quiet; then
-              git diff
-              git commit -m "update markdown report"
-              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git master
-          else
-              echo "No changes to commit"
-          fi
-
+    steps:
       - name: Send report to Telegram
         uses: appleboy/telegram-action@master
         with:
@@ -557,15 +604,49 @@ jobs:
             Result unit testing coverage:
             🐧 Linux: ${{ env.LINUX_COVERAGE }}
             🐳 Docker: ${{ env.DOCKER_COVERAGE }}
-            🍏 macOS: ${{ env.MAC_COVERAGE }}
+            🍏 macOS: ${{ env.MACOS_COVERAGE }}
             💻 Windows: ${{ env.WIN_COVERAGE }}
-            📚 Total: ${{ env.TOTAL_COVERAGE }}
+            📚 Merge: ${{ env.MERGE_COVERAGE }}
+
+  Wiki:
+    runs-on: ubuntu-latest
+    needs: [Merge]
+    if: ${{ github.event.inputs.Wiki == 'true' }}
+
+    steps:
+      - name: Download final report from merge
+        uses: actions/download-artifact@v8
+        with:
+          name: final-report
+          path: .
+
+      - name: Checkout Wiki repository
+        run: git clone https://github.com/Lifailon/lazyjournal.wiki wiki
+
+      - name: Update markdown report to Wiki
+        run: |
+          echo -e "# Report for $(go run main.go -v) release\n" > wiki/home.md
+          echo -e 'The test coverage report in `html` format using [go-coverage-report](https://github.com/marketplace/actions/go-coverage-report) is available [here](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage.html).\n' >> wiki/home.md
+          echo -e 'During testing, the interface operation is checked in the disabled `tcell` mode, as well as the reading and coloring time of all available logs in Linux, macOS and Windows systems.\n' >> wiki/home.md
+          echo -e 'To combine test results from different systems [gosovmerge](https://github.com/wadey/gocovmerge) is used.\n' >> wiki/home.md
+          echo -e '# 📈 Coverage history\n' >> wiki/home.md
+          echo -e '![](https://raw.githubusercontent.com/wiki/Lifailon/lazyjournal/coverage-chart.svg)\n' >> wiki/home.md
+          cat final-report.md >> wiki/home.md
+          cd wiki
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add home.md
+          if ! git diff --staged --quiet; then
+              git diff
+              git commit -m "update markdown report"
+              git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Lifailon/lazyjournal.wiki.git master
+          else
+              echo "No changes to commit"
+          fi
 
   Codecov:
     runs-on: ubuntu-latest
-
     needs: [Merge]
-
     if: ${{ github.event.inputs.Codecov == 'true' }}
 
     steps:

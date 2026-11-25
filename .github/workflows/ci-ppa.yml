@@ -81,7 +81,7 @@ jobs:
       - name: Install dependencies for build deb package
         if: ${{ github.event.inputs.Install != 'true' }}
         run: |
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             devscripts \
             debhelper \
             dh-golang \
