@@ -68,11 +68,14 @@ jobs:
           lazyjournal -v
           sudo apt remove -y lazyjournal
 
+      # Install Go from PPA: https://launchpad.net/~longsleep/+archive/ubuntu/golang-backports
       - name: Install Go
         if: ${{ github.event.inputs.Install != 'true' }}
         run: |
+          sudo add-apt-repository ppa:longsleep/golang-backports -y
           sudo apt-get update
           sudo apt-get install -y golang-1.27-go
+          echo "/usr/lib/go-1.27/bin" >> $GITHUB_PATH
           /usr/lib/go-1.27/bin/go version
 
       - name: Install dependencies for build deb package

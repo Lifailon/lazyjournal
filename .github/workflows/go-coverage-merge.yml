@@ -85,6 +85,9 @@ jobs:
           sudo auditctl -l
 
       - name: Run all unit test in Linux
+        env:
+          LINES: "40"
+          COLUMNS: "120"
         run: |
           sudo go test -json -cover -coverprofile linux-coverage.out ./... > test.json
           cat lazyjournal.log
@@ -164,6 +167,9 @@ jobs:
           docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
 
       - name: Run unit test for docker in Linux without root
+        env:
+          LINES: "40"
+          COLUMNS: "120"
         run: go test -v --run "TestDockerContainer" -cover -coverprofile docker-coverage.out
         continue-on-error: true
         timeout-minutes: 5
@@ -194,7 +200,10 @@ jobs:
           go build -v -o /dev/null ./...
 
       - name: Run unit test in macOS
-        run: sudo go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" -cover -coverprofile macos-coverage.out
+        env:
+          LINES: "40"
+          COLUMNS: "120"
+        run: sudo -E COLUMNS=80 LINES=40 go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" -cover -coverprofile macos-coverage.out
         continue-on-error: true
         timeout-minutes: 5
 
@@ -244,6 +253,9 @@ jobs:
         continue-on-error: true
 
       - name: Run unit test in Windows
+        env:
+          LINES: "40"
+          COLUMNS: "120"
         run: go test -v --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" -cover -coverprofile windows-coverage.out
         continue-on-error: true
         timeout-minutes: 5

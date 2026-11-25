@@ -1,4 +1,4 @@
-name: "[PR] PR Telegram notify"
+name: "[PR] Telegram notify"
 
 on:
   pull_request_target:
