@@ -4,37 +4,39 @@ services:
     container_name: lazyjournal
     restart: unless-stopped
     privileged: true
-    # TUI mode
     tty: true
     stdin_open: true
-    # Web mode
-    ports:
-      - 5555:5555
+    # Forwarding a port in web mode
+    # ports:
+    #   - 5555:5555
     environment:
-      # Enable Web mode
+      # Flags for passing to lazyjournal
+      - OPTIONS=-p /opt
+      # Enable web mode
       - TTYD=false
       - PORT=5555
-      # Credentials for accessing via Web browser (optional)
+      # Credentials for web browser access (optional)
       - USERNAME=
       - PASSWORD=
-      # Flags for passing to lazyjournal (optional)
-      - OPTIONS=
+      # Enable SSL (optional)
+      - CERT=
+      - KEY=
     volumes:
-      # Systemd
+      # Read access to the list of units from systemd
       - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
       - /run/systemd/system:/run/systemd/system:ro
       - /run/systemd/journal/socket:/run/systemd/journal/socket:ro
-      # Journald
+      # Machine identifier for reading journald logs on the host
       - /etc/machine-id:/etc/machine-id:ro
-      # Filesystem
+      # System log files (syslog, messages, etc.)
       - /var/log:/var/log:ro
-      # Docker socket
+      # Custom logs path (optional)
+      - /opt:/opt:ro
+      # Reading Docker logs from socket
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Read docker logs from filesystem
+      # Reading Docker logs from file system
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       # Kubernetes configuration
       - $HOME/.kube/config:/root/.kube/config:ro
       # Custom lazyjournal configuration (optional)
       # - ./config.yml:/lazyjournal/config.yml:ro
-      # Custom path with logs (optional)
-      # - /opt:/opt:ro
