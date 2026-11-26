@@ -17,7 +17,7 @@ on:
         type: boolean
       Golangci:
         description: 'Add linters report from golangci'
-        default: false
+        default: true
         type: boolean
       Shield:
         description: 'Update coverage report to Wiki'
@@ -328,7 +328,7 @@ jobs:
               print "- [" $1 "](https://golangci-lint.run/docs/linters/configuration/#" $1 ") — " $2;
               next
           } { print $0 }' lint-list.md > linters.tmp && mv linters.tmp lint-list.md
-          echo "lint-list.md" >> lint-report.md
+          cat "lint-list.md" >> lint-report.md
 
       - name: Golangci linters check for get issue list
         continue-on-error: true
