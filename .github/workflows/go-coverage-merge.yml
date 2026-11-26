@@ -24,7 +24,7 @@ on:
         default: true
         type: boolean
       Golangci:
-        description: 'Add linters report from golangci'
+        description: 'Run lint check using Golangci'
         default: true
         type: boolean
       Shield:
@@ -32,7 +32,7 @@ on:
         default: false
         type: boolean
       Wiki:
-        description: 'Update Markdown report to Wiki'
+        description: 'Update markdown report to Wiki'
         default: false
         type: boolean
       Codecov:
@@ -553,6 +553,14 @@ jobs:
         with:
           name: lint-report
           path: .
+
+      - name: Add CHANGELOG from git
+        if: ${{ github.event.inputs.Golangci == 'true' }}
+        run: |
+          echo "# 🌿 CHANGELOG" >> final-report.md
+          LATEST_TAG=$(git describe --tags --abbrev=0)
+          git --no-pager log "$LATEST_TAG..HEAD" --no-merges \
+            --pretty=tformat:"- [%h](https://github.com/Lifailon/lazyjournal/commit/%h): %s" >> final-report.md
 
       - name: Add golangci lint report
         if: ${{ github.event.inputs.Golangci == 'true' }}

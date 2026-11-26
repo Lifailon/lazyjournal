@@ -192,7 +192,7 @@ uninstall:
 
 git-log:
 	git --no-pager log --all --reverse --date=format:'%Y-%m-%d %H:%M:%S' \
-		--pretty=format:"%ad%Creset %C(yellow)[%C(green)%an%Creset -> %C(cyan)https://github.com/Lifailon/lazyjournal/commit/%h%C(yellow)]%C(auto)%d%Creset %s"
+		--pretty=tformat:"%ad%Creset %C(yellow)[%C(green)%an%Creset -> %C(cyan)https://github.com/Lifailon/lazyjournal/commit/%h%C(yellow)]%C(auto)%d%Creset %s"
 
 git-changelog:
-	git --no-pager log "$$(git describe --tags --abbrev=0)..HEAD" --no-merges --pretty=format:"- [%h](https://github.com/Lifailon/lazyjournal/commit/%h): %s"
+	git --no-pager log "$$(git describe --tags --abbrev=0)..HEAD" --no-merges --pretty=tformat:"- [%h](https://github.com/Lifailon/lazyjournal/commit/%h): %s"
