@@ -481,6 +481,7 @@ jobs:
           echo "Total after merge coverage: $coverTotal"
           echo -e "\n**Total**: $coverTotal" >> $GITHUB_STEP_SUMMARY
           echo "# 📚 Functions coverage" >> $GITHUB_STEP_SUMMARY
+          echo -e "A summary table showing test coverage for functions\n" >> $GITHUB_STEP_SUMMARY
           {
             echo "File Line Function Coverage"
             echo "- - - -"
@@ -505,7 +506,8 @@ jobs:
       - name: Generate test markdown report using tparse
         if: ${{ github.event.inputs.Linux == 'true' }}
         run: |
-          echo "# 📰 Unit test result"
+          echo "# 📰 Test report" >> final-report.md
+          echo -e "A list of tests and their execution results, generated using [tparse](https://github.com/mfridman/tparse) on Linux.\n" >> final-report.md
           tparse -all -format=markdown -file test.json >> final-report.md
           tparse -all -format=markdown -file test.json >> $GITHUB_STEP_SUMMARY
 
