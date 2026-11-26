@@ -7,12 +7,20 @@ on:
         description: 'Branch for checkout'
         required: true
         default: 'main'
-      Debug:
-        description: 'Advanced summary report from tests'
+      Linux:
+        description: 'Run unit tests on Linux (with root)'
         default: true
         type: boolean
-      Tparse:
-        description: 'Add report from tparse'
+      Docker:
+        description: 'Run unit tests for Docker (without root)'
+        default: true
+        type: boolean
+      macOS:
+        description: 'Run unit tests on macOS'
+        default: true
+        type: boolean
+      Win:
+        description: 'Run unit tests on Windows'
         default: true
         type: boolean
       Golangci:
@@ -38,6 +46,7 @@ permissions:
 jobs:
   Linux:
     runs-on: ubuntu-24.04
+    if: ${{ github.event.inputs.Linux == 'true' }}
 
     steps:
       - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
@@ -85,6 +94,8 @@ jobs:
           sudo auditctl -l
 
       - name: Run all unit test in Linux
+        continue-on-error: true
+        timeout-minutes: 10
         env:
           LINES: "40"
           COLUMNS: "120"
@@ -94,19 +105,12 @@ jobs:
           echo "\`\`\`bash" > lazyjournal-log.md
           cat lazyjournal.log >> lazyjournal-log.md
           echo "\`\`\`" >> lazyjournal-log.md
-          if [[ "${{ github.event.inputs.Debug }}" == "true" ]]; then
-              cat lazyjournal-log.md >> $GITHUB_STEP_SUMMARY
-          fi
-        continue-on-error: true
-        timeout-minutes: 10
 
       - name: Create markdown report for Linux
+        continue-on-error: true
         run: |
           mv test-report.md test-linux-report.md
-          if [[ "${{ github.event.inputs.Debug }}" == "true" ]]; then
-              cat test-linux-report.md >> $GITHUB_STEP_SUMMARY
-          fi
-        continue-on-error: true
+          cat test-linux-report.md >> $GITHUB_STEP_SUMMARY
 
       - name: Upload test summary report
         uses: actions/upload-artifact@v7
@@ -121,7 +125,6 @@ jobs:
           path: linux-coverage.out
 
       - name: Upload test json report for tparse
-        if: ${{ github.event.inputs.Tparse == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: test-json
@@ -135,6 +138,7 @@ jobs:
 
   Docker:
     runs-on: ubuntu-24.04
+    if: ${{ github.event.inputs.Docker == 'true' }}
 
     steps:
       - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
@@ -167,12 +171,12 @@ jobs:
           docker run -d --name pinguem -p 8085:8085 -p 3005:3005 lifailon/pinguem:latest
 
       - name: Run unit test for docker in Linux without root
+        continue-on-error: true
+        timeout-minutes: 5
         env:
           LINES: "40"
           COLUMNS: "120"
         run: go test -v --run "TestDockerContainer" -cover -coverprofile docker-coverage.out
-        continue-on-error: true
-        timeout-minutes: 5
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
@@ -182,6 +186,7 @@ jobs:
 
   macOS:
     runs-on: macos-15
+    if: ${{ github.event.inputs.macOS == 'true' }}
 
     steps:
       - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
@@ -200,20 +205,18 @@ jobs:
           go build -v -o /dev/null ./...
 
       - name: Run unit test in macOS
+        continue-on-error: true
+        timeout-minutes: 5
         env:
           LINES: "40"
           COLUMNS: "120"
         run: sudo -E COLUMNS=80 LINES=40 go test -v --run "TestUnixFiles|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface" -cover -coverprofile macos-coverage.out
-        continue-on-error: true
-        timeout-minutes: 5
 
       - name: Create markdown report for macOS
+        continue-on-error: true
         run: |
           mv test-report.md test-macos-report.md
-          if [[ "${{ github.event.inputs.Debug }}" == "true" ]]; then
-              cat test-macos-report.md >> $GITHUB_STEP_SUMMARY
-          fi
-        continue-on-error: true
+          cat test-macos-report.md >> $GITHUB_STEP_SUMMARY
 
       - name: Upload test summary report
         uses: actions/upload-artifact@v7
@@ -229,6 +232,7 @@ jobs:
 
   Windows:
     runs-on: windows-2022
+    if: ${{ github.event.inputs.Win == 'true' }}
 
     steps:
       - name: Checkout repository (${{ github.event.inputs.Branch }} branch)
@@ -247,30 +251,30 @@ jobs:
           go build -v -o NUL ./...
 
       - name: Create log file for Windows
+        continue-on-error: true
+        shell: pwsh
         run: |
           New-Item -Path "$env:APPDATA\test" -Type Directory
           "line test" | Out-File -FilePath "$env:APPDATA\test\test.log"
-        shell: pwsh
-        continue-on-error: true
 
       - name: Run unit test in Windows
+        continue-on-error: true
+        timeout-minutes: 5
         env:
           LINES: "40"
           COLUMNS: "120"
         run: go test -v --run "TestWin.*|TestFlags|TestCommandColor|TestCommandFuzzyFilter|TestCommandRegexFilter|TestMainInterface|TestMockInterface" -cover -coverprofile windows-coverage.out
-        continue-on-error: true
-        timeout-minutes: 5
 
       - name: Create markdown report for Windows
+        continue-on-error: true
+        shell: pwsh
+        env:
+          DEBUG: true
         run: |
           Rename-Item -Path test-report.md -NewName test-windows-report.md
           if ($env:DEBUG -eq "true") {
             Get-Content test-windows-report.md | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
           }
-        shell: pwsh
-        continue-on-error: true
-        env:
-          DEBUG: ${{ github.event.inputs.Debug }}
 
       - name: Upload test summary report
         uses: actions/upload-artifact@v7
@@ -337,9 +341,7 @@ jobs:
           golangci-lint run ./... > lint-results.md || true
           sed -n '/issues:/,$p' -i lint-results.md
           cat "lint-results.md" >> lint-report.md
-          if [[ "${{ github.event.inputs.Debug }}" == "true" ]]; then
-              cat "lint-report.md" >> $GITHUB_STEP_SUMMARY
-          fi
+          cat "lint-report.md" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload lint report
         uses: actions/upload-artifact@v7
@@ -349,7 +351,13 @@ jobs:
 
   Merge:
     runs-on: ubuntu-latest
-    needs: [Linux, Docker, macOS, Windows, Lint]
+    needs: [
+      Linux,
+      Docker,
+      macOS,
+      Windows,
+      Lint
+    ]
     outputs:
       LINUX_COVERAGE:   ${{ steps.linux.outputs.COVERAGE }}
       DOCKER_COVERAGE:  ${{ steps.docker.outputs.COVERAGE }}
@@ -374,36 +382,46 @@ jobs:
           go build -v -o /dev/null ./...
 
       - name: Download coverage report for Linux (with root)
+        if: ${{ github.event.inputs.Linux == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: linux-coverage
           path: .
 
       - name: Download lazyjournal log file
+        if: ${{ github.event.inputs.Linux == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: lazyjournal-log
           path: .
 
+      - name: Output lazyjournal log to summary
+        if: ${{ github.event.inputs.Linux == 'true' }}
+        run: cat lazyjournal-log.md >> $GITHUB_STEP_SUMMARY
+
       - name: Download coverage report for Docker (without root)
+        if: ${{ github.event.inputs.Docker == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: docker-coverage
           path: .
 
       - name: Download coverage report for macOS
+        if: ${{ github.event.inputs.macOS == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: macos-coverage
           path: .
 
       - name: Download coverage report for Windows
+        if: ${{ github.event.inputs.Win == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: windows-coverage
           path: .
 
       - name: Check coverage report for all tests on Linux (with root)
+        if: ${{ github.event.inputs.Linux == 'true' }}
         id: linux
         run: |
           out=$(go tool cover -func linux-coverage.out)
@@ -416,6 +434,7 @@ jobs:
           cat "$GITHUB_STEP_SUMMARY" > final-report.md
 
       - name: Check coverage report for Docker without root
+        if: ${{ github.event.inputs.Docker == 'true' }}
         id: docker
         run: |
           out=$(go tool cover -func docker-coverage.out)
@@ -426,6 +445,7 @@ jobs:
           cat "$GITHUB_STEP_SUMMARY" >> final-report.md
 
       - name: Check coverage report for macOS
+        if: ${{ github.event.inputs.macOS == 'true' }}
         id: macos
         run: |
           out=$(go tool cover -func macos-coverage.out)
@@ -436,6 +456,7 @@ jobs:
           cat "$GITHUB_STEP_SUMMARY" >> final-report.md
 
       - name: Check coverage report for Windows
+        if: ${{ github.event.inputs.Win == 'true' }}
         id: win
         run: |
           out=$(go tool cover -func windows-coverage.out)
@@ -453,7 +474,7 @@ jobs:
       - name: Merge coverage reports
         id: merge
         run: |
-          gocovmerge linux-coverage.out docker-coverage.out macos-coverage.out windows-coverage.out > merge-coverage.out
+          gocovmerge *.out > merge-coverage.out
           out=$(go tool cover -func merge-coverage.out)
           coverTotal=$(echo "$out" | tail -n 1 | awk '{print $NF}')
           echo "COVERAGE=$coverTotal" >> $GITHUB_OUTPUT
@@ -471,18 +492,18 @@ jobs:
           cat "$GITHUB_STEP_SUMMARY" >> final-report.md
 
       - name: Download test json report for tparse
-        if: ${{ github.event.inputs.Tparse == 'true' }}
+        if: ${{ github.event.inputs.Linux == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: test-json
           path: .
 
       - name: Install tparse
-        if: ${{ github.event.inputs.Tparse == 'true' }}
+        if: ${{ github.event.inputs.Linux == 'true' }}
         run: go install github.com/mfridman/tparse@latest
 
       - name: Generate test markdown report using tparse
-        if: ${{ github.event.inputs.Tparse == 'true' }}
+        if: ${{ github.event.inputs.Linux == 'true' }}
         run: |
           echo "# 📰 Unit test result"
           tparse -all -format=markdown -file test.json >> final-report.md
@@ -506,18 +527,21 @@ jobs:
         continue-on-error: true
 
       - name: Download test summary report for Linux
+        if: ${{ github.event.inputs.Linux == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: linux-report
           path: .
 
       - name: Download test summary report for macOS
+        if: ${{ github.event.inputs.macOS == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: macos-report
           path: .
 
       - name: Download test summary report for Windows
+        if: ${{ github.event.inputs.Win == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: windows-report
@@ -536,22 +560,35 @@ jobs:
           echo "# 👮‍♂️ Linters check" >> final-report.md
           cat "lint-report.md" >> final-report.md
 
-      - name: Merge all reports
+      - name: Add Linux markdown report to final report
+        if: ${{ github.event.inputs.Linux == 'true' }}
         run: |
           echo "# 🐧 Linux" >> final-report.md
           echo "Log reading and coloring performance results when testing on Linux." >> final-report.md
           cat "test-linux-report.md" >> final-report.md
+
+      - name: Add macOS markdown report to final report
+        if: ${{ github.event.inputs.macOS == 'true' }}
+        run: |
           echo "# 🍏 macOS" >> final-report.md
           echo "Log reading and coloring performance results when testing on macOS." >> final-report.md
           cat "test-macos-report.md" >> final-report.md
+
+      - name: Add Windows markdown report to final report
+        if: ${{ github.event.inputs.Linux == 'true' }}
+        run: |
           echo "# 🪟 Windows" >> final-report.md
           echo "Log reading and coloring performance results when testing on Windows." >> final-report.md
           cat "test-windows-report.md" >> final-report.md
+
+      - name: Add lazyjournal logs to final report
+        if: ${{ github.event.inputs.Linux == 'true' }}
+        run: |
           echo "# 📄 Logs" >> final-report.md
           echo "Log of executed commands during interface testing on Linux." >> final-report.md
           cat "lazyjournal-log.md" >> final-report.md
 
-      - name: Check flags for report
+      - name: Add flags output to final report
         run: |
           echo "# 🚩 Flags" >> final-report.md
           echo "## Help" >> final-report.md
