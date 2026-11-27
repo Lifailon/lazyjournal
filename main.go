@@ -8262,44 +8262,44 @@ func (app *App) setupKeybindings() error {
 
 	// Filtering mode (↑/↓)
 	// Переключение между режимами фильтрации через Up/Down для выбранного окна
-	if err := app.gui.SetKeybinding("filter", gocui.KeyArrowUp, gocui.ModNone, app.setFilterModeRight); err != nil {
+	if err := app.gui.SetKeybinding("filter", gocui.KeyArrowUp, gocui.ModNone, app.setFilterModeUp); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("filter", gocui.KeyArrowDown, gocui.ModNone, app.setFilterModeLeft); err != nil {
+	if err := app.gui.SetKeybinding("filter", gocui.KeyArrowDown, gocui.ModNone, app.setFilterModeDown); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyArrowUp, gocui.ModNone, app.setFilterModeRight); err != nil {
+	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyArrowUp, gocui.ModNone, app.setFilterModeUp); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyArrowDown, gocui.ModNone, app.setFilterModeLeft); err != nil {
+	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyArrowDown, gocui.ModNone, app.setFilterModeDown); err != nil {
 		return err
 	}
 	// PgUp/PgDown
-	if err := app.gui.SetKeybinding("filter", gocui.KeyPgup, gocui.ModNone, app.setFilterModeRight); err != nil {
+	if err := app.gui.SetKeybinding("filter", gocui.KeyPgup, gocui.ModNone, app.setFilterModeUp); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("filter", gocui.KeyPgdn, gocui.ModNone, app.setFilterModeLeft); err != nil {
+	if err := app.gui.SetKeybinding("filter", gocui.KeyPgdn, gocui.ModNone, app.setFilterModeDown); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyPgup, gocui.ModNone, app.setFilterModeRight); err != nil {
+	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyPgup, gocui.ModNone, app.setFilterModeUp); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyPgdn, gocui.ModNone, app.setFilterModeLeft); err != nil {
+	if err := app.gui.SetKeybinding("sinceFilter", gocui.KeyPgdn, gocui.ModNone, app.setFilterModeDown); err != nil {
 		return err
 	}
 	// Custom up and down for switch filter mode from config (ctrl+k b ctrl+j)
 	customUpFilterMode, altModeUp := getHotkey(config.Hotkeys.SwitchFilterMode, "ctrl+k")
 	customDownFilterMode, altModeDown := getHotkey(config.Hotkeys.BackSwitchFilterMode, "ctrl+j")
-	if err := app.gui.SetKeybinding("filter", customUpFilterMode, altModeUp, app.setFilterModeRight); err != nil {
+	if err := app.gui.SetKeybinding("filter", customUpFilterMode, altModeUp, app.setFilterModeUp); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("filter", customDownFilterMode, altModeDown, app.setFilterModeLeft); err != nil {
+	if err := app.gui.SetKeybinding("filter", customDownFilterMode, altModeDown, app.setFilterModeDown); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("sinceFilter", customUpFilterMode, altModeUp, app.setFilterModeRight); err != nil {
+	if err := app.gui.SetKeybinding("sinceFilter", customUpFilterMode, altModeUp, app.setFilterModeUp); err != nil {
 		return err
 	}
-	if err := app.gui.SetKeybinding("sinceFilter", customDownFilterMode, altModeDown, app.setFilterModeLeft); err != nil {
+	if err := app.gui.SetKeybinding("sinceFilter", customDownFilterMode, altModeDown, app.setFilterModeDown); err != nil {
 		return err
 	}
 
@@ -9205,7 +9205,7 @@ func (app *App) showInterfaceManager(g *gocui.Gui) {
 	if err != nil && !errors.Is(err, gocui.ErrUnknownView) {
 		return
 	}
-	managerView.FrameColor = app.selectedFrameColor
+	managerView.FrameColor = gocui.ColorDefault
 	managerView.TitleColor = app.selectedTitleColor
 	managerView.Clear()
 
@@ -9618,7 +9618,7 @@ func (app *App) setCountLogViewDown(g *gocui.Gui, v *gocui.View) error {
 }
 
 // Функция для переключения режима фильтрации (вверх)
-func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
+func (app *App) setFilterModeUp(g *gocui.Gui, v *gocui.View) error {
 	selectedFilter, err := g.View("filter")
 	if err != nil {
 		log.Panicln(err)
@@ -9627,9 +9627,11 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 	case "Filter (Exact)":
 		selectedFilter.Title = "Filter (Fuzzy)"
 		app.selectFilterMode = "fuzzy"
+		selectedFilter.TitleColor = gocui.ColorBlue
 	case "Filter (Fuzzy)":
 		selectedFilter.Title = "Filter (Regex)"
 		app.selectFilterMode = "regex"
+		selectedFilter.TitleColor = gocui.ColorYellow
 	case "Filter (Regex)":
 		// Фиксируем название
 		selectedFilter.Title = "Filter (Timestamp)"
@@ -9685,6 +9687,7 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 		v.TitleColor = app.selectedTitleColor
 		selectedFilter.Title = "Filter (Exact)"
 		app.selectFilterMode = "exact"
+		selectedFilter.TitleColor = gocui.ColorDefault
 	}
 	// Сбрасываем красный цвет в случае ошибки регулярного выражения при смене режима фильтрации (#95)
 	if app.selectFilterMode != "regex" {
@@ -9698,7 +9701,7 @@ func (app *App) setFilterModeRight(g *gocui.Gui, v *gocui.View) error {
 }
 
 // Функция для переключения режима фильтрации (вниз)
-func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
+func (app *App) setFilterModeDown(g *gocui.Gui, v *gocui.View) error {
 	selectedFilter, err := g.View("filter")
 	if err != nil {
 		log.Panicln(err)
@@ -9750,12 +9753,15 @@ func (app *App) setFilterModeLeft(g *gocui.Gui, v *gocui.View) error {
 		v.TitleColor = app.selectedTitleColor
 		selectedFilter.Title = "Filter (Regex)"
 		app.selectFilterMode = "regex"
+		selectedFilter.TitleColor = gocui.ColorYellow
 	case "Filter (Regex)":
 		selectedFilter.Title = "Filter (Fuzzy)"
 		app.selectFilterMode = "fuzzy"
+		selectedFilter.TitleColor = gocui.ColorBlue
 	case "Filter (Fuzzy)":
 		selectedFilter.Title = "Filter (Exact)"
 		app.selectFilterMode = "exact"
+		selectedFilter.TitleColor = gocui.ColorDefault
 	}
 	// Сбрасываем красный цвет ошибки регулярного выражения при смене режима
 	if app.selectFilterMode != "regex" {
@@ -10125,7 +10131,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10140,7 +10146,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10155,7 +10161,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.selectedFrameColor
 			selectedDocker.TitleColor = app.selectedTitleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10188,7 +10194,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 				selectedDocker.FrameColor = app.dockerFrameColor
 				selectedDocker.TitleColor = app.titleColor
 				selectedFilter.FrameColor = app.selectedFrameColor
-				selectedFilter.TitleColor = app.selectedTitleColor
+				// selectedFilter.TitleColor = app.selectedTitleColor
 				selectedLogs.FrameColor = app.frameColor
 				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
@@ -10227,7 +10233,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.selectedFrameColor
 			selectedLogs.TitleColor = app.selectedTitleColor
 			selectedScrollLogs.FrameColor = app.selectedFrameColor
@@ -10242,7 +10248,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10338,7 +10344,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.selectedFrameColor
 			selectedLogs.TitleColor = app.selectedTitleColor
 			selectedScrollLogs.FrameColor = app.selectedFrameColor
@@ -10353,7 +10359,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10386,7 +10392,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 				selectedDocker.FrameColor = app.dockerFrameColor
 				selectedDocker.TitleColor = app.titleColor
 				selectedFilter.FrameColor = app.selectedFrameColor
-				selectedFilter.TitleColor = app.selectedTitleColor
+				// selectedFilter.TitleColor = app.selectedTitleColor
 				selectedLogs.FrameColor = app.frameColor
 				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
@@ -10425,7 +10431,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.selectedFrameColor
 			selectedDocker.TitleColor = app.selectedTitleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10440,7 +10446,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10455,7 +10461,7 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			selectedFilter.TitleColor = app.titleColor
+			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor

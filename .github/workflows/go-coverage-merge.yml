@@ -127,7 +127,7 @@ jobs:
       - name: Upload test json report for tparse
         uses: actions/upload-artifact@v7
         with:
-          name: test-json
+          name: linux-test-json
           path: test.json
 
       - name: Upload lazyjournal log file
@@ -497,7 +497,7 @@ jobs:
         if: ${{ github.event.inputs.Linux == 'true' }}
         uses: actions/download-artifact@v8
         with:
-          name: test-json
+          name: linux-test-json
           path: .
 
       - name: Install tparse
@@ -560,10 +560,17 @@ jobs:
       - name: Add CHANGELOG from git
         if: ${{ github.event.inputs.Golangci == 'true' }}
         run: |
-          echo "# 🌿 CHANGELOG" >> final-report.md
           LATEST_TAG=$(git describe --tags --abbrev=0)
           git --no-pager log "$LATEST_TAG..HEAD" --no-merges \
-            --pretty=tformat:"- [%h](https://github.com/Lifailon/lazyjournal/commit/%h): %s" | tac >> final-report.md
+            --pretty=tformat:"- [%h](https://github.com/Lifailon/lazyjournal/commit/%h): %s" | tac > CHANGELOG.md
+          echo "# 🌿 CHANGELOG" >> final-report.md
+          cat "CHANGELOG.md" >> final-report.md
+
+      - name: Upload test summary report
+        uses: actions/upload-artifact@v7
+        with:
+          name: CHANGELOG
+          path: CHANGELOG.md
 
       - name: Add golangci lint report
         if: ${{ github.event.inputs.Golangci == 'true' }}
@@ -621,7 +628,7 @@ jobs:
       - name: Upload final report
         uses: actions/upload-artifact@v7
         with:
-          name: final-report
+          name: wiki-report
           path: final-report.md
 
   Telegram:
@@ -665,7 +672,7 @@ jobs:
       - name: Download final report from merge
         uses: actions/download-artifact@v8
         with:
-          name: final-report
+          name: wiki-report
           path: .
 
       - name: Checkout Wiki repository

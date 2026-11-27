@@ -1353,28 +1353,28 @@ func TestMockInterface(t *testing.T) {
 			t.Log(debugLog + textLog)
 			slog.Debug(textLog)
 		}
-		_ = app.setFilterModeRight(g, v)
+		_ = app.setFilterModeUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter fuzzy"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		_ = app.setFilterModeRight(g, v)
+		_ = app.setFilterModeUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter regex"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		_ = app.setFilterModeRight(g, v)
+		_ = app.setFilterModeUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter timestamp"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		_ = app.setFilterModeRight(g, v)
+		_ = app.setFilterModeUp(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter exact (default)"
@@ -1387,28 +1387,28 @@ func TestMockInterface(t *testing.T) {
 			t.Log(debugLog + textLog)
 			slog.Debug(textLog)
 		}
-		_ = app.setFilterModeLeft(g, v)
+		_ = app.setFilterModeDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter timestamp"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		_ = app.setFilterModeLeft(g, v)
+		_ = app.setFilterModeDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter regex"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		_ = app.setFilterModeLeft(g, v)
+		_ = app.setFilterModeDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter fuzzy"
 			t.Log(passLog + textLog)
 			slog.Debug(textLog)
 		}
-		_ = app.setFilterModeLeft(g, v)
+		_ = app.setFilterModeDown(g, v)
 		time.Sleep(1 * time.Second)
 		if debug {
 			textLog := "Filter exact"
@@ -1727,11 +1727,11 @@ func TestMockInterface(t *testing.T) {
 	// Переключаем режим фильтрации на timestamp
 	_, _ = g.SetCurrentView("filter")
 	if v, err := g.View("filter"); err == nil {
-		_ = app.setFilterModeRight(g, v)
+		_ = app.setFilterModeUp(g, v)
 		time.Sleep(1 * time.Second)
-		_ = app.setFilterModeRight(g, v)
+		_ = app.setFilterModeUp(g, v)
 		time.Sleep(1 * time.Second)
-		_ = app.setFilterModeRight(g, v)
+		_ = app.setFilterModeUp(g, v)
 		time.Sleep(1 * time.Second)
 	}
 
