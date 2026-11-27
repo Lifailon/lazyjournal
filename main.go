@@ -9627,11 +9627,11 @@ func (app *App) setFilterModeUp(g *gocui.Gui, v *gocui.View) error {
 	case "Filter (Exact)":
 		selectedFilter.Title = "Filter (Fuzzy)"
 		app.selectFilterMode = "fuzzy"
-		selectedFilter.TitleColor = gocui.ColorBlue
+		selectedFilter.TitleColor = mapColorFromConfig["blue"]
 	case "Filter (Fuzzy)":
 		selectedFilter.Title = "Filter (Regex)"
 		app.selectFilterMode = "regex"
-		selectedFilter.TitleColor = gocui.ColorYellow
+		selectedFilter.TitleColor = mapColorFromConfig["yellow"]
 	case "Filter (Regex)":
 		// Фиксируем название
 		selectedFilter.Title = "Filter (Timestamp)"
@@ -9687,7 +9687,7 @@ func (app *App) setFilterModeUp(g *gocui.Gui, v *gocui.View) error {
 		v.TitleColor = app.selectedTitleColor
 		selectedFilter.Title = "Filter (Exact)"
 		app.selectFilterMode = "exact"
-		selectedFilter.TitleColor = gocui.ColorDefault
+		selectedFilter.TitleColor = mapColorFromConfig["default"]
 	}
 	// Сбрасываем красный цвет в случае ошибки регулярного выражения при смене режима фильтрации (#95)
 	if app.selectFilterMode != "regex" {
@@ -9753,15 +9753,15 @@ func (app *App) setFilterModeDown(g *gocui.Gui, v *gocui.View) error {
 		v.TitleColor = app.selectedTitleColor
 		selectedFilter.Title = "Filter (Regex)"
 		app.selectFilterMode = "regex"
-		selectedFilter.TitleColor = gocui.ColorYellow
+		selectedFilter.TitleColor = mapColorFromConfig["yellow"]
 	case "Filter (Regex)":
 		selectedFilter.Title = "Filter (Fuzzy)"
 		app.selectFilterMode = "fuzzy"
-		selectedFilter.TitleColor = gocui.ColorBlue
+		selectedFilter.TitleColor = mapColorFromConfig["blue"]
 	case "Filter (Fuzzy)":
 		selectedFilter.Title = "Filter (Exact)"
 		app.selectFilterMode = "exact"
-		selectedFilter.TitleColor = gocui.ColorDefault
+		selectedFilter.TitleColor = mapColorFromConfig["default"]
 	}
 	// Сбрасываем красный цвет ошибки регулярного выражения при смене режима
 	if app.selectFilterMode != "regex" {
@@ -10131,7 +10131,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10146,7 +10145,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10161,7 +10159,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.selectedFrameColor
 			selectedDocker.TitleColor = app.selectedTitleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10194,7 +10191,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 				selectedDocker.FrameColor = app.dockerFrameColor
 				selectedDocker.TitleColor = app.titleColor
 				selectedFilter.FrameColor = app.selectedFrameColor
-				// selectedFilter.TitleColor = app.selectedTitleColor
 				selectedLogs.FrameColor = app.frameColor
 				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
@@ -10233,7 +10229,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.selectedFrameColor
 			selectedLogs.TitleColor = app.selectedTitleColor
 			selectedScrollLogs.FrameColor = app.selectedFrameColor
@@ -10248,7 +10243,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10344,7 +10338,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.selectedFrameColor
 			selectedLogs.TitleColor = app.selectedTitleColor
 			selectedScrollLogs.FrameColor = app.selectedFrameColor
@@ -10359,7 +10352,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10392,7 +10384,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 				selectedDocker.FrameColor = app.dockerFrameColor
 				selectedDocker.TitleColor = app.titleColor
 				selectedFilter.FrameColor = app.selectedFrameColor
-				// selectedFilter.TitleColor = app.selectedTitleColor
 				selectedLogs.FrameColor = app.frameColor
 				selectedLogs.TitleColor = app.titleColor
 				selectedScrollLogs.FrameColor = app.frameColor
@@ -10431,7 +10422,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.selectedFrameColor
 			selectedDocker.TitleColor = app.selectedTitleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10446,7 +10436,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
@@ -10461,7 +10450,6 @@ func (app *App) backView(g *gocui.Gui, v *gocui.View) error {
 			selectedDocker.FrameColor = app.dockerFrameColor
 			selectedDocker.TitleColor = app.titleColor
 			selectedFilter.FrameColor = app.frameColor
-			// selectedFilter.TitleColor = app.titleColor
 			selectedLogs.FrameColor = app.frameColor
 			selectedLogs.TitleColor = app.titleColor
 			selectedScrollLogs.FrameColor = app.frameColor
