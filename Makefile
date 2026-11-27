@@ -39,25 +39,6 @@ check:
 run: check
 	@go run main.go
 
-# Remote run
-
-SSH_OPTIONS = lifailon@192.168.3.101 -p 2121
-ROOT_PATH   = docker/lazyjournal
-GO_PATH     = /usr/local/go/bin/go
-DLV_PATH    = /home/lifailon/go/bin/dlv
-
-copy:
-	@tar czf - . | dd status=progress | ssh $(SSH_OPTIONS) "mkdir -p $(ROOT_PATH) && rm -rf $(ROOT_PATH)/* && cd $(ROOT_PATH) && tar xzf -"
-
-run-remote: copy
-	@ssh -t $(SSH_OPTIONS) "cd $(ROOT_PATH) && $(GO_PATH) run main.go"
-
-build-debug:
-	@ssh $(SSH_OPTIONS) "cd $(ROOT_PATH) && $(GO_PATH) build -gcflags='all=-N -l' -o bin/debug"
-
-run-debug: copy build-debug
-	@ssh -t $(SSH_OPTIONS) "killall dlv || true && cd $(ROOT_PATH) && $(DLV_PATH) exec bin/debug --headless --listen=:12345 --api-version=2 --log"
-
 # Tests
 
 test-list:
@@ -192,7 +173,7 @@ uninstall:
 
 git-log:
 	git --no-pager log --all --reverse --date=format:'%Y-%m-%d %H:%M:%S' \
-		--pretty=tformat:"%ad%Creset %C(yellow)[%C(green)%an%Creset -> %C(cyan)https://github.com/Lifailon/lazyjournal/commit/%h%C(yellow)]%C(auto)%d%Creset %s"
+		--pretty=tformat:"%ad%Creset %C(yellow)[%C(green)%an%Creset %C(yellow)-> %C(cyan)https://github.com/Lifailon/lazyjournal/commit/%h%C(yellow)]%C(auto)%d%Creset %s"
 
 git-changelog:
-	git --no-pager log "$$(git describe --tags --abbrev=0)..HEAD" --no-merges --pretty=tformat:"- [%h](https://github.com/Lifailon/lazyjournal/commit/%h): %s"
+	git --no-pager log "$$(git describe --tags --abbrev=0)..HEAD" --no-merges --pretty=tformat:"- [%h](https://github.com/Lifailon/lazyjournal/commit/%h): %s" | tac

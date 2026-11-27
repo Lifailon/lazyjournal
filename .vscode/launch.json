@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "inputs": [
+    {
+      "id": "host",
+      "type": "pickString",
+      "description": "Select remote server for ssh debug",
+      "options": [
+        "192.168.3.101",
+        "192.168.3.105",
+        "192.168.3.106"
+      ]
+    }
+  ],
+  "configurations": [
+    {
+      "name": "Local debug",
+      "type": "go",
+      "mode": "debug",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+    },
+    {
+      "name": "Remote ssh debug",
+      "type": "go",
+      "mode": "debug",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.go",
+      "console": "integratedTerminal",
+      "args": ["-s", "lifailon@${input:host} -p 2121 sudo"]
+    },
+    {
+      "name": "Remote attach debug",
+      "preLaunchTask": "Run debug script",
+      "type": "go",
+      "mode": "remote",
+      "request": "attach",
+      "host": "127.0.0.1",
+      "port": 12345
+    }
+  ]
+}

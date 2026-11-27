@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "host",
+      "type": "pickString",
+      "description": "Select remote server for attach debug",
+      "options": [
+        "192.168.3.101",
+        "192.168.3.105",
+        "192.168.3.106"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "label": "Run debug script",
+      "type": "shell",
+      "isBackground": true,
+      "command": "pwsh.exe",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/.vscode/debug.ps1",
+        "-sshHost", "${input:host}"
+      ]
+    }
+  ]
+}

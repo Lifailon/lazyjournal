@@ -1,6 +1,3 @@
-# Dev
-.vscode
-
 # Build
 /bin/
 *.exe
@@ -18,8 +15,8 @@ goreleaser.log
 /dist/
 
 # Linters
-linters.md
-results.md
+lint*.md
+*results.md
 
 # Test reports
 *report.md
